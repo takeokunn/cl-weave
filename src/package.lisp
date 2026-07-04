@@ -17,6 +17,9 @@
    #:it-only
    #:it-skip
    #:it-todo
+   #:clear-mock
+   #:make-mock-function
+   #:mock-calls
    #:run-all
    #:test
    #:test-only
