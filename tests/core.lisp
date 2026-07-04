@@ -679,7 +679,51 @@
       (cl-weave::add-child suite test)
       (let ((event (cl-weave::run-test-case suite test)))
         (expect (cl-weave::test-event-status event) :to-be :fail)
-        (expect events :to-equal '(:after-each))))))
+        (expect events :to-equal '(:after-each)))))
+
+  (it "exposes a restart that can continue a failed attempt as passed"
+    (let* ((test (cl-weave::make-test-case
+                  :name "continue from failure"
+                  :function (lambda ()
+                              (expect :actual :to-be :expected))))
+           (event (handler-bind ((assertion-failure
+                                   (lambda (condition)
+                                     (declare (ignore condition))
+                                     (invoke-restart 'continue-test))))
+                    (cl-weave::run-test-case (cl-weave::root-suite) test))))
+      (expect (cl-weave::test-event-status event) :to-be :pass)))
+
+  (it "exposes a restart that records a failed attempt as skipped"
+    (let* ((test (cl-weave::make-test-case
+                  :name "skip from failure"
+                  :function (lambda ()
+                              (expect :actual :to-be :expected))))
+           (event (handler-bind ((assertion-failure
+                                   (lambda (condition)
+                                     (declare (ignore condition))
+                                     (invoke-restart 'skip-test "patched interactively"))))
+                    (cl-weave::run-test-case (cl-weave::root-suite) test))))
+      (expect (cl-weave::test-event-status event) :to-be :skip)
+      (expect (cl-weave::test-event-reason event) :to-equal "patched interactively")))
+
+  (it "exposes a restart that retries without consuming configured retries"
+    (let* ((attempts 0)
+           (retried nil)
+           (test (cl-weave::make-test-case
+                  :name "retry from failure"
+                  :retry 0
+                  :function (lambda ()
+                              (incf attempts)
+                              (expect attempts :to-be 2))))
+           (event (handler-bind ((assertion-failure
+                                   (lambda (condition)
+                                     (declare (ignore condition))
+                                     (unless retried
+                                       (setf retried t)
+                                       (invoke-restart 'retry-test)))))
+                    (cl-weave::run-test-case (cl-weave::root-suite) test))))
+      (expect attempts :to-be 2)
+      (expect (cl-weave::test-event-status event) :to-be :pass))))
 
 (describe "concurrent tests"
   (it "runs adjacent concurrent tests before either one completes"
@@ -1247,7 +1291,69 @@
         (expect (mapcar #'cl-weave:test-plan-entry-reason plan)
                 :to-equal '("pending"))
         (expect (mapcar #'cl-weave:test-plan-entry-focused plan)
-                :to-equal '(t))))))
+                :to-equal '(t)))))
+
+  (it "exposes test plans as logic facts"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "logic"
+                    :parent root
+                    :focus t))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "runs"
+        :function (lambda () t)
+        :retry 2
+        :timeout-ms 250
+        :concurrent t))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "skips"
+        :function (lambda () t)
+        :skip-reason "blocked"))
+      (let ((facts (test-plan-facts (cl-weave:collect-test-plan root))))
+        (expect facts :to-contain '(:test ("logic" "runs")))
+        (expect facts :to-contain '(:status ("logic" "runs") :run))
+        (expect facts :to-contain '(:focused ("logic" "runs")))
+        (expect facts :to-contain '(:retry ("logic" "runs") 2))
+        (expect facts :to-contain '(:timeout-ms ("logic" "runs") 250))
+        (expect facts :to-contain '(:concurrent ("logic" "runs")))
+        (expect facts :to-contain '(:reason ("logic" "skips") "blocked")))))
+
+  (it "queries test plans with Prolog-style variables"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "logic"
+                    :parent root
+                    :focus t))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "runs"
+        :function (lambda () t)
+        :concurrent t))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "skips"
+        :function (lambda () t)
+        :skip-reason "blocked"))
+      (let* ((plan (cl-weave:collect-test-plan root))
+             (focused-concurrent
+               (query-test-plan plan
+                                '((:status ?test :run)
+                                  (:focused ?test)
+                                  (:concurrent ?test))))
+             (limited (query-test-plan plan '((:test ?test)) :limit 1)))
+        (expect (logic-variable-p '?test) :to-be t)
+        (expect focused-concurrent :to-equal '(((?test . ("logic" "runs")))))
+        (expect (length limited) :to-be 1)))))
 
 (describe "bail"
   (it "stops after the first failing event"

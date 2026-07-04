@@ -11,6 +11,7 @@
    #:clear-tests
    #:collect-test-plan
    #:collect-mutations
+   #:continue-test
    #:coverage-support-available-p
    #:coverage-unavailable
    #:coverage-unavailable-reason
@@ -62,6 +63,8 @@
    #:it-skip-if
    #:it-todo
    #:list-tests
+   #:logic-query
+   #:logic-variable-p
    #:mutation
    #:mutation-form
    #:mutation-id
@@ -93,8 +96,11 @@
    #:run-isolated
    #:run-mutations
    #:run-system
+   #:query-test-plan
    #:reset-coverage
    #:save-coverage
+   #:retry-test
+   #:skip-test
    #:test-plan-entry
    #:test-plan-entry-focused
    #:test-plan-entry-location
@@ -104,6 +110,7 @@
    #:test-plan-entry-status
    #:test-plan-entry-timeout-ms
    #:test-plan-entry-concurrent
+   #:test-plan-facts
    #:test
    #:test-concurrent
    #:test-each

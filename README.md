@@ -473,6 +473,25 @@ failures are reported as `test-timeout` conditions.
 error, or timeout is reported as `:pass`; an unexpectedly passing body is
 reported as `:fail` with `expected-failure-missed`.
 
+### Interactive Restarts
+
+Every runnable attempt installs Common Lisp restarts while the body and
+`before-each` / `after-each` hooks are active:
+
+```lisp
+(handler-bind ((cl-weave:assertion-failure
+                 (lambda (condition)
+                   (declare (ignore condition))
+                   (invoke-restart 'cl-weave:retry-test))))
+  (cl-weave:run-all))
+```
+
+`continue-test` records the current attempt as `:pass`, `skip-test` records it
+as `:skip` with an optional reason, and `retry-test` reruns the attempt without
+consuming the configured `:retry` budget. If no handler or debugger invokes a
+restart, CI behavior is unchanged and the original failure, error, or timeout is
+reported normally.
+
 ### Concurrent Tests
 
 ```lisp
@@ -575,6 +594,23 @@ CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinfo
 
 List mode supports `spec`, `sexp`, and `json` reporters. `CL_WEAVE_OUTPUT_FILE`
 can write the plan payload to an artifact file.
+
+AI agents can also query plans as plain Lisp facts:
+
+```lisp
+(cl-weave:query-test-plan
+ (cl-weave:collect-test-plan (cl-weave::root-suite))
+ '((:status ?test :run)
+   (:focused ?test)
+   (:concurrent ?test)))
+;; => (((?test . ("suite" "case"))))
+```
+
+`test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
+`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+`logic-query` is intentionally small and deterministic: variables are symbols
+whose names start with `?`, clauses are matched left-to-right, and `:limit`
+caps backtracking results.
 
 ### Bail
 

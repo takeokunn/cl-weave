@@ -3,6 +3,8 @@
 (defvar *test-name-filter* nil)
 (defvar *test-sequence-order* :defined)
 (defvar *test-sequence-seed* 0)
+(defvar *retry-test-restart-marker* (list :retry-test-restart))
+(defvar *runner-default-condition-handler-disabled* nil)
 
 (defconstant +stable-hash-modulus+ 4294967296)
 (defconstant +stable-hash-offset+ 2166136261)
@@ -117,38 +119,98 @@
       (t
        event))))
 
+(defun normalize-restart-skip-reason (reason)
+  (cond
+    ((null reason) "skipped by skip-test restart")
+    ((stringp reason) reason)
+    (t (princ-to-string reason))))
+
+(defun call-test-attempt/restarts (suite test start)
+  (restart-case
+      (call-test-case-with-timeout/k
+       suite
+       test
+       (timeout-seconds test)
+       (lambda ()
+         (make-event :pass suite test start)))
+    (continue-test ()
+      :report "Continue the current failed test attempt and record it as passed."
+      (make-event :pass suite test start))
+    (skip-test (&optional reason)
+      :report "Skip the current failed test attempt and record it as skipped."
+      (make-event :skip
+                  suite
+                  test
+                  start
+                  :reason (normalize-restart-skip-reason reason)))
+    (retry-test ()
+      :report "Retry the current test attempt without consuming the configured retry budget."
+      *retry-test-restart-marker*)))
+
+(defun offer-condition-to-outer-handlers (condition)
+  (let ((*runner-default-condition-handler-disabled* t))
+    (signal condition)))
+
 (defun run-test-attempt (suite test start)
-  (expected-failure-event
-   suite
-   test
-   start
-   (handler-case
-       (call-test-case-with-timeout/k
-        suite
-        test
-        (timeout-seconds test)
-        (lambda ()
-          (make-event :pass suite test start)))
-     (sb-ext:timeout ()
-       (let ((condition (make-condition 'test-timeout
-                                        :timeout-ms (test-case-timeout-ms test))))
-         (make-event :fail suite test start :condition condition)))
-     (assertion-failure (condition)
-       (make-event :fail suite test start
-                   :condition condition
-                   :assertion (failure-detail condition)))
-     (condition (condition)
-       (make-event :error suite test start :condition condition)))))
+  (let ((event nil))
+    (block attempt
+      (setf event
+            (handler-bind
+                ((sb-ext:timeout
+                   (lambda (condition)
+                     (unless *runner-default-condition-handler-disabled*
+                       (offer-condition-to-outer-handlers condition)
+                       (let ((timeout (make-condition
+                                       'test-timeout
+                                       :timeout-ms (test-case-timeout-ms test))))
+                         (return-from attempt
+                           (setf event
+                                 (make-event :fail
+                                             suite
+                                             test
+                                             start
+                                             :condition timeout)))))))
+                 (assertion-failure
+                   (lambda (condition)
+                     (unless *runner-default-condition-handler-disabled*
+                       (offer-condition-to-outer-handlers condition)
+                       (return-from attempt
+                         (setf event
+                               (make-event :fail
+                                           suite
+                                           test
+                                           start
+                                           :condition condition
+                                           :assertion (failure-detail condition)))))))
+                 (condition
+                   (lambda (condition)
+                     (unless *runner-default-condition-handler-disabled*
+                       (offer-condition-to-outer-handlers condition)
+                       (return-from attempt
+                         (setf event
+                               (make-event :error
+                                           suite
+                                           test
+                                           start
+                                           :condition condition)))))))
+              (call-test-attempt/restarts suite test start))))
+    (if (eq event *retry-test-restart-marker*)
+        event
+        (expected-failure-event suite test start event))))
 
 (defun retryable-event-p (event)
   (member (test-event-status event) '(:fail :error)))
 
 (defun run-test-attempts/k (suite test start remaining-retries)
   (let ((event (run-test-attempt suite test start)))
-    (if (and (plusp remaining-retries)
-             (retryable-event-p event))
-        (run-test-attempts/k suite test start (1- remaining-retries))
-        event)))
+    (cond
+      ((eq event *retry-test-restart-marker*)
+       (run-test-attempts/k suite test start remaining-retries))
+      ((and (plusp remaining-retries)
+            (retryable-event-p event))
+       (run-test-attempts/k suite test start (1- remaining-retries)))
+      (t
+       event))))
 
 (defun focused-child-p (child)
   (typecase child

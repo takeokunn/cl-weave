@@ -463,6 +463,28 @@ fed back to `CL_WEAVE_TEST_FILTER` for focused execution after discovery.
 List mode supports `spec`, `sexp`, and `json` reporters. It exits with status
 `0` after writing the plan, including when no tests match.
 
+Agents that need symbolic selection can avoid parsing reporter output and use
+the Lisp-native logic layer:
+
+```lisp
+(cl-weave:test-plan-facts (cl-weave:collect-test-plan (cl-weave::root-suite)))
+;; => ((:test ("suite" "case"))
+;;     (:status ("suite" "case") :run)
+;;     (:retry ("suite" "case") 0)
+;;     ...)
+
+(cl-weave:query-test-plan
+ (cl-weave:collect-test-plan (cl-weave::root-suite))
+ '((:status ?test :run)
+   (:focused ?test)))
+;; => (((?test . ("suite" "case"))))
+```
+
+Logic variables are symbols whose names start with `?`. Facts and clauses are
+plain lists, matched left-to-right by `logic-query`. `:limit` may be `nil` or a
+positive integer. The stable public relation names are `:test`, `:status`,
+`:reason`, `:focused`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+
 ## Bail Contract
 
 Agents can stop after the first failure or after a fixed number of failing
@@ -527,6 +549,21 @@ reason.
 Retry observes transformed attempt events. This means an unexpectedly passing
 expected-failure case is retryable as `:fail`, while the first raw failure or
 error becomes `:pass` and stops retrying.
+
+## Interactive Restart Contract
+
+Each runnable attempt exposes three Common Lisp restarts while fixtures, the
+test body, and timeout boundary are active:
+
+- `continue-test` returns a normal `:pass` event for the current attempt.
+- `skip-test` returns a normal `:skip` event and accepts an optional reason.
+- `retry-test` reruns the attempt without decrementing the configured `:retry`
+  count.
+
+Reporter schemas are unchanged. The final event is still one of the ordinary
+event statuses, and no intermediate retry or restart metadata is emitted. If no
+handler or debugger invokes a restart, failures, errors, and timeouts keep the
+same CI behavior described above.
 
 ## Table-Driven Macro Expansion
 

@@ -12,6 +12,7 @@
    #:clear-mock
    #:clear-tests
    #:collect-mutations
+   #:continue-test
    #:defmatcher
    #:defmutation-operator
    #:describe-each
@@ -49,6 +50,8 @@
    #:isolated-result-status
    #:isolated-result-stderr
    #:isolated-result-timed-out-p
+   #:logic-query
+   #:logic-variable-p
    #:make-mock-function
    #:mock-calls
    #:mutation-form
@@ -61,11 +64,15 @@
    #:mutation-summary
    #:report-mutations-json
    #:report-mutations-sexp
+   #:query-test-plan
    #:run-isolated
    #:run-mutations
+   #:retry-test
+   #:skip-test
    #:test-concurrent
    #:test-each
    #:test-fails
+   #:test-plan-facts
    #:test-run-if
    #:test-skip-if
    #:with-mocked-functions))
