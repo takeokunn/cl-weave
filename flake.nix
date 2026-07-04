@@ -35,10 +35,24 @@
           pname = "cl-weave";
           version = "0.1.0";
           src = self;
+          dontBuild = true;
           installPhase = ''
             mkdir -p $out/share/common-lisp/source/cl-weave
+            mkdir -p $out/bin
             cp -R . $out/share/common-lisp/source/cl-weave
+            cat > $out/bin/cl-weave <<EOF
+            #!${pkgs.runtimeShell}
+            set -eu
+            export CL_SOURCE_REGISTRY="$out/share/common-lisp/source//:\''${CL_SOURCE_REGISTRY:-}"
+            exec ${pkgs.sbcl}/bin/sbcl --noinform --non-interactive \\
+              --eval '(require :asdf)' \\
+              --eval '(asdf:load-system :cl-weave)' \\
+              --eval '(cl-weave/cli:main (uiop:command-line-arguments))' \\
+              -- "\$@"
+            EOF
+            chmod +x $out/bin/cl-weave
           '';
+          meta.mainProgram = "cl-weave";
         };
       });
     };

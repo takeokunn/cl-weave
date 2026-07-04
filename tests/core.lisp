@@ -1247,6 +1247,82 @@
                 :to-equal '(:fail :pass :error))
         (expect events-log :to-equal '(:first :second :third))))))
 
+(describe "cli"
+  (it "parses Vitest-shaped run options into explicit data"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("run"
+                      "cl-weave-tests"
+                      "--reporter=json"
+                      "--filter"
+                      "parser"
+                      "--output"
+                      "results.json"
+                      "--bail=2"
+                      "--shard"
+                      "2/4"
+                      "--sequence"
+                      "random"
+                      "--seed"
+                      "123"
+                      "--coverage"
+                      "--coverage-output"
+                      "coverage.out"
+                      "--update-snapshots")
+                    (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-command options) :to-be :run)
+      (expect (cl-weave/cli::cli-options-systems options)
+              :to-equal '("cl-weave-tests"))
+      (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
+      (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "parser")
+      (expect (cl-weave/cli::cli-options-output-file options)
+              :to-equal "results.json")
+      (expect (cl-weave/cli::cli-options-bail options) :to-be 2)
+      (expect (cl-weave/cli::cli-options-shard options) :to-equal '(2 4))
+      (expect (cl-weave/cli::cli-options-order options) :to-be :random)
+      (expect (cl-weave/cli::cli-options-seed options) :to-be 123)
+      (expect (cl-weave/cli::cli-options-coverage options) :to-be t)
+      (expect (cl-weave/cli::cli-options-coverage-output options)
+              :to-equal "coverage.out")
+      (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t)))
+
+  (it "parses list and watch commands without executing tests"
+    (let ((list-options (cl-weave/cli::parse-cli-arguments
+                         '("list" "cl-weave-tests" "--reporter" "sexp")
+                         (cl-weave/cli::make-cli-options)))
+          (watch-options (cl-weave/cli::parse-cli-arguments
+                          '("watch" "cl-weave-tests" "--watch-interval" "1.5")
+                          (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-command list-options) :to-be :list)
+      (expect (cl-weave/cli::cli-options-list list-options) :to-be t)
+      (expect (cl-weave/cli::cli-options-reporter list-options) :to-be :sexp)
+      (expect (cl-weave/cli::cli-options-command watch-options) :to-be :watch)
+      (expect (cl-weave/cli::cli-options-watch watch-options) :to-be t)
+      (expect (cl-weave/cli::cli-options-watch-interval watch-options)
+              :to-be 1.5)))
+
+  (it "normalizes SBCL argument separators from nix run"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("--" "run" "cl-weave-tests" "--filter" "cli")
+                    (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-command options) :to-be :run)
+      (expect (cl-weave/cli::cli-options-systems options)
+              :to-equal '("cl-weave-tests"))
+      (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
+
+  (it "rejects CI-incompatible list reporters early"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("list" "cl-weave-tests" "--reporter" "junit")
+                    (cl-weave/cli::make-cli-options))))
+      (expect (lambda ()
+                (cl-weave/cli::ensure-valid-reporter-for-command options))
+              :to-throw)))
+
+  (it "prints AI-friendly command usage"
+    (let ((usage (cl-weave/cli::cli-usage)))
+      (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
+      (expect usage :to-contain "--reporter REPORTER")
+      (expect usage :to-contain "--shard INDEX/COUNT"))))
+
 (describe "asdf integration"
   (it "collects source files from ASDF systems"
     (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))

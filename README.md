@@ -73,6 +73,17 @@ With Nix:
 ```sh
 nix develop
 nix flake check
+nix run . -- run cl-weave-tests --reporter spec
+```
+
+The packaged CLI is Vitest-shaped and intended for local use, CI, and AI
+agents:
+
+```sh
+nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
+nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
+nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
+nix run . -- watch cl-weave-tests --filter parser
 ```
 
 ## CI
@@ -81,6 +92,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
 nix flake check --print-build-logs
+nix run . -- run cl-weave-tests --reporter json --output cl-weave-cli-results.json
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp

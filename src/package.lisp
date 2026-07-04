@@ -117,3 +117,8 @@
    #:test-timeout-ms
    #:watch-system
    #:with-mocked-functions))
+
+(defpackage #:cl-weave/cli
+  (:use #:cl)
+  (:export
+   #:main))

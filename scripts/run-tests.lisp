@@ -14,6 +14,7 @@
                   "src/reporters.lisp"
                   "src/runner.lisp"
                   "src/watch.lisp"
+                  "src/cli.lisp"
                   "tests/package.lisp"
                   "tests/core.lisp"))
     (load (merge-pathnames path root))))

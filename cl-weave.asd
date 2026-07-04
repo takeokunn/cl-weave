@@ -19,5 +19,6 @@
      (:file "dsl")
      (:file "reporters")
      (:file "runner")
-     (:file "watch"))))
+     (:file "watch")
+     (:file "cli"))))
   :in-order-to ((test-op (test-op "cl-weave-tests"))))

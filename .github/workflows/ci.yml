@@ -33,6 +33,11 @@ jobs:
         run: |
           nix develop --command timeout 360s env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp > cl-weave-results.json
 
+      - name: Run packaged CLI smoke test
+        timeout-minutes: 8
+        run: |
+          timeout 360s nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+
       - name: Run filtered smoke test
         timeout-minutes: 2
         run: |
@@ -50,5 +55,6 @@ jobs:
           name: cl-weave-test-reports
           path: |
             cl-weave-results.json
+            cl-weave-cli-results.json
             cl-weave-junit.xml
           if-no-files-found: error
