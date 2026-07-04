@@ -25,6 +25,7 @@
   snapshot-directory
   snapshot-file
   update-snapshots
+  version
   help)
 
 (defvar *cli-option-handlers* (make-hash-table :test #'equal))
@@ -171,6 +172,10 @@
 
 (define-cli-option "--help" (options rest)
   (setf (cli-options-help options) t)
+  rest)
+
+(define-cli-option "--version" (options rest)
+  (setf (cli-options-version options) t)
   rest)
 
 (define-cli-option "--system" (options rest)
@@ -334,7 +339,7 @@
     options))
 
 (defun command-token-p (token)
-  (member token '("run" "list" "watch" "help") :test #'string=))
+  (member token '("run" "list" "watch" "version" "help") :test #'string=))
 
 (defun apply-command-token (options token)
   (cond
@@ -345,6 +350,7 @@
     ((string= token "watch")
      (setf (cli-options-command options) :watch
            (cli-options-watch options) t))
+    ((string= token "version") (setf (cli-options-version options) t))
     ((string= token "help") (setf (cli-options-help options) t))))
 
 (defun handle-option-token (options token rest)
@@ -398,6 +404,7 @@
             "  cl-weave run [SYSTEM] [options]"
             "  cl-weave list [SYSTEM] [options]"
             "  cl-weave watch [SYSTEM] [options]"
+            "  cl-weave version"
             ""
             "Options:"
             "  --system SYSTEM           ASDF system to load before running tests"
@@ -427,7 +434,14 @@
             "                            external snapshot file name"
             "  --update-snapshots, --update, --updateSnapshots"
             "                            update external snapshots during this run"
+            "  --version                print cl-weave version"
             "  --help                    print this help")))
+
+(defun cli-version ()
+  (or (ignore-errors
+        (let ((system (asdf:find-system "cl-weave" nil)))
+          (and system (asdf:component-version system))))
+      "unknown"))
 
 (defun ensure-valid-reporter-for-command (options)
   (when (and (cli-options-list options)
@@ -527,6 +541,9 @@
   (handler-case
       (let ((options (parse-cli-arguments argv)))
         (cond
+          ((cli-options-version options)
+           (format *standard-output* "cl-weave ~A~%" (cli-version))
+           (exit-process 0))
           ((cli-options-help options)
            (write-string (cli-usage) *standard-output*)
            (exit-process 0))

@@ -2360,6 +2360,26 @@
               :to-equal '("cl-weave-tests"))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
 
+  (it "prints Vitest-compatible version output without running tests"
+    (let ((flag-options (cl-weave/cli::parse-cli-arguments
+                         '("--version")
+                         (cl-weave/cli::make-cli-options)))
+          (command-options (cl-weave/cli::parse-cli-arguments
+                            '("version")
+                            (cl-weave/cli::make-cli-options)))
+          (exit-code nil))
+      (expect (cl-weave/cli::cli-options-version flag-options) :to-be t)
+      (expect (cl-weave/cli::cli-options-version command-options) :to-be t)
+      (expect (cl-weave/cli::cli-version) :to-equal "0.1.0")
+      (with-mocked-functions
+          (((symbol-function 'cl-weave/cli::exit-process)
+            (lambda (code)
+              (setf exit-code code))))
+        (let ((output (with-output-to-string (*standard-output*)
+                        (cl-weave/cli:main '("--version")))))
+          (expect output :to-equal (format nil "cl-weave 0.1.0~%"))
+          (expect exit-code :to-be 0)))))
+
   (it "rejects CI-incompatible list reporters early"
     (dolist (reporter '("github" "junit"))
       (let ((options (cl-weave/cli::parse-cli-arguments
@@ -2372,13 +2392,15 @@
   (it "prints AI-friendly command usage"
     (let ((usage (cl-weave/cli::cli-usage)))
       (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
+      (expect usage :to-contain "cl-weave version")
       (expect usage :to-contain "--reporter REPORTER")
       (expect usage :to-contain "--shard INDEX/COUNT")
       (expect usage :to-contain "--testNamePattern TEXT")
       (expect usage :to-contain "--failWithNoTests")
       (expect usage :to-contain "--snapshotDir DIR")
       (expect usage :to-contain "--snapshotFile FILE")
-      (expect usage :to-contain "--updateSnapshots"))))
+      (expect usage :to-contain "--updateSnapshots")
+      (expect usage :to-contain "--version"))))
 
 (describe "asdf integration"
   (it "collects source files from ASDF systems"
