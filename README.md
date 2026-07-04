@@ -19,6 +19,7 @@ Early MVP. The current focus is a solid core:
 - `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
 - `describe-skip` / `it-skip` / `test-skip` skipped suites and cases
+- `describe-skip-if` / `it-skip-if` and `run-if` conditional registration
 - `describe-only` / `it-only` focused runs
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
@@ -227,6 +228,30 @@ structured reporters, which keeps architecture tests AI-readable.
 `it-each` and `test-each` expand into independent `it` forms at macro expansion
 time. `describe-each` expands into independent `describe` forms, so nested
 fixtures and cases keep the same semantics as hand-written suites.
+
+### Conditional Runs
+
+```lisp
+(it-skip-if (not (probe-file #P"/tmp/service.sock"))
+    "talks to a local service"
+  (expect (probe-file #P"/tmp/service.sock") :to-be-truthy))
+
+(it-run-if (member :sbcl *features*)
+    "uses SBCL allocation counters"
+  (expect (lambda () (list :ok)) :to-cons-less-than 4096))
+
+(describe-run-if (member :linux *features*)
+    "linux-only integration"
+  (it "checks a platform boundary"
+    (expect :ok :to-be :ok)))
+```
+
+`it-skip-if`, `test-skip-if`, and `describe-skip-if` register skipped tests or
+suites when the condition is true. `it-run-if`, `test-run-if`, and
+`describe-run-if` register skipped tests or suites when the condition is false.
+Conditions are evaluated while the test file registers tests; skipped branches
+emit ordinary `:skip` events with deterministic reasons, and their hooks and
+bodies are not executed.
 
 ### Property Tests
 

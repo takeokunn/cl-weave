@@ -211,6 +211,33 @@
                    (tree-contains-p form :todo-reason)
                    (tree-contains-p form "needs design")))))
 
+  (it "expands conditional test registration into run and skip branches"
+    (expect (macroexpand-1
+             '(it-skip-if expensivep
+                  "conditional case"
+                (:retry 2 :timeout-ms 100)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'if)
+                   (tree-contains-p form 'it-skip)
+                   (tree-contains-p form 'it)
+                   (tree-contains-p form :retry)
+                   (tree-contains-p form :timeout-ms)))))
+
+  (it "expands conditional suite registration into run and skip branches"
+    (expect (macroexpand-1
+             '(describe-run-if
+                  (member :sbcl *features*)
+                  "conditional suite"
+                (it "case" (expect :ok :to-be :ok))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'if)
+                   (tree-contains-p form 'describe)
+                   (tree-contains-p form 'describe-skip)
+                   (tree-contains-p form "conditional run-if")))))
+
   (it "expands describe-each into independent suites"
     (expect (macroexpand-1
              '(describe-each ((1 2 3))
@@ -496,7 +523,50 @@
         (expect (mapcar #'cl-weave::test-event-reason events)
                 :to-equal '("suite blocked"))
         (expect (mapcar #'cl-weave::test-event-path events)
-                :to-equal '(("blocked" "case")))))))
+                :to-equal '(("blocked" "case"))))))
+
+  (it "registers conditional tests as skipped or runnable cases"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (ran nil))
+      (let ((cl-weave::*root-suite* root)
+            (cl-weave::*current-suite* nil))
+        (it-skip-if t "skip-if true"
+          (setf ran :skip-if-true))
+        (it-run-if nil "run-if false"
+          (setf ran :run-if-false))
+        (it-skip-if nil "skip-if false"
+          (setf ran :skip-if-false))
+        (test-run-if t "test-run-if true"
+          (setf ran :test-run-if-true)))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:skip :skip :pass :pass))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("conditional skip" "conditional run-if" nil nil))
+        (expect ran :to-be :test-run-if-true))))
+
+  (it "registers conditional suites as skipped or runnable groups"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (ran nil))
+      (let ((cl-weave::*root-suite* root)
+            (cl-weave::*current-suite* nil))
+        (describe-skip-if t "skip-if suite"
+          (before-all (setf ran :skip-before-all))
+          (it "case" (setf ran :skip-body)))
+        (describe-run-if nil "run-if suite"
+          (it "case" (setf ran :run-if-body)))
+        (describe-run-if t "enabled suite"
+          (it "case" (setf ran :enabled-body))))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:skip :skip :pass))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("conditional skip" "conditional run-if" nil))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("skip-if suite" "case")
+                            ("run-if suite" "case")
+                            ("enabled suite" "case")))
+        (expect ran :to-be :enabled-body)))))
 
 (describe "todos"
   (it-todo "documents pending work" "intentional")

@@ -13,7 +13,9 @@
    #:describe
    #:describe-each
    #:describe-only
+   #:describe-run-if
    #:describe-skip
+   #:describe-skip-if
    #:describe-todo
    #:expect
    #:gen-boolean
@@ -44,7 +46,9 @@
    #:it-isolated
    #:it-property
    #:it-only
+   #:it-run-if
    #:it-skip
+   #:it-skip-if
    #:it-todo
    #:list-tests
    #:*property-seed*
@@ -72,7 +76,9 @@
    #:test
    #:test-each
    #:test-only
+   #:test-run-if
    #:test-skip
+   #:test-skip-if
    #:test-todo
    #:test-failure
    #:test-timeout

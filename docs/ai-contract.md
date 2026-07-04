@@ -178,6 +178,14 @@ rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
 events with the suite reason in `:reason`; suite hooks and test bodies are not
 executed while the suite is suppressed.
 
+Conditional registration macros keep the same reporter contract.
+`it-skip-if`, `test-skip-if`, and `describe-skip-if` emit ordinary `:skip`
+events when their condition is true. `it-run-if`, `test-run-if`, and
+`describe-run-if` emit ordinary `:skip` events when their condition is false.
+The deterministic reasons are `"conditional skip"` and `"conditional run-if"`.
+Conditions are evaluated while the test file registers tests; reporters do not
+add a new event field or schema version for conditional registration.
+
 ## Sharding Contract
 
 Agents can partition selected tests for CI without changing source files:

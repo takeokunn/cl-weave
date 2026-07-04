@@ -16,6 +16,16 @@
         (forms (if (and body (stringp (first body))) (rest body) body)))
     `(register-suite ,name (lambda () ,@forms) :todo-reason ,reason)))
 
+(defmacro describe-skip-if (condition name &body body)
+  `(if ,condition
+       (describe-skip ,name "conditional skip" ,@body)
+       (describe ,name ,@body)))
+
+(defmacro describe-run-if (condition name &body body)
+  `(if ,condition
+       (describe ,name ,@body)
+       (describe-skip ,name "conditional run-if" ,@body)))
+
 (defmacro describe-each (cases name bindings &body body)
   `(progn
      ,@(loop for case in cases
@@ -61,6 +71,16 @@
 
 (defmacro it-todo (name &optional (reason "todo"))
   `(register-test ,name (lambda () nil) :todo-reason ,reason))
+
+(defmacro it-skip-if (condition name &body body)
+  `(if ,condition
+       (it-skip ,name "conditional skip")
+       (it ,name ,@body)))
+
+(defmacro it-run-if (condition name &body body)
+  `(if ,condition
+       (it ,name ,@body)
+       (it-skip ,name "conditional run-if")))
 
 (defun isolated-option-form (options key fallback)
   (if (getf options key)
@@ -123,6 +143,12 @@
 
 (defmacro test-todo (name &optional (reason "todo"))
   `(it-todo ,name ,reason))
+
+(defmacro test-skip-if (condition name &body body)
+  `(it-skip-if ,condition ,name ,@body))
+
+(defmacro test-run-if (condition name &body body)
+  `(it-run-if ,condition ,name ,@body))
 
 (defmacro before-all (&body body)
   `(register-before-all (lambda () ,@body)))

@@ -12,7 +12,9 @@
    #:clear-mock
    #:clear-tests
    #:describe-each
+   #:describe-run-if
    #:describe-skip
+   #:describe-skip-if
    #:describe-todo
    #:expect
    #:gen-boolean
@@ -33,7 +35,9 @@
    #:it-isolated
    #:it-property
    #:it-only
+   #:it-run-if
    #:it-skip
+   #:it-skip-if
    #:it-todo
    #:isolated-result-exit-code
    #:isolated-result-status
@@ -43,4 +47,6 @@
    #:mock-calls
    #:run-isolated
    #:test-each
+   #:test-run-if
+   #:test-skip-if
    #:with-mocked-functions))
