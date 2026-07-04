@@ -116,6 +116,26 @@ thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:
 the existing `actual` and `expected` fields so agents can parse the measurement
 without scraping human-oriented output.
 
+MOP architecture matchers report normalized architecture data instead of the raw
+input designator. A failing `:to-have-slot` assertion uses:
+
+```lisp
+(:actual (:class widget
+          :slots (name state))
+ :expected (:slot missing-slot))
+```
+
+A failing `:to-have-method-specialized-on` assertion uses:
+
+```lisp
+(:actual (:methods ((widget stream)
+                    (widget t)))
+ :expected (:specializers (missing t)))
+```
+
+Specializers are printed as class names; EQL specializers are printed as
+`(eql value)`.
+
 ## Test Selection
 
 Agents can narrow execution without changing source files:
@@ -131,6 +151,26 @@ contract through `CL_WEAVE_TEST_FILTER`.
 Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
 the run is considered successful because no selected test failed.
+
+## ASDF Runner Contract
+
+Agents can discover declared source files before choosing a focused run:
+
+```lisp
+(cl-weave:asdf-system-files "my-project-tests" :include-dependencies t)
+```
+
+`run-system` and `watch-system` preserve reporter contracts because both call
+`run-all` after ASDF loading:
+
+```lisp
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser")
+(cl-weave:watch-system "my-project-tests" :reporter :json :once t)
+```
+
+`watch-system` writes status lines to `:status-stream`, which defaults to
+`*error-output*`, and writes reporter payloads to `:stream`. CI should keep
+`CL_WEAVE_WATCH` unset; watch mode is for local agents and REPL sessions.
 
 ## Property Failure Contract
 

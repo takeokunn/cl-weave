@@ -25,6 +25,7 @@ Early MVP. The current focus is a solid core:
 - CI-friendly thunk runtime and allocation assertions
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
+- ASDF-aware system runner and watch mode
 - spec, S-expression, JSON, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
@@ -152,6 +153,8 @@ Built-in matchers:
 - `:to-throw`
 - `:to-run-under-ms`
 - `:to-cons-less-than`
+- `:to-have-slot`
+- `:to-have-method-specialized-on`
 - `:to-expand-to`
 - `:to-match-inline-snapshot`
 - `:to-match-snapshot`
@@ -175,6 +178,19 @@ the body runs once per matcher. Failure reports include `:elapsed-seconds`,
 Allocation measurement uses the implementation's byte-consing counter; it is
 currently backed by SBCL and fails clearly on implementations that do not expose
 one.
+
+### MOP Architecture Assertions
+
+MOP architecture assertions let tests describe class and generic-function shape
+without ad-hoc reflection helpers:
+
+```lisp
+(expect 'widget :to-have-slot 'state)
+(expect #'render-widget :to-have-method-specialized-on '(widget stream))
+```
+
+These matchers report normalized slot and method-specializer lists through the
+structured reporters, which keeps architecture tests AI-readable.
 
 ### Table Tests
 
@@ -359,14 +375,41 @@ reporter is the stable external-tool interface. See `docs/ai-contract.md`.
 `junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering. Use
 `junit` when a CI service should ingest test results as XML.
 
+### ASDF System Runner and Watch Mode
+
+```lisp
+(cl-weave:asdf-system-files "my-project-tests" :include-dependencies t)
+(cl-weave:run-system "my-project-tests" :reporter :spec)
+(cl-weave:watch-system "my-project-tests"
+                       :reporter :json
+                       :name-filter "parser"
+                       :include-dependencies t
+                       :interval 0.5)
+```
+
+`asdf-system-files` returns the existing source files declared by an ASDF
+system. `run-system` reloads the system with ASDF, then runs the currently
+registered cl-weave tests. `watch-system` uses ASDF dependency information and
+file write dates to rerun only after declared source files change.
+Reporter output goes to `:stream`; watch status goes to `:status-stream`, which
+defaults to `*error-output*`.
+
+The script runner enables watch mode with environment variables:
+
+```sh
+CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
+CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
+```
+
+CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit` or
+`CL_WEAVE_REPORTER=json`.
+
 ## Roadmap
 
 MVP quality comes first. The intended direction is:
 
 - richer recursive data generators
-- watch mode based on ASDF dependency information
 - subprocess isolation for FFI crash tests
-- MOP-based architecture checks
 
 ## License
 

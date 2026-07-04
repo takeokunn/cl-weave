@@ -1,10 +1,16 @@
+(require :asdf)
+
 (let ((root (truename ".")))
+  (pushnew root asdf:*central-registry* :test #'equal)
+  (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
+  (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
   (dolist (path '("src/package.lisp"
                   "src/model.lisp"
                   "src/matchers.lisp"
                   "src/dsl.lisp"
                   "src/reporters.lisp"
                   "src/runner.lisp"
+                  "src/watch.lisp"
                   "tests/package.lisp"
                   "tests/core.lisp"))
     (load (merge-pathnames path root))))
@@ -27,12 +33,46 @@
   #-sbcl
   nil)
 
+(defun requested-watch-p ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_WATCH")))
+    (and value
+         (not (string= value ""))
+         (not (string= value "0"))
+         (not (string-equal value "false"))))
+  #-sbcl
+  nil)
+
+(defun requested-watch-interval ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_WATCH_INTERVAL")))
+    (if (and value (not (string= value "")))
+        (multiple-value-bind (parsed position)
+            (let ((*read-eval* nil))
+              (read-from-string value))
+          (unless (and (numberp parsed)
+                       (plusp parsed)
+                       (loop for index from position below (length value)
+                             always (find (char value index)
+                                          '(#\Space #\Tab #\Newline #\Return))))
+            (error "CL_WEAVE_WATCH_INTERVAL must be a positive number: ~A" value))
+          parsed)
+        0.5))
+  #-sbcl
+  0.5)
+
 #+sbcl
-(sb-ext:exit :code (if (cl-weave:run-all
-                        :reporter (requested-reporter)
-                        :name-filter (requested-test-filter))
-                       0
-                       1))
+(if (requested-watch-p)
+    (cl-weave:watch-system "cl-weave-tests"
+                           :reporter (requested-reporter)
+                           :name-filter (requested-test-filter)
+                           :include-dependencies t
+                           :interval (requested-watch-interval))
+    (sb-ext:exit :code (if (cl-weave:run-all
+                            :reporter (requested-reporter)
+                            :name-filter (requested-test-filter))
+                           0
+                           1)))
 
 #-sbcl
 (error "scripts/run-tests.lisp currently requires SBCL.")

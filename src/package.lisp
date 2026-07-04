@@ -35,10 +35,13 @@
    #:make-mock-function
    #:mock-calls
    #:*test-name-filter*
+   #:asdf-system-files
    #:run-all
+   #:run-system
    #:test
    #:test-only
    #:test-skip
    #:test-todo
    #:test-failure
+   #:watch-system
    #:with-mocked-functions))

@@ -6,7 +6,15 @@
 (defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
 
-(defclass sample-widget () ())
+(defclass sample-widget ()
+  ((name :initarg :name :reader sample-widget-name)
+   (state :initarg :state :initform :new :reader sample-widget-state)))
+
+(defgeneric render-widget (widget stream))
+
+(defmethod render-widget ((widget sample-widget) stream)
+  (declare (ignore stream))
+  (sample-widget-name widget))
 
 (defmacro sample-unless (condition &body body)
   `(if ,condition
@@ -58,6 +66,11 @@
     ("to-run-under-ms" (expect (lambda () (+ 1 1)) :to-run-under-ms 1000))
     ("to-cons-less-than"
      (expect (lambda () nil) :to-cons-less-than most-positive-fixnum))
+    ("to-have-slot symbol" (expect 'sample-widget :to-have-slot 'name))
+    ("to-have-slot instance"
+     (expect (make-instance 'sample-widget :name "ok") :to-have-slot 'state))
+    ("to-have-method-specialized-on"
+     (expect #'render-widget :to-have-method-specialized-on '(sample-widget t)))
     ("to-throw rejects non-throwing thunk"
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
@@ -351,6 +364,51 @@
       (expect (cl-weave::collect-events root :name-filter "missing")
               :to-equal nil)
       (expect hook-events :to-equal nil))))
+
+(describe "asdf integration"
+  (it "collects source files from ASDF systems"
+    (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))
+      (expect files :to-satisfy
+              (lambda (paths)
+                (some (lambda (pathname)
+                        (search "src/runner.lisp" (namestring pathname)))
+                      paths)))
+      (expect files :to-satisfy
+              (lambda (paths)
+                (some (lambda (pathname)
+                        (search "src/watch.lisp" (namestring pathname)))
+                      paths)))))
+
+  (it "detects changed file states"
+    (let* ((pathname #P"/tmp/cl-weave-watch-state.lisp")
+           (old-state (list (cons pathname 1)))
+           (new-state (list (cons pathname 2))))
+      (expect (cl-weave::changed-pathnames old-state new-state)
+              :to-equal (list pathname))
+      (expect (cl-weave::changed-pathnames new-state new-state)
+              :to-equal nil)))
+
+  (it "runs watch mode once without reloading the active test suite"
+    (let ((calls nil)
+          (output nil))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave:run-system)
+            (lambda (system &key reporter stream name-filter)
+              (declare (ignore stream))
+              (push (list system reporter name-filter) calls)
+              t)))
+        (setf output
+              (with-output-to-string (stream)
+                (expect (cl-weave:watch-system
+                         "cl-weave"
+                         :reporter :json
+                         :stream stream
+                         :status-stream stream
+                         :name-filter "expect"
+                         :once t)
+                        :to-be-truthy))))
+      (expect calls :to-equal '(("cl-weave" :json "expect")))
+      (expect output :to-contain "cl-weave watch"))))
 
 (describe "mocking"
   (it "restores symbol functions"

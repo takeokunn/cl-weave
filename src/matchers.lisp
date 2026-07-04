@@ -162,6 +162,59 @@
              matcher))
     bytes))
 
+(defun mop-required (matcher)
+  (error "Matcher ~S requires SBCL MOP support." matcher))
+
+(defun class-designator-class (designator matcher)
+  (or (typecase designator
+        (class designator)
+        (symbol (find-class designator nil))
+        (t (class-of designator)))
+      (error "Matcher ~S cannot resolve class designator ~S." matcher designator)))
+
+(defun class-slot-names (class matcher)
+  (declare (ignorable matcher))
+  #+sbcl
+  (progn
+    (sb-mop:finalize-inheritance class)
+    (mapcar #'sb-mop:slot-definition-name
+            (sb-mop:class-slots class)))
+  #-sbcl
+  (mop-required matcher))
+
+(defun generic-function-designator-function (designator matcher)
+  (let ((function (typecase designator
+                    (symbol (when (fboundp designator)
+                              (fdefinition designator)))
+                    (function designator)
+                    (t nil))))
+    (unless (typep function 'generic-function)
+      (error "Matcher ~S expects a generic function designator, got ~S."
+             matcher designator))
+    function))
+
+(defun specializer-report-name (specializer)
+  #+sbcl
+  (cond
+    ((typep specializer 'class)
+     (class-name specializer))
+    ((typep specializer 'sb-mop:eql-specializer)
+     (list 'eql (sb-mop:eql-specializer-object specializer)))
+    (t specializer))
+  #-sbcl
+  specializer)
+
+(defun generic-function-specializer-lists (generic-function matcher)
+  (declare (ignorable matcher))
+  #+sbcl
+  (progn
+    (mapcar (lambda (method)
+              (mapcar #'specializer-report-name
+                      (sb-mop:method-specializers method)))
+            (sb-mop:generic-function-methods generic-function)))
+  #-sbcl
+  (mop-required matcher))
+
 (defun matcher-result-values (matcher actual expected)
   (let ((values (multiple-value-list
                  (funcall (matcher-function matcher) actual expected))))
@@ -274,6 +327,26 @@
     (values (< bytes max-bytes)
             measurement
             (list :max-bytes max-bytes))))
+
+(defmatcher :to-have-slot (actual expected)
+  (let* ((slot-name (expected-one expected :to-have-slot))
+         (class (class-designator-class actual :to-have-slot))
+         (slots (class-slot-names class :to-have-slot)))
+    (values (not (null (member slot-name slots :test #'eq)))
+            (list :class (class-name class)
+                  :slots slots)
+            (list :slot slot-name))))
+
+(defmatcher :to-have-method-specialized-on (actual expected)
+  (let* ((expected-specializers (expected-one expected :to-have-method-specialized-on))
+         (generic-function
+           (generic-function-designator-function actual :to-have-method-specialized-on))
+         (methods
+           (generic-function-specializer-lists generic-function
+                                               :to-have-method-specialized-on)))
+    (values (not (null (member expected-specializers methods :test #'equal)))
+            (list :methods methods)
+            (list :specializers expected-specializers))))
 
 (defmatcher :to-expand-to (actual expected)
   (equal (expand-once actual)
