@@ -126,6 +126,25 @@
   #-sbcl
   nil)
 
+(defun requested-coverage-p ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_COVERAGE")))
+    (and value
+         (not (string= value ""))
+         (not (string= value "0"))
+         (not (string-equal value "false"))
+         (not (string-equal value "nil"))))
+  #-sbcl
+  nil)
+
+(defun requested-coverage-output ()
+  #+sbcl
+  (let ((path (sb-ext:posix-getenv "CL_WEAVE_COVERAGE_FILE")))
+    (when (and path (not (string= path "")))
+      path))
+  #-sbcl
+  nil)
+
 (defun requested-list-p ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_LIST")))
@@ -167,6 +186,8 @@
 #+sbcl
 (let ((reporter (requested-reporter))
       (output-file (requested-output-file))
+      (coverage (requested-coverage-p))
+      (coverage-output (requested-coverage-output))
       (shard (requested-shard))
       (sequence-order (requested-sequence-order))
       (sequence-seed (requested-sequence-seed)))
@@ -211,6 +232,8 @@
                        :order sequence-order
                        :seed sequence-seed
                        :bail (requested-bail)
+                       :coverage coverage
+                       :coverage-output coverage-output
                        :stream stream)))
                   0
                   1))))))

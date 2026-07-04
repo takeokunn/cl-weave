@@ -97,6 +97,16 @@ CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinfor
 with `0` when all selected events pass, skip, or todo, and exits with `1` when
 any selected event fails or errors.
 
+Coverage output is a separate artifact, not a reporter schema field:
+
+```sh
+CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+The coverage artifact is SBCL `sb-cover` state written with
+`sb-cover:save-coverage-in-file`. Agents should treat it as a sidecar file and
+continue to parse S-expression or JSON reporter output for test results.
+
 ## TAP Reporter
 
 ```lisp

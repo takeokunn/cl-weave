@@ -10,6 +10,9 @@
    #:before-each
    #:clear-tests
    #:collect-test-plan
+   #:coverage-support-available-p
+   #:coverage-unavailable
+   #:coverage-unavailable-reason
    #:describe
    #:describe-each
    #:describe-only
@@ -71,6 +74,8 @@
    #:run-all
    #:run-isolated
    #:run-system
+   #:reset-coverage
+   #:save-coverage
    #:test-plan-entry
    #:test-plan-entry-focused
    #:test-plan-entry-path

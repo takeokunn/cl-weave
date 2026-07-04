@@ -27,9 +27,11 @@ Early MVP. The current focus is a solid core:
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
+- Vitest-style `it-concurrent` / `test-concurrent` parallel cases
 - Vitest-style `it-fails` / `test-fails` expected-failure cases
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
+- SBCL `sb-cover` reset/save integration for CI coverage artifacts
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - ASDF-aware system runner and watch mode
@@ -84,6 +86,7 @@ nix develop --command env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform
 nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
@@ -578,9 +581,17 @@ must stay alive.
 (cl-weave:run-all :reporter :tap)
 (cl-weave:run-all :reporter :junit)
 (cl-weave:run-all :reporter :json :name-filter "properties")
+(cl-weave:run-all :coverage t :coverage-output "cl-weave.coverage")
 ```
 
 `run-all` returns true when the suite passed and false otherwise.
+
+Coverage support is optional and SBCL-specific. `run-all :coverage t` requires
+`sb-cover`, resets counters before execution by default, and saves a readable
+coverage state with `sb-cover:save-coverage-in-file` when `:coverage-output` is
+provided. Pass `:coverage-reset nil` to merge the run into existing counters.
+Projects remain responsible for loading code with SBCL coverage instrumentation;
+cl-weave only manages the test-run reset/save boundary.
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. Both include failed and errored
@@ -591,7 +602,9 @@ path summaries for focused reruns. See `docs/ai-contract.md`.
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
-`CL_WEAVE_BAIL` for fast-fail runs.
+`CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_COVERAGE=1` to wrap
+execution with SBCL `sb-cover`, and set `CL_WEAVE_COVERAGE_FILE=path` to save
+the coverage state as a CI artifact.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
 artifact file while preserving the process exit code contract. Use `tap` for
 line-oriented CI logs and `junit` when a CI service should ingest test results
@@ -632,7 +645,7 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 
 MVP quality comes first. The intended direction is:
 
-- mutation testing and coverage integration
+- mutation testing
 
 ## License
 

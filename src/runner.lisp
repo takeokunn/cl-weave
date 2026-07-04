@@ -735,27 +735,102 @@
 (defun passed-event-p (event)
   (member (test-event-status event) '(:pass :skip :todo)))
 
+(define-condition coverage-unavailable (error)
+  ((reason :initarg :reason :reader coverage-unavailable-reason))
+  (:report (lambda (condition stream)
+             (format stream "Coverage support is unavailable: ~A"
+                     (coverage-unavailable-reason condition)))))
+
+(defun coverage-fbound-symbol (name &optional required-p)
+  (let ((package (find-package "SB-COVER")))
+    (unless package
+      (when required-p
+        (error 'coverage-unavailable :reason "SB-COVER is not loaded.")))
+    (when package
+      (multiple-value-bind (symbol status)
+          (find-symbol name package)
+        (if (and status (fboundp symbol))
+            symbol
+            (when required-p
+              (error 'coverage-unavailable
+                     :reason (format nil "SB-COVER:~A is not available." name))))))))
+
+(defun require-coverage-support ()
+  #+sbcl
+  (handler-case
+      (progn
+        (require :sb-cover)
+        (coverage-fbound-symbol "RESET-COVERAGE" t)
+        (coverage-fbound-symbol "SAVE-COVERAGE-IN-FILE" t)
+        t)
+    (coverage-unavailable (condition)
+      (error condition))
+    (error (condition)
+      (error 'coverage-unavailable :reason condition)))
+  #-sbcl
+  (error 'coverage-unavailable :reason "Coverage requires SBCL sb-cover."))
+
+(defun coverage-support-available-p ()
+  #+sbcl
+  (handler-case
+      (handler-bind ((warning #'muffle-warning))
+        (require-coverage-support))
+    (condition ()
+      nil))
+  #-sbcl
+  nil)
+
+(defun reset-coverage ()
+  (require-coverage-support)
+  (funcall (coverage-fbound-symbol "RESET-COVERAGE" t))
+  t)
+
+(defun save-coverage (pathname)
+  (require-coverage-support)
+  (funcall (coverage-fbound-symbol "SAVE-COVERAGE-IN-FILE" t) pathname)
+  pathname)
+
+(defun call-with-coverage (coverage coverage-output coverage-reset thunk)
+  (if coverage
+      (progn
+        (require-coverage-support)
+        (when coverage-reset
+          (reset-coverage))
+        (unwind-protect
+             (funcall thunk)
+          (when coverage-output
+            (save-coverage coverage-output))))
+      (funcall thunk)))
+
 (defun run-all (&key (reporter :spec)
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
                   shard
                   order
                   seed
-                  bail)
-  (let ((events (collect-events
-                 (root-suite)
-                 :name-filter name-filter
-                 :shard shard
-                 :order order
-                 :seed seed
-                 :bail bail)))
-    (ecase reporter
-      (:spec (report-spec events stream))
-      (:sexp (report-sexp events stream))
-      (:json (report-json events stream))
-      (:tap (report-tap events stream))
-      (:junit (report-junit events stream)))
-    (every #'passed-event-p events)))
+                  bail
+                  coverage
+                  coverage-output
+                  (coverage-reset t))
+  (call-with-coverage
+   coverage
+   coverage-output
+   coverage-reset
+   (lambda ()
+     (let ((events (collect-events
+                    (root-suite)
+                    :name-filter name-filter
+                    :shard shard
+                    :order order
+                    :seed seed
+                    :bail bail)))
+       (ecase reporter
+         (:spec (report-spec events stream))
+         (:sexp (report-sexp events stream))
+         (:json (report-json events stream))
+         (:tap (report-tap events stream))
+         (:junit (report-junit events stream)))
+       (every #'passed-event-p events)))))
 
 (defun list-tests (&key (reporter :spec)
                      (stream *standard-output*)
