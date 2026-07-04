@@ -1490,6 +1490,7 @@
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
+      (expect (cl-weave/cli::parse-reporter "github") :to-be :github)
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "parser")
       (expect (cl-weave/cli::cli-options-output-file options)
               :to-equal "results.json")
@@ -1568,12 +1569,13 @@
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
 
   (it "rejects CI-incompatible list reporters early"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("list" "cl-weave-tests" "--reporter" "junit")
-                    (cl-weave/cli::make-cli-options))))
-      (expect (lambda ()
-                (cl-weave/cli::ensure-valid-reporter-for-command options))
-              :to-throw)))
+    (dolist (reporter '("github" "junit"))
+      (let ((options (cl-weave/cli::parse-cli-arguments
+                      (list "list" "cl-weave-tests" "--reporter" reporter)
+                      (cl-weave/cli::make-cli-options))))
+        (expect (lambda ()
+                  (cl-weave/cli::ensure-valid-reporter-for-command options))
+                :to-throw))))
 
   (it "prints AI-friendly command usage"
     (let ((usage (cl-weave/cli::cli-usage)))
@@ -1871,4 +1873,43 @@
       (expect output :to-contain "not ok 5 - reporters > errors")
       (expect output :to-contain "status: \"fail\"")
       (expect output :to-contain "condition: \"bad value\"")
-      (expect output :to-contain "matcher: \":TO-BE\""))))
+      (expect output :to-contain "matcher: \":TO-BE\"")))
+
+  (it "prints GitHub Actions annotations for failures and errors"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-github
+                     (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("reporters" "passes")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :skip
+                            :path '("reporters" "skips")
+                            :reason "needs terminal"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "fails")
+                            :location '(:file "tests/reporters,case:lisp")
+                            :condition (format nil "bad%~%value, x:y")
+                            :assertion (cl-weave::make-assertion-detail
+                                        :form '(expect 1 :to-be 2)
+                                        :matcher :to-be
+                                        :actual 1
+                                        :expected 2
+                                        :negated nil
+                                        :pass nil)
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :error
+                            :path '("reporters" "errors")
+                            :condition "boom"
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect output :to-contain "::error file=tests/reporters%2Ccase%3Alisp::")
+      (expect output :to-contain "reporters > fails [fail]%0Abad%25%0Avalue, x:y")
+      (expect output :to-contain "matcher: :TO-BE")
+      (expect output :to-contain "::error::reporters > errors [error]%0Aboom")
+      (expect output :not :to-contain "reporters > passes [pass]")
+      (expect output :not :to-contain "reporters > skips [skip]")
+      (expect output :to-contain "cl-weave: 1 passed, 1 skipped, 0 todo, 1 failed, 1 errored, 4 total"))))

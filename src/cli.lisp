@@ -91,6 +91,7 @@
       ((string= normalized "sexp") :sexp)
       ((string= normalized "json") :json)
       ((string= normalized "tap") :tap)
+      ((string= normalized "github") :github)
       ((string= normalized "junit") :junit)
       (t (error 'cli-error
                 :message (format nil "Unknown reporter: ~A" value))))))
@@ -351,7 +352,7 @@
             "Options:"
             "  --system SYSTEM           ASDF system to load before running tests"
             "  --load FILE               Lisp file to load before running tests"
-            "  --reporter REPORTER       spec, sexp, json, tap, or junit"
+            "  --reporter REPORTER       spec, sexp, json, tap, github, or junit"
             "  --filter TEXT             run tests whose Vitest-style path contains TEXT"
             "  --output FILE             write reporter output to FILE"
             "  --list                    discover tests without executing bodies"
@@ -370,7 +371,7 @@
 
 (defun ensure-valid-reporter-for-command (options)
   (when (and (cli-options-list options)
-             (member (cli-options-reporter options) '(:tap :junit)))
+             (member (cli-options-reporter options) '(:tap :github :junit)))
     (error 'cli-error
            :message "List mode supports spec, sexp, and json reporters.")))
 

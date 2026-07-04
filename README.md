@@ -37,7 +37,7 @@ Early MVP. The current focus is a solid core:
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - ASDF-aware system runner and watch mode
-- spec, S-expression, JSON, TAP, and JUnit XML reporters
+- spec, S-expression, JSON, TAP, GitHub Actions, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -692,6 +692,7 @@ must stay alive.
 (cl-weave:run-all :reporter :sexp)
 (cl-weave:run-all :reporter :json)
 (cl-weave:run-all :reporter :tap)
+(cl-weave:run-all :reporter :github)
 (cl-weave:run-all :reporter :junit)
 (cl-weave:run-all :reporter :json :name-filter "properties")
 (cl-weave:run-all :coverage t :coverage-output "cl-weave.coverage")
@@ -711,7 +712,7 @@ reporter is the stable external-tool interface. Both include failed and errored
 path summaries for focused reruns. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`,
-`tap`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
+`tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
@@ -720,8 +721,9 @@ execution with SBCL `sb-cover`, and set `CL_WEAVE_COVERAGE_FILE=path` to save
 the coverage state as a CI artifact.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
 artifact file while preserving the process exit code contract. Use `tap` for
-line-oriented CI logs and `junit` when a CI service should ingest test results
-as XML. List mode supports `spec`, `sexp`, and `json`.
+line-oriented CI logs, `github` for GitHub Actions annotations, and `junit`
+when a CI service should ingest test results as XML. List mode supports `spec`,
+`sexp`, and `json`.
 
 ### ASDF System Runner and Watch Mode
 

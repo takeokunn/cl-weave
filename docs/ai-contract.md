@@ -250,6 +250,30 @@ TAP is intentionally a stream format. Agents that need stable field names,
 path arrays, assertion payloads, and focused rerun metadata should use the
 S-expression or JSON reporters.
 
+## GitHub Actions Reporter
+
+```lisp
+(cl-weave:run-all :reporter :github)
+```
+
+The GitHub Actions reporter emits workflow command annotations for failed and
+errored tests:
+
+```text
+::error file=tests/math.lisp::math > subtracts [fail]%0AExpected 1 to be 2
+cl-weave: 1 passed, 0 skipped, 0 todo, 1 failed, 0 errored, 2 total
+```
+
+Only `:fail` and `:error` events become annotations. Passing, skipped, and todo
+events are represented only in the summary line so CI logs stay actionable.
+Annotation data uses GitHub workflow command escaping. `file` is emitted when
+source location metadata is available; otherwise cl-weave emits an annotation
+without a `file` property.
+
+This reporter is a CI log affordance, not a structured artifact schema. Agents
+that need stable fields should continue to use the S-expression or JSON
+reporters.
+
 For assertion failures, `assertion` contains:
 
 ```json

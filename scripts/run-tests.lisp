@@ -27,6 +27,7 @@
       ((string-equal reporter "sexp") :sexp)
       ((string-equal reporter "json") :json)
       ((string-equal reporter "tap") :tap)
+      ((string-equal reporter "github") :github)
       ((string-equal reporter "junit") :junit)
       (t (error "Unknown CL_WEAVE_REPORTER value: ~A" reporter)))))
 

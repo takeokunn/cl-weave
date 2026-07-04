@@ -907,6 +907,7 @@
          (:sexp (report-sexp events stream))
          (:json (report-json events stream))
          (:tap (report-tap events stream))
+         (:github (report-github events stream))
          (:junit (report-junit events stream)))
        (every #'passed-event-p events)))))
 
