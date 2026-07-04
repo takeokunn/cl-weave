@@ -536,7 +536,9 @@ Agents can reproduce order-dependent failures without changing source files:
 The command runner exposes the same contract through
 `CL_WEAVE_SEQUENCE=random` and `CL_WEAVE_SEQUENCE_SEED=N`. Accepted order values
 are `defined`, `random`, and `shuffle`; `shuffle` is an alias for `random`.
-`:defined` is the default.
+`:defined` is the default. When `CL_WEAVE_SEQUENCE_SEED` is explicitly set, it
+must be a positive integer so failed CI runs can be reproduced from logs without
+ambiguous seed parsing.
 
 Ordering is applied after focus, `name-filter`, and shard selection. Shard
 membership remains stable across seeds. Ordering is local to each suite so
@@ -669,8 +671,8 @@ events:
 ```
 
 The command runner exposes the same control through `CL_WEAVE_BAIL`. Accepted
-values are `true`, `yes`, `on`, `false`, `no`, `off`, `0`, `nil`, or a positive
-integer. Other boolean environment variables use the same false tokens:
+values are `true`, `yes`, `on`, `t`, `false`, `no`, `off`, `0`, `nil`, or a
+positive integer. Other boolean environment variables use the same false tokens:
 `0`, `false`, `no`, `off`, and `nil`.
 
 Bail counts only emitted `:fail` and `:error` events. `:pass`, `:skip`, and

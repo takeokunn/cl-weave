@@ -32,7 +32,7 @@
       ((string-equal reporter "tap") :tap)
       ((string-equal reporter "github") :github)
       ((string-equal reporter "junit") :junit)
-      (t (error "Unknown CL_WEAVE_REPORTER value: ~A" reporter)))))
+      (t (error "cl-weave: unknown CL_WEAVE_REPORTER value: ~A" reporter)))))
 
 (defun requested-test-filter ()
   #+sbcl
@@ -77,7 +77,7 @@
            (string-equal value "nil"))
        nil)
       (t
-       (error "CL_WEAVE_PASS_WITH_NO_TESTS must be a boolean: ~A" value))))
+       (error "cl-weave: CL_WEAVE_PASS_WITH_NO_TESTS must be a boolean: ~A" value))))
   #-sbcl
   t)
 
@@ -89,9 +89,13 @@
            (string= value "")
            (string= value "0")
            (string-equal value "false")
+           (string-equal value "no")
+           (string-equal value "off")
            (string-equal value "nil"))
        nil)
       ((or (string-equal value "true")
+           (string-equal value "yes")
+           (string-equal value "on")
            (string-equal value "t"))
        t)
       (t
@@ -103,7 +107,7 @@
                       (loop for index from position below (length value)
                             always (find (char value index)
                                          '(#\Space #\Tab #\Newline #\Return))))
-           (error "CL_WEAVE_BAIL must be true, false, or a positive integer: ~A" value))
+           (error "cl-weave: CL_WEAVE_BAIL must be true, false, or a positive integer: ~A" value))
          parsed))))
   #-sbcl
   nil)
@@ -114,7 +118,7 @@
     (unless (and parsed
                  (plusp parsed)
                  (= position (length value)))
-      (error "~A must contain a positive integer: ~A" name value))
+      (error "cl-weave: ~A must contain a positive integer: ~A" name value))
     parsed))
 
 (defun requested-shard ()
@@ -123,7 +127,7 @@
     (when (and value (not (string= value "")))
       (let ((slash (position #\/ value)))
         (unless slash
-          (error "CL_WEAVE_SHARD must use INDEX/COUNT, for example 1/3: ~A" value))
+          (error "cl-weave: CL_WEAVE_SHARD must use INDEX/COUNT, for example 1/3: ~A" value))
         (let ((index (parse-positive-integer
                       (subseq value 0 slash)
                       "CL_WEAVE_SHARD index"))
@@ -131,7 +135,7 @@
                       (subseq value (1+ slash))
                       "CL_WEAVE_SHARD count")))
           (unless (<= index count)
-            (error "CL_WEAVE_SHARD requires INDEX <= COUNT: ~A" value))
+            (error "cl-weave: CL_WEAVE_SHARD requires INDEX <= COUNT: ~A" value))
           (list index count)))))
   #-sbcl
   nil)
@@ -141,7 +145,7 @@
       (parse-integer value :junk-allowed t)
     (unless (and parsed
                  (= position (length value)))
-      (error "~A must contain an integer: ~A" name value))
+      (error "cl-weave: ~A must contain an integer: ~A" name value))
     parsed))
 
 (defun requested-sequence-order ()
@@ -150,7 +154,7 @@
     (cond
       ((or (null value) (string= value "") (string-equal value "defined")) :defined)
       ((or (string-equal value "random") (string-equal value "shuffle")) :random)
-      (t (error "CL_WEAVE_SEQUENCE must be defined, random, or shuffle: ~A" value))))
+      (t (error "cl-weave: CL_WEAVE_SEQUENCE must be defined, random, or shuffle: ~A" value))))
   #-sbcl
   :defined)
 
@@ -158,7 +162,7 @@
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_SEQUENCE_SEED")))
     (if (and value (not (string= value "")))
-        (parse-complete-integer value "CL_WEAVE_SEQUENCE_SEED")
+        (parse-positive-integer value "CL_WEAVE_SEQUENCE_SEED")
         0))
   #-sbcl
   0)
@@ -219,7 +223,7 @@
                        (loop for index from position below (length value)
                              always (find (char value index)
                                           '(#\Space #\Tab #\Newline #\Return))))
-            (error "CL_WEAVE_WATCH_INTERVAL must be a positive number: ~A" value))
+            (error "cl-weave: CL_WEAVE_WATCH_INTERVAL must be a positive number: ~A" value))
           parsed)
         0.5))
   #-sbcl
@@ -290,4 +294,4 @@
                     1)))))))
 
 #-sbcl
-(error "scripts/run-tests.lisp currently requires SBCL.")
+(error "cl-weave: scripts/run-tests.lisp currently requires SBCL.")

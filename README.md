@@ -743,7 +743,7 @@ stops after that many failing or errored events. Skips and todos do not count
 toward the bail limit.
 
 For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `yes`, `on`,
-`false`, `no`, `off`, `0`, `nil`, or a positive integer:
+`t`, `false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
 timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
@@ -843,7 +843,7 @@ reporters include failed and errored path summaries for focused reruns. See
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`, `ndjson`,
 `tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
-discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
+discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus positive
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
 `CL_WEAVE_BAIL` for fast-fail runs. Boolean environment variables treat
 `0`, `false`, `no`, `off`, and `nil` as false. Set
