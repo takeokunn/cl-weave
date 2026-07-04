@@ -44,6 +44,10 @@
   (loop for current in (suite-lineage suite)
         append (suite-before-each current)))
 
+(defun effective-around-hooks (suite)
+  (loop for current in (suite-lineage suite)
+        append (suite-around-each current)))
+
 (defun effective-after-hooks (suite)
   (loop for current in (reverse (suite-lineage suite))
         append (reverse (suite-after-each current))))
@@ -55,14 +59,24 @@
         (funcall (first hooks))
         (call-hooks/k (rest hooks) continue))))
 
+(defun call-around-hooks/k (hooks continue)
+  (if (null hooks)
+      (funcall continue)
+      (funcall (first hooks)
+               (lambda ()
+                 (call-around-hooks/k (rest hooks) continue)))))
+
 (defun call-test-case/k (suite test continue)
   (let ((*test-context* (make-hash-table :test #'equal)))
     (unwind-protect
          (call-hooks/k
           (effective-before-hooks suite)
           (lambda ()
-            (funcall (test-case-function test))
-            (funcall continue)))
+            (call-around-hooks/k
+             (effective-around-hooks suite)
+             (lambda ()
+               (funcall (test-case-function test))
+               (funcall continue)))))
       (call-hooks/k (effective-after-hooks suite) (lambda () nil)))))
 
 (defun test-path (suite test)

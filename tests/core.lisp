@@ -626,7 +626,51 @@
     (expect *fixture-value* :to-be 42))
 
   (it "keeps before-all state across cases"
-    (expect *fixture-events* :to-equal '(:before-each :after-each :before-each :before-all))))
+    (expect *fixture-events* :to-equal '(:before-each :after-each :before-each :before-all)))
+
+  (it "wraps each test body with around-each continuations"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (events nil))
+      (let ((*fixture-value* :outer)
+            (cl-weave::*current-suite* root)
+            (cl-weave::*root-suite* root))
+        (cl-weave::register-suite
+         "around"
+         (lambda ()
+           (before-each
+             (push :before events))
+           (around-each (next)
+             (push (list :enter *fixture-value*) events)
+             (let ((*fixture-value* :inner))
+               (funcall next))
+             (push (list :exit *fixture-value*) events))
+           (after-each
+             (push :after events))
+           (it "case"
+             (push (list :body *fixture-value*) events)))))
+      (cl-weave::collect-events root)
+      (expect (reverse events)
+              :to-equal '(:before (:enter 41) (:body :inner) (:exit 41) :after))))
+
+  (it "runs around-each cleanup before after-each when body fails"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (events nil))
+      (let ((cl-weave::*current-suite* root)
+            (cl-weave::*root-suite* root))
+        (cl-weave::register-suite
+         "around cleanup"
+         (lambda ()
+           (around-each (next)
+             (unwind-protect
+                  (funcall next)
+               (push :around-cleanup events)))
+           (after-each
+             (push :after events))
+           (it "case"
+             (error "boom")))))
+      (let ((result (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
+      (expect (reverse events) :to-equal '(:around-cleanup :after)))))
 
 (describe "retry and timeout"
   (it "retries failing tests until they pass"

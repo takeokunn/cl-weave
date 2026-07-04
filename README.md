@@ -18,7 +18,7 @@ Early MVP. The current focus is a solid core:
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
-- `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
+- `before-all` / `after-all`, `before-each` / `after-each`, and CPS `around-each` dynamic fixtures
 - `describe-skip` / `it-skip` / `test-skip` skipped suites and cases
 - `describe-skip-if` / `it-skip-if` and `run-if` conditional registration
 - `describe-only` / `it-only` focused runs
@@ -399,6 +399,12 @@ Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
   (before-each
     (setf (gethash :trace *state*) nil))
 
+  (around-each (next)
+    (let ((*state* *state*))
+      (unwind-protect
+           (funcall next)
+        (remhash :scratch *state*))))
+
   (after-each
     (remhash :trace *state*))
 
@@ -412,6 +418,9 @@ Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
 
 `before-all` / `after-all` bodies run once around a suite. `before-each` /
 `after-each` bodies run around every test in the current suite and nested suites.
+`around-each` receives a continuation for the remaining around hooks and test
+body, so special variables can be dynamically rebound around only the case.
+Use `unwind-protect` inside `around-each` when the fixture owns cleanup.
 
 ### Skipping
 

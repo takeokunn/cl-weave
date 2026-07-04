@@ -3,6 +3,7 @@
   (:shadow #:describe)
   (:export
    #:*test-context*
+   #:around-each
    #:after-all
    #:after-each
    #:assertion-failure

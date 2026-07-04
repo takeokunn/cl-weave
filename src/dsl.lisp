@@ -195,6 +195,9 @@
 (defmacro before-each (&body body)
   `(register-before-each (lambda () ,@body)))
 
+(defmacro around-each ((next) &body body)
+  `(register-around-each (lambda (,next) ,@body)))
+
 (defmacro after-each (&body body)
   `(register-after-each (lambda () ,@body)))
 

@@ -388,9 +388,19 @@ are `defined`, `random`, and `shuffle`; `shuffle` is an alias for `random`.
 
 Ordering is applied after focus, `name-filter`, and shard selection. Shard
 membership remains stable across seeds. Ordering is local to each suite so
-`before-all`, `after-all`, `before-each`, and `after-each` boundaries are
-preserved. Reporter schemas are unchanged. The same seed and same test tree
-produce the same execution and list-mode order across SBCL processes.
+`before-all`, `after-all`, `before-each`, `around-each`, and `after-each`
+boundaries are preserved. Reporter schemas are unchanged. The same seed and
+same test tree produce the same execution and list-mode order across SBCL
+processes.
+
+## Fixture Continuation Contract
+
+`around-each` registers a single-argument hook. The argument is the continuation
+for the remaining `around-each` hooks and the test body. `before-each` hooks run
+before `around-each`; `after-each` hooks run after the continuation returns or
+unwinds. Around hooks compose from outer suites to inner suites. Use
+`unwind-protect` inside an around hook for deterministic cleanup. Reporter
+schemas are unchanged.
 
 ## Test Plan Contract
 
@@ -523,7 +533,7 @@ event, so reporter schemas do not expose intermediate attempts.
 `:timeout-ms` is a per-attempt wall-clock budget. When an attempt times out, the
 final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `:assertion` is `nil`. Fixture hooks are still executed through the same
-`before-each` / `after-each` contract as ordinary test attempts.
+`before-each` / `around-each` / `after-each` contract as ordinary test attempts.
 
 `:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
 parallel execution with adjacent concurrent cases. Event arrays and test-plan

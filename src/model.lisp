@@ -11,10 +11,11 @@
   skip-reason
   todo-reason
   (children '())
-  (before-all '())
-  (after-all '())
-  (before-each '())
-  (after-each '()))
+   (before-all '())
+   (after-all '())
+   (before-each '())
+   (around-each '())
+   (after-each '()))
 
 (defstruct test-case
   name
@@ -222,6 +223,11 @@
   (let ((suite (or *current-suite* (root-suite))))
     (setf (suite-before-each suite)
           (append (suite-before-each suite) (list function)))))
+
+(defun register-around-each (function)
+  (let ((suite (or *current-suite* (root-suite))))
+    (setf (suite-around-each suite)
+          (append (suite-around-each suite) (list function)))))
 
 (defun register-after-each (function)
   (let ((suite (or *current-suite* (root-suite))))

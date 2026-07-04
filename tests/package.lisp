@@ -4,6 +4,7 @@
    #:describe)
   (:import-from #:cl-weave
    #:*test-context*
+   #:around-each
    #:after-all
    #:after-each
    #:assertion-failure
