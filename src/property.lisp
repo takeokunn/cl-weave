@@ -30,16 +30,27 @@
     (error ()
       nil)))
 
+(defun parse-environment-integer (name value)
+  (handler-case
+      (parse-integer value :junk-allowed nil)
+    (error ()
+      (error "cl-weave: ~A must be an integer, got ~S." name value))))
+
 (defun environment-integer (name fallback)
-  (or #+sbcl
-      (let ((value (sb-ext:posix-getenv name)))
-        (when value
-          (parse-integer value)))
-      #-sbcl nil
-      fallback))
+  (let ((value (uiop:getenv name)))
+    (if (and value (plusp (length value)))
+        (parse-environment-integer name value)
+        fallback)))
+
+(defun ensure-positive-property-count (count source)
+  (unless (and (integerp count) (plusp count))
+    (error "cl-weave: ~A must be a positive integer, got ~S." source count))
+  count)
 
 (defun property-test-count ()
-  (environment-integer "CL_WEAVE_PROPERTY_TESTS" *property-test-count*))
+  (ensure-positive-property-count
+   (environment-integer "CL_WEAVE_PROPERTY_TESTS" *property-test-count*)
+   "CL_WEAVE_PROPERTY_TESTS or *property-test-count*"))
 
 (defun property-seed ()
   (environment-integer "CL_WEAVE_PROPERTY_SEED" *property-seed*))

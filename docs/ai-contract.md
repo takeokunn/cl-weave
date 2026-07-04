@@ -10,29 +10,43 @@ to the canonical hyphenated forms when reasoning about test plans:
 
 - `describe.each` -> `describe-each`
 - `describe.only` -> `describe-only`
+- `describe.only.each` -> `describe-only-each`
 - `describe.concurrent` -> `describe-concurrent`
+- `describe.concurrent.each` -> `describe-concurrent-each`
 - `describe.sequential` -> `describe-sequential`
+- `describe.sequential.each` -> `describe-sequential-each`
 - `describe.run-if` -> `describe-run-if`
 - `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
+- `describe.skip.each` -> `describe-skip-each`
 - `it.each` -> `it-each`
 - `it.concurrent` -> `it-concurrent`
+- `it.concurrent.each` -> `it-concurrent-each`
 - `it.sequential` -> `it-sequential`
+- `it.sequential.each` -> `it-sequential-each`
 - `it.isolated` -> `it-isolated`
 - `it.property` -> `it-property`
 - `it.fails` -> `it-fails`
+- `it.fails.each` -> `it-fails-each`
 - `it.only` -> `it-only`
+- `it.only.each` -> `it-only-each`
 - `it.run-if` -> `it-run-if`
 - `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
+- `it.skip.each` -> `it-skip-each`
 - `test` -> `it`
 - `test.each` -> `test-each`
 - `test.concurrent` -> `test-concurrent`
+- `test.concurrent.each` -> `test-concurrent-each`
 - `test.sequential` -> `test-sequential`
+- `test.sequential.each` -> `test-sequential-each`
 - `test.isolated` -> `test-isolated`
 - `test.property` -> `test-property`
 - `test.fails` -> `test-fails`
+- `test.fails.each` -> `test-fails-each`
 - `test.only` -> `test-only`
+- `test.only.each` -> `test-only-each`
 - `test.run-if` -> `test-run-if`
 - `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
+- `test.skip.each` -> `test-skip-each`
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
 - `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
@@ -801,6 +815,11 @@ generated values and shrink candidates before the same `assertion-failure`
 payload is reported. `gen-symbol`, `gen-keyword`, `gen-sexp`, and `gen-form`
 are convenience generators for Lisp-native property tests and macro-expansion
 inputs.
+
+Property CI controls are strict. `CL_WEAVE_PROPERTY_TESTS` must parse as a
+positive integer, and `CL_WEAVE_PROPERTY_SEED` must parse as an integer. Invalid
+values are cl-weave errors, not implementation-level parser errors, so agents
+can treat them as configuration failures.
 
 ## Isolated Process Contract
 

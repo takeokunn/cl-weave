@@ -101,16 +101,11 @@
 
 (defun parse-reporter (value)
   (let ((normalized (string-downcase value)))
-    (cond
-      ((string= normalized "spec") :spec)
-      ((string= normalized "sexp") :sexp)
-      ((string= normalized "json") :json)
-      ((member normalized '("jsonl" "ndjson") :test #'string=) :jsonl)
-      ((string= normalized "tap") :tap)
-      ((string= normalized "github") :github)
-      ((string= normalized "junit") :junit)
-      (t (error 'cli-error
-                :message (format nil "Unknown reporter: ~A" value))))))
+    (or (loop for (reporter . aliases) in cl-weave::*reporter-aliases*
+              when (member normalized aliases :test #'string=)
+                return reporter)
+        (error 'cli-error
+               :message (format nil "Unknown reporter: ~A" value)))))
 
 (defun parse-sequence-order (value)
   (let ((normalized (string-downcase value)))
@@ -419,7 +414,8 @@
 
 (defun ensure-valid-reporter-for-command (options)
   (when (and (cli-options-list options)
-             (member (cli-options-reporter options) '(:tap :github :junit)))
+             (not (member (cli-options-reporter options)
+                          cl-weave::*list-reporters*)))
     (error 'cli-error
            :message "List mode supports spec, sexp, json, and jsonl reporters.")))
 

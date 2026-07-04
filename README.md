@@ -360,13 +360,29 @@ survived, errored, and score fields.
       "runs generated case ~A"
       (actual expected)
     (expect actual :to-be expected)))
+
+(test.only.each ((1 2 3))
+    "focuses generated case ~A and ~A"
+    (left right total)
+  (expect (+ left right) :to-be total))
+
+(it.skip.each ((:slow :case))
+    "skips generated case ~A"
+    (kind label)
+  "blocked by upstream"
+  (expect (list kind label) :to-equal '(:slow :case)))
 ```
 
 `it-each` and `test-each` expand into independent `it` forms at macro expansion
 time. `describe-each` expands into independent `describe` forms, so nested
 fixtures and cases keep the same semantics as hand-written suites. Dot aliases
 such as `it.each`, `test.each`, and `describe.each` macro-expand through the
-canonical hyphenated forms. The full Vitest-shaped surface also includes
+canonical hyphenated forms. Table aliases compose with the Vitest-shaped
+modifiers: `it.only.each`, `it.concurrent.each`, `it.sequential.each`,
+`it.fails.each`, `it.skip.each`, the matching `test.*.each` aliases, and
+suite-level `describe.only.each`, `describe.concurrent.each`,
+`describe.sequential.each`, and `describe.skip.each`. The full Vitest-shaped
+surface also includes
 `it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
 `it.skip`, `it.skip-if`, `it.todo`, `it.isolated`, `it.property`, matching
 `test.*` aliases, suite-level `describe.concurrent`, `describe.sequential`,
@@ -458,6 +474,9 @@ Lisp data and macro-expansion inputs without embedding runner logic in tests;
 
 Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
 `CL_WEAVE_PROPERTY_TESTS` and `CL_WEAVE_PROPERTY_SEED` for reproducible CI runs.
+`CL_WEAVE_PROPERTY_TESTS` must be a positive integer. Both CI environment
+variables are parsed strictly, so invalid values fail fast with a `cl-weave:`
+diagnostic instead of silently running zero generated cases.
 
 ### Fixtures
 

@@ -914,6 +914,29 @@
             (save-coverage coverage-output))))
       (funcall thunk)))
 
+(defparameter *reporter-aliases*
+  '((:spec "spec")
+    (:sexp "sexp")
+    (:json "json")
+    (:jsonl "jsonl" "ndjson")
+    (:tap "tap")
+    (:github "github")
+    (:junit "junit")))
+
+(defparameter *run-reporters* (mapcar #'first *reporter-aliases*))
+
+(defparameter *list-reporters* '(:spec :sexp :json :jsonl))
+
+(defun ensure-run-reporter (reporter)
+  (unless (member reporter *run-reporters*)
+    (error "Run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))
+  reporter)
+
+(defun ensure-list-reporter (reporter)
+  (unless (member reporter *list-reporters*)
+    (error "List mode supports spec, sexp, json, and jsonl reporters."))
+  reporter)
+
 (defun run-all (&key (reporter :spec)
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
@@ -925,6 +948,7 @@
                   coverage-output
                   (pass-with-no-tests t)
                   (coverage-reset t))
+  (ensure-run-reporter reporter)
   (call-with-coverage
    coverage
    coverage-output
@@ -954,6 +978,7 @@
                      shard
                      order
                      seed)
+  (ensure-list-reporter reporter)
   (let ((plan (collect-test-plan
                (root-suite)
                :name-filter name-filter

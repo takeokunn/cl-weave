@@ -21,19 +21,27 @@
    #:defmatcher
    #:defmutation-operator
    #:describe.concurrent
+   #:describe.concurrent.each
    #:describe.each
    #:describe.only
+   #:describe.only.each
    #:describe.run-if
    #:describe.sequential
+   #:describe.sequential.each
    #:describe.skip
+   #:describe.skip.each
    #:describe.skip-if
    #:describe.todo
    #:describe-concurrent
+   #:describe-concurrent-each
    #:describe-each
    #:describe-only
+   #:describe-only-each
    #:describe-sequential
+   #:describe-sequential-each
    #:describe-run-if
    #:describe-skip
+   #:describe-skip-each
    #:describe-skip-if
    #:describe-todo
    #:extend-expect
@@ -57,23 +65,33 @@
    #:gen-tuple
    #:it
    #:it.concurrent
+   #:it.concurrent.each
    #:it.each
    #:it-concurrent
+   #:it-concurrent-each
    #:it-each
    #:it.fails
+   #:it.fails.each
    #:it-fails
+   #:it-fails-each
    #:it.isolated
    #:it-isolated
    #:it.property
    #:it-property
    #:it.only
+   #:it.only.each
    #:it-only
+   #:it-only-each
    #:it.run-if
    #:it-run-if
    #:it.sequential
+   #:it.sequential.each
    #:it-sequential
+   #:it-sequential-each
    #:it.skip
+   #:it.skip.each
    #:it-skip
+   #:it-skip-each
    #:it.skip-if
    #:it-skip-if
    #:it.todo
@@ -105,15 +123,21 @@
    #:skip-test
    #:test
    #:test.concurrent
+   #:test.concurrent.each
    #:test.each
    #:test-concurrent
+   #:test-concurrent-each
    #:test-each
    #:test.fails
+   #:test.fails.each
    #:test-fails
+   #:test-fails-each
    #:test.isolated
    #:test-isolated
    #:test.only
+   #:test.only.each
    #:test-only
+   #:test-only-each
    #:test.property
    #:test-property
    #:test-plan-facts
@@ -121,9 +145,13 @@
    #:test.run-if
    #:test-run-if
    #:test.sequential
+   #:test.sequential.each
    #:test-sequential
+   #:test-sequential-each
    #:test.skip
+   #:test.skip.each
    #:test-skip
+   #:test-skip-each
    #:test.skip-if
    #:test-skip-if
    #:test.todo

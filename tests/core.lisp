@@ -580,8 +580,32 @@
        (expect (+ left right) :to-be total))
      cl-weave:it-each)
     (expect-macroexpands-through
+     (it.only.each ((1 2 3))
+         "focused ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:it-only-each)
+    (expect-macroexpands-through
+     (it.concurrent.each ((1 2 3))
+         "parallel ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:it-concurrent-each)
+    (expect-macroexpands-through
+     (it.sequential.each ((1 2 3))
+         "serial ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:it-sequential-each)
+    (expect-macroexpands-through
      (it.fails "expected failure alias" (expect :ok :to-be :not-ok))
      cl-weave:it-fails)
+    (expect-macroexpands-through
+     (it.fails.each ((1 2 4))
+         "expected failure ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:it-fails-each)
     (expect-macroexpands-through
      (it.only "focused alias" (expect :ok :to-be :ok))
      cl-weave:it-only)
@@ -594,6 +618,13 @@
     (expect-macroexpands-through
      (it.skip "skipped alias" "because")
      cl-weave:it-skip)
+    (expect-macroexpands-through
+     (it.skip.each ((1 2 3))
+         "skipped ~A and ~A"
+         (left right total)
+       "because"
+       (expect (+ left right) :to-be total))
+     cl-weave:it-skip-each)
     (expect-macroexpands-through
      (it.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
      cl-weave:it-skip-if)
@@ -614,11 +645,29 @@
      (test.concurrent "parallel alias" (expect :ok :to-be :ok))
      cl-weave:test-concurrent)
     (expect-macroexpands-through
+     (test.concurrent.each ((1 2 3))
+         "parallel alias ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:test-concurrent-each)
+    (expect-macroexpands-through
      (test.fails "expected failure alias" (expect :ok :to-be :not-ok))
      cl-weave:test-fails)
     (expect-macroexpands-through
+     (test.fails.each ((1 2 4))
+         "expected failure alias ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:test-fails-each)
+    (expect-macroexpands-through
      (test.only "focused alias" (expect :ok :to-be :ok))
      cl-weave:test-only)
+    (expect-macroexpands-through
+     (test.only.each ((1 2 3))
+         "focused alias ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:test-only-each)
     (expect-macroexpands-through
      (test.run-if t "conditional alias" (expect :ok :to-be :ok))
      cl-weave:test-run-if)
@@ -626,8 +675,21 @@
      (test.sequential "serial alias" (expect :ok :to-be :ok))
      cl-weave:test-sequential)
     (expect-macroexpands-through
+     (test.sequential.each ((1 2 3))
+         "serial alias ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:test-sequential-each)
+    (expect-macroexpands-through
      (test.skip "skipped alias" "because")
      cl-weave:test-skip)
+    (expect-macroexpands-through
+     (test.skip.each ((1 2 3))
+         "skipped alias ~A and ~A"
+         (left right total)
+       "because"
+       (expect (+ left right) :to-be total))
+     cl-weave:test-skip-each)
     (expect-macroexpands-through
      (test.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
      cl-weave:test-skip-if)
@@ -649,13 +711,31 @@
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-concurrent)
     (expect-macroexpands-through
+     (describe.concurrent.each ((1 2 3))
+         "parallel suite ~A and ~A"
+         (left right total)
+       (it "case" (expect (+ left right) :to-be total)))
+     cl-weave:describe-concurrent-each)
+    (expect-macroexpands-through
      (describe.sequential "serial alias"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-sequential)
     (expect-macroexpands-through
+     (describe.sequential.each ((1 2 3))
+         "serial suite ~A and ~A"
+         (left right total)
+       (it "case" (expect (+ left right) :to-be total)))
+     cl-weave:describe-sequential-each)
+    (expect-macroexpands-through
      (describe.only "focused alias"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-only)
+    (expect-macroexpands-through
+     (describe.only.each ((1 2 3))
+         "focused suite ~A and ~A"
+         (left right total)
+       (it "case" (expect (+ left right) :to-be total)))
+     cl-weave:describe-only-each)
     (expect-macroexpands-through
      (describe.run-if t "conditional suite alias"
        (it "case" (expect :ok :to-be :ok)))
@@ -664,6 +744,13 @@
      (describe.skip "skipped suite alias" "because"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-skip)
+    (expect-macroexpands-through
+     (describe.skip.each ((1 2 3))
+         "skipped suite ~A and ~A"
+         (left right total)
+       "because"
+       (it "case" (expect (+ left right) :to-be total)))
+     cl-weave:describe-skip-each)
     (expect-macroexpands-through
      (describe.skip-if t "conditional skipped suite alias"
        (it "case" (expect :ok :to-be :ok)))
@@ -818,6 +905,72 @@
           (expect (getf actual :case-index) :to-be 0)
           (expect actual :to-contain :values)
           (expect actual :to-contain :minimal)))))
+
+  (it "uses property count from the CI environment"
+    (let ((runs 0))
+      (with-mocked-functions
+          (((symbol-function 'uiop:getenv)
+            (lambda (name)
+              (cond
+                ((string= name "CL_WEAVE_PROPERTY_TESTS") "3")
+                ((string= name "CL_WEAVE_PROPERTY_SEED") "5")
+                (t nil)))))
+        (cl-weave::run-property
+         (list (gen-integer :min 1 :max 1))
+         (lambda (value)
+           (expect value :to-be 1)
+           (incf runs)
+           t)
+         '(value)
+         '(property-env-count)))
+      (expect runs :to-be 3)))
+
+  (it "rejects invalid property count environment values"
+    (with-mocked-functions
+        (((symbol-function 'uiop:getenv)
+          (lambda (name)
+            (when (string= name "CL_WEAVE_PROPERTY_TESTS")
+              "not-a-number"))))
+      (expect (lambda ()
+                (cl-weave::run-property
+                 (list (gen-integer :min 1 :max 1))
+                 (lambda (value)
+                   (declare (ignore value))
+                   t)
+                 '(value)
+                 '(property-invalid-count)))
+              :to-throw
+              "CL_WEAVE_PROPERTY_TESTS")))
+
+  (it "rejects non-positive property counts"
+    (let ((cl-weave:*property-test-count* 0))
+      (expect (lambda ()
+                (cl-weave::run-property
+                 (list (gen-integer :min 1 :max 1))
+                 (lambda (value)
+                   (declare (ignore value))
+                   t)
+                 '(value)
+                 '(property-zero-count)))
+              :to-throw
+              "positive integer")))
+
+  (it "rejects invalid property seed environment values"
+    (with-mocked-functions
+        (((symbol-function 'uiop:getenv)
+          (lambda (name)
+            (when (string= name "CL_WEAVE_PROPERTY_SEED")
+              "not-a-seed"))))
+      (expect (lambda ()
+                (cl-weave::run-property
+                 (list (gen-integer :min 1 :max 1))
+                 (lambda (value)
+                   (declare (ignore value))
+                   t)
+                 '(value)
+                 '(property-invalid-seed)))
+              :to-throw
+              "CL_WEAVE_PROPERTY_SEED")))
 
   (it "expands it-property into the property runner"
     (expect (macroexpand-1
@@ -1570,7 +1723,15 @@
           :function (lambda () (error "should not run")))))
       (let ((plan (cl-weave:collect-test-plan root :shard '(1 2))))
         (expect (mapcar #'cl-weave:test-plan-entry-path plan)
-                :to-equal '(("plan-shard" "one") ("plan-shard" "three")))))))
+                :to-equal '(("plan-shard" "one") ("plan-shard" "three"))))))
+
+  (it "rejects invalid shard specs with stable errors"
+    (let ((root (cl-weave::make-suite :name "root")))
+      (dolist (shard '((0 2) (3 2) (1) (1 2 3) "1/2"))
+        (expect (lambda ()
+                  (cl-weave::collect-events root :shard shard))
+                :to-throw
+                "Shard must be NIL")))))
 
 (describe "sequence"
   (it "runs and lists tests in deterministic seeded order"
@@ -1613,9 +1774,28 @@
              (names (mapcar (lambda (path) (second path))
                             (mapcar #'cl-weave::test-event-path events))))
         (expect (sort (copy-list names) #'string<)
-                :to-equal '("one" "three"))))))
+                :to-equal '("one" "three")))))
+
+  (it "rejects invalid sequence controls with stable errors"
+    (let ((root (cl-weave::make-suite :name "root")))
+      (expect (lambda ()
+                (cl-weave::collect-events root :order :reverse))
+              :to-throw
+              "Sequence order must")
+      (expect (lambda ()
+                (cl-weave:collect-test-plan root :seed "123"))
+              :to-throw
+              "Sequence seed must"))))
 
 (describe "list mode"
+  (it "rejects CI-incompatible plan reporters before dispatch"
+    (dolist (reporter '(:github :junit :tap))
+      (expect (lambda ()
+                (with-output-to-string (stream)
+                  (cl-weave:list-tests :reporter reporter :stream stream)))
+              :to-throw
+              "List mode supports")))
+
   (it "collects selected tests without running hooks or bodies"
     (let* ((root (cl-weave::make-suite :name "root"))
            (events-log nil)
@@ -1897,7 +2077,15 @@
       (let ((events (cl-weave::collect-events root :bail 2)))
         (expect (mapcar #'cl-weave::test-event-status events)
                 :to-equal '(:fail :pass :error))
-        (expect events-log :to-equal '(:first :second :third))))))
+        (expect events-log :to-equal '(:first :second :third)))))
+
+  (it "rejects invalid bail limits with stable errors"
+    (let ((root (cl-weave::make-suite :name "root")))
+      (dolist (bail '(-1 :yes "1"))
+        (expect (lambda ()
+                  (cl-weave::collect-events root :bail bail))
+                :to-throw
+                "Bail must be")))))
 
 (describe "cli"
   (it "parses Vitest-shaped run options into explicit data"
@@ -2298,6 +2486,13 @@
                   '(:index 2 :arguments (:missing))))))))
 
 (describe "reporters"
+  (it "rejects unknown run reporters before dispatch"
+    (expect (lambda ()
+              (with-output-to-string (stream)
+                (cl-weave:run-all :reporter :unknown :stream stream)))
+            :to-throw
+            "Run mode supports"))
+
   (it "prints AI-readable S-expression results"
     (let ((output (with-output-to-string (stream)
                       (cl-weave::report-sexp

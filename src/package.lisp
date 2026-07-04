@@ -24,16 +24,24 @@
    #:describe
    #:describe.concurrent
    #:describe-concurrent
+   #:describe.concurrent.each
+   #:describe-concurrent-each
    #:describe.each
    #:describe-each
    #:describe.only
    #:describe-only
+   #:describe.only.each
+   #:describe-only-each
    #:describe.run-if
    #:describe-run-if
    #:describe.sequential
    #:describe-sequential
+   #:describe.sequential.each
+   #:describe-sequential-each
    #:describe.skip
    #:describe-skip
+   #:describe.skip.each
+   #:describe-skip-each
    #:describe.skip-if
    #:describe-skip-if
    #:describe.todo
@@ -73,22 +81,32 @@
    #:it
    #:it.concurrent
    #:it-concurrent
+   #:it.concurrent.each
+   #:it-concurrent-each
    #:it.each
    #:it-each
    #:it.fails
    #:it-fails
+   #:it.fails.each
+   #:it-fails-each
    #:it.isolated
    #:it-isolated
    #:it.property
    #:it-property
    #:it.only
    #:it-only
+   #:it.only.each
+   #:it-only-each
    #:it.run-if
    #:it-run-if
    #:it.sequential
    #:it-sequential
+   #:it.sequential.each
+   #:it-sequential-each
    #:it.skip
    #:it-skip
+   #:it.skip.each
+   #:it-skip-each
    #:it.skip-if
    #:it-skip-if
    #:it.todo
@@ -148,22 +166,32 @@
    #:test
    #:test.concurrent
    #:test-concurrent
+   #:test.concurrent.each
+   #:test-concurrent-each
    #:test.each
    #:test-each
    #:test.fails
    #:test-fails
+   #:test.fails.each
+   #:test-fails-each
    #:test.isolated
    #:test-isolated
    #:test.only
    #:test-only
+   #:test.only.each
+   #:test-only-each
    #:test.property
    #:test-property
    #:test.run-if
    #:test-run-if
    #:test.sequential
    #:test-sequential
+   #:test.sequential.each
+   #:test-sequential-each
    #:test.skip
    #:test-skip
+   #:test.skip.each
+   #:test-skip-each
    #:test.skip-if
    #:test-skip-if
    #:test.todo

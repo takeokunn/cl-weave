@@ -39,8 +39,51 @@
                         (destructuring-bind ,bindings ',case
                           ,@body)))))
 
+(defmacro describe-only-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(describe-only ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro describe-concurrent-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(describe-concurrent ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro describe-sequential-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(describe-sequential ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro describe-skip-each (cases name bindings &body body)
+  (let ((reason (if (and body (stringp (first body))) (first body) "skipped"))
+        (forms (if (and body (stringp (first body))) (rest body) body)))
+    `(progn
+       ,@(loop for case in cases
+               collect `(describe-skip ,(apply #'format nil name case)
+                          ,reason
+                          (destructuring-bind ,bindings ',case
+                            ,@forms))))))
+
 (defmacro describe.each (cases name bindings &body body)
   `(describe-each ,cases ,name ,bindings ,@body))
+
+(defmacro describe.only.each (cases name bindings &body body)
+  `(describe-only-each ,cases ,name ,bindings ,@body))
+
+(defmacro describe.concurrent.each (cases name bindings &body body)
+  `(describe-concurrent-each ,cases ,name ,bindings ,@body))
+
+(defmacro describe.sequential.each (cases name bindings &body body)
+  `(describe-sequential-each ,cases ,name ,bindings ,@body))
+
+(defmacro describe.skip.each (cases name bindings &body body)
+  `(describe-skip-each ,cases ,name ,bindings ,@body))
 
 (defmacro describe.only (name &body body)
   `(describe-only ,name ,@body))
@@ -186,6 +229,41 @@
                          (destructuring-bind ,bindings ',case
                            ,@body)))))
 
+(defmacro it-only-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(it-only ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro it-concurrent-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(it-concurrent ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro it-sequential-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(it-sequential ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro it-fails-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(it-fails ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
+(defmacro it-skip-each (cases name bindings &body body)
+  (declare (ignore bindings))
+  (let ((reason (if (and body (stringp (first body))) (first body) "skipped")))
+    `(progn
+       ,@(loop for case in cases
+               collect `(it-skip ,(apply #'format nil name case) ,reason)))))
+
 (defmacro it-property (name bindings &body body)
   (let ((names (mapcar #'first bindings))
         (generators (mapcar #'second bindings)))
@@ -204,6 +282,21 @@
 
 (defmacro it.each (cases name bindings &body body)
   `(it-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.only.each (cases name bindings &body body)
+  `(it-only-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.concurrent.each (cases name bindings &body body)
+  `(it-concurrent-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.sequential.each (cases name bindings &body body)
+  `(it-sequential-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.fails.each (cases name bindings &body body)
+  `(it-fails-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.skip.each (cases name bindings &body body)
+  `(it-skip-each ,cases ,name ,bindings ,@body))
 
 (defmacro it.fails (name &body body)
   `(it-fails ,name ,@body))
@@ -241,6 +334,21 @@
 (defmacro test-each (cases name bindings &body body)
   `(it-each ,cases ,name ,bindings ,@body))
 
+(defmacro test-only-each (cases name bindings &body body)
+  `(it-only-each ,cases ,name ,bindings ,@body))
+
+(defmacro test-concurrent-each (cases name bindings &body body)
+  `(it-concurrent-each ,cases ,name ,bindings ,@body))
+
+(defmacro test-sequential-each (cases name bindings &body body)
+  `(it-sequential-each ,cases ,name ,bindings ,@body))
+
+(defmacro test-fails-each (cases name bindings &body body)
+  `(it-fails-each ,cases ,name ,bindings ,@body))
+
+(defmacro test-skip-each (cases name bindings &body body)
+  `(it-skip-each ,cases ,name ,bindings ,@body))
+
 (defmacro test-only (name &body body)
   `(it-only ,name ,@body))
 
@@ -273,6 +381,21 @@
 
 (defmacro test.each (cases name bindings &body body)
   `(test-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.only.each (cases name bindings &body body)
+  `(test-only-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.concurrent.each (cases name bindings &body body)
+  `(test-concurrent-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.sequential.each (cases name bindings &body body)
+  `(test-sequential-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.fails.each (cases name bindings &body body)
+  `(test-fails-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.skip.each (cases name bindings &body body)
+  `(test-skip-each ,cases ,name ,bindings ,@body))
 
 (defmacro test.fails (name &body body)
   `(test-fails ,name ,@body))
