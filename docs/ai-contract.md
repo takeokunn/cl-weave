@@ -76,6 +76,21 @@ substring, or a predicate function. Failure payloads use:
             :value "needle"))
 ```
 
+Mock function matchers report call and result histories in `:actual`:
+
+```lisp
+(:call-count 1
+ :calls ((1 2))
+ :result-count 1
+ :results ((:type :return :value 3 :values (3)))
+ :return-count 1
+ :throw-count 0)
+```
+
+Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
+The `:to-have-returned-with` matcher compares its operands with the recorded
+Common Lisp multiple values list.
+
 Smart assertions use the same shape. For predicate forms such as
 `(expect (= (+ 1 1) 3))`, the matcher is the predicate symbol and `:actual`
 contains operand reports:

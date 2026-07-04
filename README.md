@@ -202,6 +202,10 @@ Built-in matchers:
 - `:to-have-been-called`
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
+- `:to-have-returned`
+- `:to-have-returned-times`
+- `:to-have-returned-with`
+- `:to-have-thrown`
 
 `:to-throw` accepts an optional expected condition class designator, message
 substring, or predicate function. Failures report `:threw`, `:condition-type`,
@@ -690,7 +694,13 @@ selected and executed before the runner stopped.
   (expect add :to-have-been-called)
   (expect add :to-have-been-called-times 1)
   (expect add :to-have-been-called-with 1 2)
+  (expect add :to-have-returned)
+  (expect add :to-have-returned-times 1)
+  (expect add :to-have-returned-with 3)
   (expect (mock-calls add) :to-equal '((1 2)))
+  (expect (mock-results add)
+          :to-equal
+          '((:type :return :value 3 :values (3))))
   (clear-mock add))
 
 (with-mocked-functions (((symbol-function 'now) (lambda () 0)))
@@ -699,7 +709,9 @@ selected and executed before the runner stopped.
 
 `make-mock-function` creates an inspectable function object, close to
 Vitest's `vi.fn`. `mock-calls` returns a copy of the recorded argument lists,
-and `clear-mock` resets the call history.
+`mock-results` returns return/throw reports, and `clear-mock` resets both
+histories. `:to-have-returned-with` accepts Common Lisp multiple values as
+matcher operands, for example `(expect mock :to-have-returned-with :ok 42)`.
 
 `with-mocked-functions` temporarily rewrites global function cells. The
 original function cells are restored with `unwind-protect`.

@@ -1929,7 +1929,51 @@
       (expect (mock-calls mock) :to-equal '((1 2) (5 8)))
       (clear-mock mock)
       (expect mock :not :to-have-been-called)
-      (expect (mock-calls mock) :to-equal nil))))
+      (expect (mock-calls mock) :to-equal nil)
+      (expect (mock-results mock) :to-equal nil)))
+
+  (it "records mock return values including multiple values"
+    (let ((mock (make-mock-function (lambda (value)
+                                      (values value (* value 2))))))
+      (multiple-value-bind (value doubled) (funcall mock 4)
+        (expect value :to-be 4)
+        (expect doubled :to-be 8))
+      (expect mock :to-have-returned)
+      (expect mock :to-have-returned-times 1)
+      (expect mock :to-have-returned-with 4 8)
+      (expect (mock-results mock)
+              :to-equal
+              '((:type :return :value 4 :values (4 8))))))
+
+  (it "records thrown conditions from mock functions"
+    (let ((mock (make-mock-function (lambda ()
+                                      (error "mock exploded")))))
+      (expect (lambda () (funcall mock)) :to-throw "mock exploded")
+      (expect mock :to-have-thrown)
+      (expect mock :not :to-have-returned)
+      (expect (getf (first (mock-results mock)) :type) :to-be :throw)
+      (expect (getf (first (mock-results mock)) :message)
+              :to-contain
+              "mock exploded")))
+
+  (it "reports structured mock assertion failures"
+    (handler-case
+        (let ((mock (make-mock-function (lambda () :ok))))
+          (funcall mock)
+          (expect mock :to-have-returned-times 2)
+          (error "unreachable"))
+      (assertion-failure (condition)
+        (let ((assertion (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher assertion)
+                  :to-be
+                  :to-have-returned-times)
+          (expect (getf (cl-weave::assertion-detail-actual assertion)
+                        :return-count)
+                  :to-be
+                  1)
+          (expect (cl-weave::assertion-detail-expected assertion)
+                  :to-equal
+                  '(:return-count 2)))))))
 
 (describe "reporters"
   (it "prints AI-readable S-expression results"

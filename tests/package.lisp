@@ -64,6 +64,7 @@
    #:logic-where
    #:make-mock-function
    #:mock-calls
+   #:mock-results
    #:mutation-form
    #:mutation-id
    #:mutation-operator

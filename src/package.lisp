@@ -109,6 +109,7 @@
    #:clear-mock
    #:make-mock-function
    #:mock-calls
+   #:mock-results
    #:*test-sequence-order*
    #:*test-sequence-seed*
    #:*test-name-filter*

@@ -8,7 +8,8 @@
 
 (defstruct mock-state
   implementation
-  calls)
+  calls
+  results)
 
 (defvar *mock-states* (make-hash-table :test #'eq))
 (defvar *snapshot-directory* #P"__snapshots__/")
@@ -336,32 +337,75 @@
   (setf (mock-state-calls state)
         (append (mock-state-calls state) (list arguments))))
 
+(defun register-mock-result (state result)
+  (setf (mock-state-results state)
+        (append (mock-state-results state) (list result))))
+
 (defun mock-state-for (mock)
   (or (gethash mock *mock-states*)
       (error "Value is not a cl-weave mock function: ~S" mock)))
+
+(defun mock-thrown-result (condition)
+  (list :type :throw
+        :condition-type (class-name (class-of condition))
+        :message (princ-to-string condition)))
 
 (defun make-mock-function (&optional (implementation (lambda (&rest arguments)
                                                        (declare (ignore arguments))
                                                        nil)))
   (let* ((state (make-mock-state :implementation implementation
-                                 :calls nil))
+                                 :calls nil
+                                 :results nil))
          (mock (lambda (&rest arguments)
                  (register-mock-call state arguments)
-                 (apply (mock-state-implementation state) arguments))))
+                 (handler-case
+                     (let ((values (multiple-value-list
+                                    (apply (mock-state-implementation state) arguments))))
+                       (register-mock-result state
+                                             (list :type :return
+                                                   :value (first values)
+                                                   :values values))
+                       (values-list values))
+                   (condition (condition)
+                     (register-mock-result state (mock-thrown-result condition))
+                     (error condition))))))
     (setf (gethash mock *mock-states*) state)
     mock))
 
 (defun mock-calls (mock)
   (copy-tree (mock-state-calls (mock-state-for mock))))
 
+(defun mock-results (mock)
+  (copy-tree (mock-state-results (mock-state-for mock))))
+
 (defun clear-mock (mock)
-  (setf (mock-state-calls (mock-state-for mock)) nil)
+  (let ((state (mock-state-for mock)))
+    (setf (mock-state-calls state) nil
+          (mock-state-results state) nil))
   mock)
 
 (defun mock-called-with-p (mock expected-arguments)
   (some (lambda (actual-arguments)
           (equal actual-arguments expected-arguments))
         (mock-calls mock)))
+
+(defun mock-returned-with-p (mock expected-values)
+  (some (lambda (result)
+          (and (eq (getf result :type) :return)
+               (equal (getf result :values) expected-values)))
+        (mock-results mock)))
+
+(defun mock-report (mock)
+  (let ((calls (mock-calls mock))
+        (results (mock-results mock)))
+    (list :call-count (length calls)
+          :calls calls
+          :result-count (length results)
+          :results results
+          :return-count (count :return results
+                               :key (lambda (result) (getf result :type)))
+          :throw-count (count :throw results
+                              :key (lambda (result) (getf result :type))))))
 
 (defmatcher :to-be (actual expected)
   (eql actual (expected-one expected :to-be)))
@@ -473,14 +517,50 @@
 
 (defmatcher :to-have-been-called (actual expected)
   (declare (ignore expected))
-  (not (null (mock-calls actual))))
+  (let ((report (mock-report actual)))
+    (values (plusp (getf report :call-count))
+            report
+            '(:call-count (:min 1)))))
 
 (defmatcher :to-have-been-called-times (actual expected)
-  (= (length (mock-calls actual))
-     (expected-one expected :to-have-been-called-times)))
+  (let* ((times (expected-one expected :to-have-been-called-times))
+         (report (mock-report actual)))
+    (values (= (getf report :call-count) times)
+            report
+            (list :call-count times))))
 
 (defmatcher :to-have-been-called-with (actual expected)
-  (mock-called-with-p actual expected))
+  (let ((report (mock-report actual)))
+    (values (mock-called-with-p actual expected)
+            report
+            (list :arguments expected))))
+
+(defmatcher :to-have-returned (actual expected)
+  (declare (ignore expected))
+  (let ((report (mock-report actual)))
+    (values (plusp (getf report :return-count))
+            report
+            '(:return-count (:min 1)))))
+
+(defmatcher :to-have-returned-times (actual expected)
+  (let* ((times (expected-one expected :to-have-returned-times))
+         (report (mock-report actual)))
+    (values (= (getf report :return-count) times)
+            report
+            (list :return-count times))))
+
+(defmatcher :to-have-returned-with (actual expected)
+  (let ((report (mock-report actual)))
+    (values (mock-returned-with-p actual expected)
+            report
+            (list :values expected))))
+
+(defmatcher :to-have-thrown (actual expected)
+  (declare (ignore expected))
+  (let ((report (mock-report actual)))
+    (values (plusp (getf report :throw-count))
+            report
+            '(:throw-count (:min 1)))))
 
 (defun normalize-expectation (tokens)
   (when (null tokens)
