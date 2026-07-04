@@ -189,6 +189,47 @@ Generator combinators do not create new event types. `gen-one-of`,
 `gen-recursive`, `gen-tuple`, and `gen-such-that` only affect generated values
 and shrink candidates before the same `assertion-failure` payload is reported.
 
+## Isolated Process Contract
+
+`it-isolated` expands to a normal `it` case that calls `run-isolated` and then
+asserts the returned `isolated-result` succeeded. The child process loads the
+declared ASDF systems before evaluating the body.
+
+```lisp
+(it-isolated "native boundary"
+    (:systems ("my-project-tests") :timeout 5)
+  (expect (call-native) :to-be :ok))
+```
+
+`run-isolated` returns an `isolated-result` with:
+
+```lisp
+(:status :pass-or-fail-or-timeout
+ :exit-code 0
+ :stdout "..."
+ :stderr "..."
+ :timed-out-p nil
+ :elapsed-ms 12
+ :script-path "/tmp/cl-weave-isolated-....lisp")
+```
+
+When `it-isolated` fails, the assertion matcher is `:isolated` and the payload
+keeps the child process diagnostics:
+
+```lisp
+(:actual (:status :timeout
+          :exit-code nil
+          :timed-out-p t
+          :elapsed-ms 100
+          :stdout ""
+          :stderr ""
+          :script-path "/tmp/cl-weave-isolated-....lisp")
+ :expected (:status :pass :exit-code 0))
+```
+
+This is intended for FFI and crash-boundary tests where agents must preserve
+the parent runner while still receiving parseable failure data.
+
 ## Stability
 
 - `:schema-version` and `schemaVersion` change only when the shape changes.

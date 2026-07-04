@@ -16,6 +16,7 @@ Early MVP. The current focus is a solid core:
 - smart S-expression assertions that capture operand values
 - `it-each` compile-time table tests
 - `it-property` deterministic property tests with shrinking
+- `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
 - `it-skip` / `test-skip` skipped cases
 - `describe-only` / `it-only` focused runs
@@ -356,6 +357,26 @@ and `clear-mock` resets the call history.
 `with-mocked-functions` temporarily rewrites global function cells. The
 original function cells are restored with `unwind-protect`.
 
+### Subprocess Isolation
+
+```lisp
+(it-isolated "ffi parser rejects invalid input"
+    (:systems ("my-project-tests") :timeout 5)
+  (expect (parse-native-buffer #(0 1 2)) :to-equal :invalid))
+
+(let ((result (run-isolated
+               '(error "native boundary failed")
+               :systems '("my-project-tests")
+               :package "MY-PROJECT/TESTS"
+               :timeout 5)))
+  (expect (isolated-result-status result) :to-be :fail))
+```
+
+`it-isolated` runs the body in a fresh SBCL subprocess and reports non-zero
+exits or timeouts as normal structured assertion failures. Use it around FFI,
+native parser, and crash-boundary tests where the parent REPL or CI process
+must stay alive.
+
 ### Reporters
 
 ```lisp
@@ -409,7 +430,6 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit` or
 MVP quality comes first. The intended direction is:
 
 - richer recursive data generators
-- subprocess isolation for FFI crash tests
 
 ## License
 

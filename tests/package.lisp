@@ -22,10 +22,16 @@
     #:gen-tuple
     #:it
     #:it-each
+    #:it-isolated
     #:it-property
     #:it-only
    #:it-skip
    #:it-todo
+   #:isolated-result-exit-code
+   #:isolated-result-status
+   #:isolated-result-stderr
+   #:isolated-result-timed-out-p
    #:make-mock-function
    #:mock-calls
+   #:run-isolated
    #:with-mocked-functions))

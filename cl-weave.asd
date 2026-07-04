@@ -12,6 +12,7 @@
     :components
     ((:file "package")
      (:file "model")
+     (:file "isolation")
      (:file "matchers")
      (:file "dsl")
      (:file "reporters")

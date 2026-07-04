@@ -18,6 +18,42 @@
 (defmacro it-todo (name &optional (reason "todo"))
   `(register-test ,name (lambda () nil) :todo-reason ,reason))
 
+(defun isolated-options-form-p (form)
+  (and (consp form)
+       (evenp (length form))
+       (loop for (key nil) on form by #'cddr
+             always (keywordp key))))
+
+(defun isolated-option-form (options key fallback)
+  (if (getf options key)
+      (getf options key)
+      fallback))
+
+(defun isolated-systems-option-form (options)
+  (let ((systems (getf options :systems)))
+    (cond
+      ((null systems) ''("cl-weave"))
+      ((and (listp systems)
+            (not (eq (first systems) 'quote)))
+       `',systems)
+      (t systems))))
+
+(defmacro it-isolated (name &body body)
+  (let* ((options (when (and body (isolated-options-form-p (first body)))
+                    (first body)))
+         (forms (if options (rest body) body))
+         (timeout (isolated-option-form options :timeout '*isolated-timeout-seconds*))
+         (package (isolated-option-form options :package (package-name *package*)))
+         (systems (isolated-systems-option-form options))
+         (form `(progn ,@forms)))
+    `(it ,name
+       (assert-isolated-success
+        (run-isolated ',form
+                      :systems ,systems
+                      :package ,package
+                      :timeout ,timeout)
+        ',form))))
+
 (defmacro it-each (cases name bindings &body body)
   `(progn
      ,@(loop for case in cases

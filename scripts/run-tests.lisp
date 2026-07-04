@@ -6,6 +6,7 @@
   (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
   (dolist (path '("src/package.lisp"
                   "src/model.lisp"
+                  "src/isolation.lisp"
                   "src/matchers.lisp"
                   "src/dsl.lisp"
                   "src/reporters.lisp"

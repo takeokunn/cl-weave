@@ -20,8 +20,19 @@
    #:gen-recursive
    #:gen-such-that
    #:gen-tuple
+   #:*isolated-timeout-seconds*
+   #:assert-isolated-success
+   #:isolated-result
+   #:isolated-result-elapsed-ms
+   #:isolated-result-exit-code
+   #:isolated-result-script-path
+   #:isolated-result-status
+   #:isolated-result-stderr
+   #:isolated-result-stdout
+   #:isolated-result-timed-out-p
    #:it
    #:it-each
+   #:it-isolated
    #:it-property
    #:it-only
    #:it-skip
@@ -37,6 +48,7 @@
    #:*test-name-filter*
    #:asdf-system-files
    #:run-all
+   #:run-isolated
    #:run-system
    #:test
    #:test-only

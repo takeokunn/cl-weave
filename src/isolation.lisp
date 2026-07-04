@@ -1,0 +1,202 @@
+(in-package #:cl-weave)
+
+(defvar *isolated-timeout-seconds* 5)
+
+(defstruct isolated-result
+  status
+  exit-code
+  stdout
+  stderr
+  timed-out-p
+  elapsed-ms
+  script-path)
+
+(defun normalize-isolated-systems (systems)
+  (cond
+    ((null systems) nil)
+    ((stringp systems) (list systems))
+    ((symbolp systems) (list (string-downcase (symbol-name systems))))
+    ((listp systems)
+     (mapcar (lambda (system)
+               (etypecase system
+                 (string system)
+                 (symbol (string-downcase (symbol-name system)))))
+             systems))
+    (t (error "cl-weave: isolated systems must be a string, symbol, or list, got ~S."
+              systems))))
+
+(defun isolated-temp-pathname (prefix type)
+  (merge-pathnames
+   (make-pathname :name (format nil "~A-~36R" prefix (random (expt 36 8)))
+                  :type type)
+   (uiop:temporary-directory)))
+
+(defun isolated-temp-directory (prefix)
+  (let ((pathname
+          (merge-pathnames
+           (make-pathname :directory (list :relative
+                                           (format nil "~A-~36R"
+                                                   prefix
+                                                   (random (expt 36 8)))))
+           (uiop:temporary-directory))))
+    (ensure-directories-exist pathname)
+    pathname))
+
+(defun read-file-string-or-empty (pathname)
+  (if (probe-file pathname)
+      (with-open-file (stream pathname :direction :input)
+        (let ((content (make-string (file-length stream))))
+          (read-sequence content stream)
+          content))
+      ""))
+
+#+sbcl
+(defun isolated-environment-entry-name-p (name entry)
+  (let ((prefix (concatenate 'string name "=")))
+    (and (>= (length entry) (length prefix))
+         (string= prefix (subseq entry 0 (length prefix))))))
+
+#+sbcl
+(defun isolated-process-environment (home)
+  (let* ((cache (merge-pathnames #p".cache/" home))
+         (replacements (list (format nil "HOME=~A" (namestring home))
+                             (format nil "XDG_CACHE_HOME=~A" (namestring cache)))))
+    (ensure-directories-exist cache)
+    (append replacements
+            (remove-if
+             (lambda (entry)
+               (or (isolated-environment-entry-name-p "HOME" entry)
+                   (isolated-environment-entry-name-p "XDG_CACHE_HOME" entry)))
+             (sb-ext:posix-environ)))))
+
+(defun write-isolated-script (pathname form systems package)
+  (with-open-file (stream pathname :direction :output :if-exists :supersede)
+    (let ((*print-case* :downcase)
+          (*print-pretty* t))
+      (write
+       `(progn
+          (require :asdf)
+          (pushnew (truename ".")
+                   (symbol-value (find-symbol "*CENTRAL-REGISTRY*" "ASDF"))
+                   :test #'equal)
+          ,@(loop for system in (normalize-isolated-systems systems)
+                  collect `(funcall
+                            (symbol-function (find-symbol "LOAD-SYSTEM" "ASDF"))
+                            ,system)))
+       :stream stream)
+      (terpri stream)
+      (write `(in-package ,(string-upcase (string package))) :stream stream)
+      (terpri stream)
+      (write
+       `(handler-case
+            (progn
+              ,form
+              (funcall (symbol-function (find-symbol "EXIT" "SB-EXT")) :code 0))
+          (condition (condition)
+            (format *error-output* "~&~A~%" condition)
+            (funcall (symbol-function (find-symbol "PRINT-BACKTRACE" "SB-DEBUG"))
+                     :stream *error-output*)
+            (funcall (symbol-function (find-symbol "EXIT" "SB-EXT")) :code 1)))
+       :stream stream)
+      (terpri stream)))
+  pathname)
+
+#+sbcl
+(defun isolated-sbcl-program ()
+  (or (when (and (boundp 'sb-ext:*runtime-pathname*)
+                 sb-ext:*runtime-pathname*)
+        (namestring sb-ext:*runtime-pathname*))
+      "sbcl"))
+
+#+sbcl
+(defun wait-isolated-process (process timeout)
+  (let ((deadline (+ (get-internal-real-time)
+                     (round (* timeout internal-time-units-per-second)))))
+    (loop while (sb-ext:process-alive-p process)
+          do (when (>= (get-internal-real-time) deadline)
+               (ignore-errors (sb-ext:process-kill process 15))
+               (sleep 0.05)
+               (when (sb-ext:process-alive-p process)
+                 (ignore-errors (sb-ext:process-kill process 9)))
+               (ignore-errors (sb-ext:process-wait process))
+               (return :timeout))
+             (sleep 0.01)
+          finally (progn
+                    (sb-ext:process-wait process)
+                    (return :finished)))))
+
+#+sbcl
+(defun run-isolated (form &key
+                            (systems '("cl-weave"))
+                            (package (package-name *package*))
+                            (timeout *isolated-timeout-seconds*)
+                            keep-files)
+  (unless (and (numberp timeout) (plusp timeout))
+    (error "cl-weave: isolated timeout must be a positive number, got ~S." timeout))
+  (let* ((script (isolated-temp-pathname "cl-weave-isolated" "lisp"))
+         (stdout (isolated-temp-pathname "cl-weave-isolated" "out"))
+         (stderr (isolated-temp-pathname "cl-weave-isolated" "err"))
+         (home (isolated-temp-directory "cl-weave-isolated-home"))
+         (started (get-internal-real-time)))
+    (unwind-protect
+         (progn
+           (write-isolated-script script form systems package)
+           (let* ((process
+                    (sb-ext:run-program
+                     (isolated-sbcl-program)
+                     (list "--noinform" "--non-interactive" "--load" (namestring script))
+                     :search t
+                     :wait nil
+                     :output stdout
+                     :error stderr
+                     :environment (isolated-process-environment home)
+                     :if-output-exists :supersede
+                     :if-error-exists :supersede))
+                  (wait-status (wait-isolated-process process timeout))
+                  (exit-code (sb-ext:process-exit-code process))
+                  (elapsed-ms (/ (* 1000
+                                    (- (get-internal-real-time) started))
+                                 internal-time-units-per-second)))
+             (make-isolated-result
+              :status (cond
+                        ((eq wait-status :timeout) :timeout)
+                        ((eql exit-code 0) :pass)
+                        (t :fail))
+              :exit-code exit-code
+              :stdout (read-file-string-or-empty stdout)
+              :stderr (read-file-string-or-empty stderr)
+              :timed-out-p (eq wait-status :timeout)
+              :elapsed-ms elapsed-ms
+              :script-path (namestring script))))
+      (unless keep-files
+        (ignore-errors (delete-file script))
+        (ignore-errors (delete-file stdout))
+        (ignore-errors (delete-file stderr))
+        (ignore-errors
+          (uiop:delete-directory-tree home :validate t :if-does-not-exist :ignore))))))
+
+#-sbcl
+(defun run-isolated (form &key systems package timeout keep-files)
+  (declare (ignore form systems package timeout keep-files))
+  (error "cl-weave: run-isolated currently requires SBCL."))
+
+(defun signal-isolated-failure (result form)
+  (signal-assertion-failure
+   (make-assertion-detail
+    :form form
+    :matcher :isolated
+    :actual (list :status (isolated-result-status result)
+                  :exit-code (isolated-result-exit-code result)
+                  :timed-out-p (isolated-result-timed-out-p result)
+                  :elapsed-ms (isolated-result-elapsed-ms result)
+                  :stdout (isolated-result-stdout result)
+                  :stderr (isolated-result-stderr result)
+                  :script-path (isolated-result-script-path result))
+    :expected '(:status :pass :exit-code 0)
+    :negated nil
+    :pass nil)))
+
+(defun assert-isolated-success (result form)
+  (unless (eq (isolated-result-status result) :pass)
+    (signal-isolated-failure result form))
+  t)
