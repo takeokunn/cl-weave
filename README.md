@@ -93,6 +93,7 @@ Built-in matchers:
 - `:to-be-less-than`
 - `:to-be-less-than-or-equal`
 - `:to-throw`
+- `:to-expand-to`
 
 ### Table Tests
 
@@ -150,7 +151,6 @@ The `:sexp` reporter is the stable AI-friendly interface. See
 
 MVP quality comes first. The intended direction is:
 
-- macro expansion assertions
 - structured JSON/JUnit reporters
 - snapshot testing
 - property-based testing and shrinking

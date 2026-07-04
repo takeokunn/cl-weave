@@ -38,6 +38,9 @@
          (condition ()
            t))))
 
+(defun expand-once (form)
+  (macroexpand-1 form))
+
 (defmatcher :to-be (actual expected)
   (eql actual (expected-one expected :to-be)))
 
@@ -83,6 +86,10 @@
 (defmatcher :to-throw (actual expected)
   (declare (ignore expected))
   (thunk-throws-p actual))
+
+(defmatcher :to-expand-to (actual expected)
+  (equal (expand-once actual)
+         (expected-one expected :to-expand-to)))
 
 (defun normalize-expectation (tokens)
   (when (null tokens)

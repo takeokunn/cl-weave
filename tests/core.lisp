@@ -5,6 +5,11 @@
 (defvar *fixture-value* nil)
 (defun sample-size (value) (length value))
 
+(defmacro sample-unless (condition &body body)
+  `(if ,condition
+       nil
+       (progn ,@body)))
+
 (defmacro matcher-pass-cases (&body cases)
   `(progn
      ,@(loop for (name form) in cases
@@ -65,6 +70,13 @@
             :to-satisfy
             (lambda (form)
               (tree-contains-p form 'cl-weave::assert-expectation)))))
+
+  (it "compares a single macroexpansion step"
+    (expect '(sample-unless ready (setf *fixture-value* :done))
+            :to-expand-to
+            '(if ready
+                 nil
+                 (progn (setf *fixture-value* :done)))))
 
 (describe "fixtures"
   (before-each
