@@ -178,6 +178,67 @@
          (condition ()
            t))))
 
+(defun thrown-condition (thunk matcher)
+  (unless (functionp thunk)
+    (error "Matcher ~S expects a function thunk, got ~S." matcher thunk))
+  (handler-case
+      (progn
+        (funcall thunk)
+        nil)
+    (condition (condition)
+      condition)))
+
+(defun condition-class-designator-p (value)
+  (or (typep value 'class)
+      (and (symbolp value) (find-class value nil))))
+
+(defun condition-class-designator-class (value)
+  (if (typep value 'class)
+      value
+      (find-class value)))
+
+(defun condition-report (condition)
+  (when condition
+    (list :threw t
+          :condition-type (class-name (class-of condition))
+          :message (princ-to-string condition))))
+
+(defun no-condition-report ()
+  '(:threw nil :condition-type nil :message nil))
+
+(defun normalize-throw-expected (expected matcher)
+  (cond
+    ((null expected)
+     (list :matcher :any))
+    ((/= (length expected) 1)
+     (error "Matcher ~S expects zero or one expected value, got ~D."
+            matcher (length expected)))
+    (t
+     (let ((value (first expected)))
+       (cond
+         ((stringp value)
+          (list :matcher :message-substring :value value))
+         ((condition-class-designator-p value)
+          (list :matcher :condition-type
+                :value (class-name (condition-class-designator-class value))))
+         ((functionp value)
+          (list :matcher :predicate :value value))
+         (t
+          (error "Matcher ~S expected NIL, a condition class designator, string, or predicate, got ~S."
+                 matcher value)))))))
+
+(defun thrown-condition-matches-p (condition expectation)
+  (case (getf expectation :matcher)
+    (:any t)
+    (:message-substring
+     (not (null (search (getf expectation :value)
+                        (princ-to-string condition)))))
+    (:condition-type
+     (typep condition (getf expectation :value)))
+    (:predicate
+     (not (null (funcall (getf expectation :value) condition))))
+    (otherwise nil)))
+
 (defun current-bytes-consed ()
   #+sbcl
   (sb-ext:get-bytes-consed)
@@ -356,8 +417,13 @@
   (<= actual (expected-one expected :to-be-less-than-or-equal)))
 
 (defmatcher :to-throw (actual expected)
-  (declare (ignore expected))
-  (thunk-throws-p actual))
+  (let* ((expectation (normalize-throw-expected expected :to-throw))
+         (condition (thrown-condition actual :to-throw))
+         (actual-report (or (condition-report condition)
+                            (no-condition-report))))
+    (values (and condition (thrown-condition-matches-p condition expectation))
+            actual-report
+            expectation)))
 
 (defmatcher :to-run-under-ms (actual expected)
   (let* ((max-ms (non-negative-real-expected expected :to-run-under-ms "millisecond threshold"))

@@ -203,6 +203,19 @@ Built-in matchers:
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
 
+`:to-throw` accepts an optional expected condition class designator, message
+substring, or predicate function. Failures report `:threw`, `:condition-type`,
+and `:message` in `:actual`, plus the normalized throw matcher in `:expected`:
+
+```lisp
+(expect (lambda () (error "missing user")) :to-throw 'simple-error)
+(expect (lambda () (error "missing user")) :to-throw "missing")
+(expect (lambda () (error "missing user"))
+        :to-throw
+        (lambda (condition)
+          (search "user" (princ-to-string condition))))
+```
+
 Custom matchers use `defmatcher`. The matcher receives the evaluated actual
 value and the remaining expected operands as a list. Return the pass boolean,
 then optional reported actual and expected values for structured reporters:
@@ -632,19 +645,20 @@ can write the plan payload to an artifact file.
 AI agents can also query plans as plain Lisp facts:
 
 ```lisp
-(cl-weave:query-test-plan
+(cl-weave:test-plan-where
  (cl-weave:collect-test-plan (cl-weave::root-suite))
- '((:status ?test :run)
-   (:focused ?test)
-   (:concurrent ?test)))
+ (:status ?test :run)
+ (:focused ?test)
+ (:concurrent ?test))
 ;; => (((?test . ("suite" "case"))))
 ```
 
 `test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
 `:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
-`logic-query` is intentionally small and deterministic: variables are symbols
-whose names start with `?`, clauses are matched left-to-right, and `:limit`
-caps backtracking results.
+`logic-where` and `test-plan-where` are macro syntax over `logic-query`, keeping
+facts as data while making clauses read like Prolog goals. Variables are
+symbols whose names start with `?`, clauses are matched left-to-right, and
+`(:limit n)` caps backtracking results.
 
 ### Bail
 

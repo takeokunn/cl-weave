@@ -61,6 +61,7 @@
    #:isolated-result-timed-out-p
    #:logic-query
    #:logic-variable-p
+   #:logic-where
    #:make-mock-function
    #:mock-calls
    #:mutation-form
@@ -84,6 +85,7 @@
    #:test-each
    #:test-fails
    #:test-plan-facts
+   #:test-plan-where
    #:test-run-if
    #:test-skip-if
    #:with-mocked-functions))

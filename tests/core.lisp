@@ -102,6 +102,15 @@
     ("to-be-less-than" (expect 9 :to-be-less-than 10))
     ("to-be-less-than-or-equal" (expect 10 :to-be-less-than-or-equal 10))
     ("to-throw" (expect (lambda () (error "boom")) :to-throw))
+    ("to-throw condition type"
+     (expect (lambda () (error "typed boom")) :to-throw 'simple-error))
+    ("to-throw message substring"
+     (expect (lambda () (error "needle in haystack")) :to-throw "needle"))
+    ("to-throw predicate"
+     (expect (lambda () (error "predicate boom"))
+             :to-throw
+             (lambda (condition)
+               (search "predicate" (princ-to-string condition)))))
     ("to-run-under-ms" (expect (lambda () (+ 1 1)) :to-run-under-ms 1000))
     ("to-cons-less-than"
      (expect (lambda () nil) :to-cons-less-than most-positive-fixnum))
@@ -158,6 +167,38 @@
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(1))
           (expect (cl-weave::assertion-detail-negated detail) :to-be-truthy)
           (expect (cl-weave::assertion-detail-pass detail) :to-be-truthy)))))
+
+  (it "reports to-throw failures with structured condition data"
+    (handler-case
+        (progn
+          (expect (lambda () (error "wrong message")) :to-throw "needle")
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-throw)
+          (expect (getf actual :threw) :to-be-truthy)
+          (expect (getf actual :condition-type) :to-be 'simple-error)
+          (expect (getf actual :message) :to-contain "wrong message")
+          (expect (getf expected :matcher) :to-be :message-substring)
+          (expect (getf expected :value) :to-equal "needle")))))
+
+  (it "reports to-throw missing conditions with structured data"
+    (handler-case
+        (progn
+          (expect (lambda () :ok) :to-throw 'simple-error)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-throw)
+          (expect (getf actual :threw) :to-be nil)
+          (expect (getf actual :condition-type) :to-be nil)
+          (expect (getf actual :message) :to-be nil)
+          (expect (getf expected :matcher) :to-be :condition-type)
+          (expect (getf expected :value) :to-be 'simple-error)))))
 
   (it "reports missing external snapshots as structured data"
     (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
@@ -1493,6 +1534,45 @@
         (expect (logic-variable-p '?test) :to-be t)
         (expect focused-concurrent :to-equal '(((?test . ("logic" "runs")))))
         (expect (length limited) :to-be 1)))))
+
+  (it "queries facts with Prolog-style macro clauses"
+    (let ((facts '((:test ("logic" "runs"))
+                   (:status ("logic" "runs") :run)
+                   (:concurrent ("logic" "runs"))
+                   (:test ("logic" "skips"))
+                   (:status ("logic" "skips") :skip))))
+      (expect (logic-where facts
+                (:status ?test :run)
+                (:concurrent ?test))
+              :to-equal '(((?test . ("logic" "runs")))))
+      (expect (logic-where facts
+                (:limit 1)
+                (:test ?test))
+              :to-equal '(((?test . ("logic" "runs")))))))
+
+  (it "queries test plans with macro clauses"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "logic" :parent root :focus t))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "runs"
+        :function (lambda () t)
+        :concurrent t))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "plain"
+        :function (lambda () t)))
+      (let ((plan (cl-weave:collect-test-plan root)))
+        (expect (test-plan-where plan
+                  (:status ?test :run)
+                  (:focused ?test)
+                  (:concurrent ?test))
+                :to-equal
+                '(((?test . ("logic" "runs"))))))))
 
 (describe "bail"
   (it "stops after the first failing event"

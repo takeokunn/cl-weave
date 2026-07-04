@@ -126,6 +126,37 @@
                                 (solve rest-clauses next-bindings results)))))))))))
     (nreverse (solve clauses nil nil))))
 
+(defun split-logic-where-forms (forms)
+  (let ((limit nil)
+        (limit-present-p nil)
+        (clauses forms))
+    (when (and clauses
+               (consp (first clauses))
+               (eq (first (first clauses)) :limit))
+      (unless (= 2 (length (first clauses)))
+        (error "cl-weave: :limit expects exactly one value, got ~S."
+               (first clauses)))
+      (setf limit (second (first clauses))
+            limit-present-p t
+            clauses (rest clauses)))
+    (unless clauses
+      (error "cl-weave: logic where macros require at least one relation clause."))
+    (dolist (clause clauses)
+      (unless (and (consp clause) (keywordp (first clause)))
+        (error "cl-weave: logic clauses must be non-empty keyword relation lists, got ~S."
+               clause)))
+    (values clauses limit limit-present-p)))
+
+(defmacro logic-where (facts &body forms)
+  (multiple-value-bind (clauses limit limit-present-p)
+      (split-logic-where-forms forms)
+    `(logic-query ,facts ',clauses ,@(when limit-present-p `(:limit ,limit)))))
+
+(defmacro test-plan-where (plan &body forms)
+  (multiple-value-bind (clauses limit limit-present-p)
+      (split-logic-where-forms forms)
+    `(query-test-plan ,plan ',clauses ,@(when limit-present-p `(:limit ,limit)))))
+
 (defun test-plan-entry-facts (entry)
   (let ((path (test-plan-entry-path entry)))
     (append

@@ -65,6 +65,17 @@ payload. The matcher keyword is stored in `:matcher`; the optional second and
 third return values become `:actual` and `:expected`, which lets AI agents read
 domain-specific failure data without parsing human messages.
 
+`:to-throw` accepts no expected value, a condition class designator, a message
+substring, or a predicate function. Failure payloads use:
+
+```lisp
+(:actual (:threw t
+          :condition-type simple-error
+          :message "missing user")
+ :expected (:matcher :message-substring
+            :value "needle"))
+```
+
 Smart assertions use the same shape. For predicate forms such as
 `(expect (= (+ 1 1) 3))`, the matcher is the predicate symbol and `:actual`
 contains operand reports:
@@ -538,17 +549,19 @@ the Lisp-native logic layer:
 ;;     (:retry ("suite" "case") 0)
 ;;     ...)
 
-(cl-weave:query-test-plan
+(cl-weave:test-plan-where
  (cl-weave:collect-test-plan (cl-weave::root-suite))
- '((:status ?test :run)
-   (:focused ?test)))
+ (:status ?test :run)
+ (:focused ?test))
 ;; => (((?test . ("suite" "case"))))
 ```
 
 Logic variables are symbols whose names start with `?`. Facts and clauses are
-plain lists, matched left-to-right by `logic-query`. `:limit` may be `nil` or a
-positive integer. The stable public relation names are `:test`, `:status`,
-`:reason`, `:focused`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+plain lists, matched left-to-right by `logic-query`. `logic-where` and
+`test-plan-where` are macro syntax over that data contract; use `(:limit n)` as
+the first form to cap backtracking results. The stable public relation names are
+`:test`, `:status`, `:reason`, `:focused`, `:retry`, `:timeout-ms`,
+`:concurrent`, and `:location`.
 
 ## Bail Contract
 

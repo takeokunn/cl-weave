@@ -87,6 +87,7 @@
    #:list-tests
    #:logic-query
    #:logic-variable-p
+   #:logic-where
    #:mutation
    #:mutation-form
    #:mutation-id
@@ -133,6 +134,7 @@
    #:test-plan-entry-timeout-ms
    #:test-plan-entry-concurrent
    #:test-plan-facts
+   #:test-plan-where
    #:test
    #:test.concurrent
    #:test-concurrent
