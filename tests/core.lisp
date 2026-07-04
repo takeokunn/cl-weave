@@ -93,7 +93,8 @@
        (expect (lambda ()
                  (expect '(:missing 42) :to-match-snapshot key))
                :to-throw)))
-    ("not" (expect 1 :not :to-be 2)))
+    ("not" (expect 1 :not :to-be 2))
+    ("expect-not" (expect-not 1 :to-be 2)))
 
   (it "signals assertion-failure with structured data"
     (handler-case
@@ -105,6 +106,19 @@
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
+
+  (it "signals negated matcher failures with structured data"
+    (handler-case
+        (progn
+          (expect-not 1 :to-be 1)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
+          (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
+          (expect (cl-weave::assertion-detail-expected detail) :to-equal '(1))
+          (expect (cl-weave::assertion-detail-negated detail) :to-be-truthy)
+          (expect (cl-weave::assertion-detail-pass detail) :to-be-truthy)))))
 
   (it "signals smart assertion failures with operand values"
     (handler-case
@@ -164,6 +178,14 @@
             :to-satisfy
             (lambda (form)
               (tree-contains-p form 'cl-weave::assert-expectation))))
+
+  (it "expands expect-not into a negated matcher assertion"
+    (expect (macroexpand-1 '(expect-not (+ 1 1) :to-be 3))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::assert-expectation)
+                   (tree-contains-p form :not)
+                   (tree-contains-p form 'expect-not)))))
 
   (it "expands smart expect into operand capture"
     (expect (macroexpand-1 '(expect (= (+ 1 1) 2)))

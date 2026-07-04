@@ -137,6 +137,19 @@ thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:
 the existing `actual` and `expected` fields so agents can parse the measurement
 without scraping human-oriented output.
 
+Negated matcher assertions use either explicit matcher syntax or Vitest-style
+DSL sugar:
+
+```lisp
+(expect value :not :to-be expected)
+(expect-not value :to-be expected)
+```
+
+Both forms run through the same assertion engine. Failing negated assertions
+set `:negated t` in the assertion detail and preserve the raw matcher result in
+`:pass`, so agents can tell that the matcher itself succeeded but the negated
+expectation failed.
+
 MOP architecture matchers report normalized architecture data instead of the raw
 input designator. A failing `:to-have-slot` assertion uses:
 

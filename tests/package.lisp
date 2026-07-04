@@ -17,6 +17,7 @@
    #:describe-skip-if
    #:describe-todo
    #:expect
+   #:expect-not
    #:gen-boolean
    #:gen-form
    #:gen-integer

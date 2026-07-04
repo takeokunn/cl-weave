@@ -121,11 +121,14 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
     (expect form :to-match-snapshot "suite/case"))
   (expect form :to-match-snapshot "suite/case"))
 (expect value :not :to-be nil)
+(expect-not value :to-be nil)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
 matcher, actual, expected, negation, and pass metadata through conditions and
-reporters.
+reporters. `expect-not` is Vitest-style sugar for matcher assertions that
+should fail when the underlying matcher passes; it uses the same structured
+failure payload as `(expect value :not matcher ...)`.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or

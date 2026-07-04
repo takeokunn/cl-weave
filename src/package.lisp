@@ -18,6 +18,7 @@
    #:describe-skip-if
    #:describe-todo
    #:expect
+   #:expect-not
    #:expected-failure-missed
    #:expected-failure-missed-reason
    #:gen-boolean

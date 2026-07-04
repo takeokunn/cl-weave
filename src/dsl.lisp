@@ -229,15 +229,28 @@
       (expand-smart-predicate-assertion actual form)
       (expand-smart-truthy-assertion actual form)))
 
+(defun expand-matcher-expectation (macro-name actual expectation &key negated)
+  (when (null expectation)
+    (error "cl-weave: ~A requires a matcher, for example (~(~A~) value :to-be expected)."
+           macro-name
+           macro-name))
+  (let ((value (gensym "ACTUAL-"))
+        (tokens (if negated
+                    `(:not ,@expectation)
+                    expectation)))
+    `(let ((,value ,actual))
+       (assert-expectation
+        ,value
+        (list ,@tokens)
+        '(,macro-name ,actual ,@expectation)))))
+
 (defmacro expect (actual &body expectation)
   (if expectation
-      (let ((value (gensym "ACTUAL-")))
-        `(let ((,value ,actual))
-           (assert-expectation
-            ,value
-            (list ,@expectation)
-            '(expect ,actual ,@expectation))))
+      (expand-matcher-expectation 'expect actual expectation)
       (expand-smart-assertion actual `(expect ,actual))))
+
+(defmacro expect-not (actual &body expectation)
+  (expand-matcher-expectation 'expect-not actual expectation :negated t))
 
 (defmacro with-snapshot-updates (&body body)
   `(let ((*update-snapshots* t))
