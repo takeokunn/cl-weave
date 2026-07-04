@@ -226,9 +226,10 @@ and `:message` in `:actual`, plus the normalized throw matcher in `:expected`:
           (search "user" (princ-to-string condition))))
 ```
 
-Custom matchers use `defmatcher`. The matcher receives the evaluated actual
-value and the remaining expected operands as a list. Return the pass boolean,
-then optional reported actual and expected values for structured reporters:
+Custom matchers use `defmatcher`, `expect.extend`, or the data-driven
+`extend-expect`. Each matcher receives the evaluated actual value and the
+remaining expected operands as a list. Return the pass boolean, then optional
+reported actual and expected values for structured reporters:
 
 ```lisp
 (cl-weave:defmatcher :to-have-status (response expected)
@@ -239,6 +240,32 @@ then optional reported actual and expected values for structured reporters:
             wanted-status)))
 
 (expect '(:status 201 :body "created") :to-have-status 201)
+```
+
+Vitest-style bulk registration keeps related domain matchers together:
+
+```lisp
+(cl-weave:expect.extend
+  (:to-be-cache-hit (response expected)
+    (declare (ignore expected))
+    (let ((state (getf response :cache)))
+      (values (eq state :hit)
+              `(:cache ,state)
+              '(:cache :hit)))))
+```
+
+AI agents and generators can emit plain matcher data with `extend-expect`:
+
+```lisp
+(cl-weave:extend-expect
+ (list
+  (list :to-have-status
+        (lambda (response expected)
+          (let ((actual-status (getf response :status))
+                (wanted-status (first expected)))
+            (values (= actual-status wanted-status)
+                    `(:status ,actual-status)
+                    `(:status ,wanted-status)))))))
 ```
 
 ### Performance And Allocation

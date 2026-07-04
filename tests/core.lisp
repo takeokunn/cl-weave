@@ -78,6 +78,24 @@
                                         :odd))
           '(:parity :even)))
 
+(expect.extend
+  (:to-be-odd (actual expected)
+    (declare (ignore expected))
+    (values (and (integerp actual) (oddp actual))
+            `(:value ,actual :parity ,(if (and (integerp actual) (oddp actual))
+                                          :odd
+                                          :even))
+            '(:parity :odd))))
+
+(extend-expect
+ (list
+  (list :to-be-between
+        (lambda (actual expected)
+          (destructuring-bind (low high) expected
+            (values (and (realp actual) (<= low actual high))
+                    `(:value ,actual :range (,low ,high))
+                    `(:range (,low ,high))))))))
+
 (describe "expect"
   (matcher-pass-cases
     ("to-be" (expect 2 :to-be 2))
@@ -142,7 +160,9 @@
                  (expect '(:missing 42) :to-match-snapshot key))
                :to-throw)))
     ("not" (expect 1 :not :to-be 2))
-    ("expect-not" (expect-not 1 :to-be 2)))
+    ("expect-not" (expect-not 1 :to-be 2))
+    ("expect.extend matcher" (expect 5 :to-be-odd))
+    ("extend-expect matcher" (expect 5 :to-be-between 1 10)))
 
   (it "signals assertion-failure with structured data"
     (handler-case
@@ -261,6 +281,34 @@
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal '(:parity :even))))))
 
+  (it "supports Vitest-style expect.extend custom matchers"
+    (expect 7 :to-be-odd)
+    (handler-case
+        (progn
+          (expect 8 :to-be-odd)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-odd)
+          (expect (cl-weave::assertion-detail-actual detail)
+                  :to-equal '(:value 8 :parity :even))
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(:parity :odd))))))
+
+  (it "supports data-driven extend-expect custom matchers"
+    (expect 5 :to-be-between 1 10)
+    (handler-case
+        (progn
+          (expect 11 :to-be-between 1 10)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-between)
+          (expect (cl-weave::assertion-detail-actual detail)
+                  :to-equal '(:value 11 :range (1 10)))
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(:range (1 10)))))))
+
   (it "signals smart assertion failures with operand values"
     (handler-case
         (progn
@@ -340,6 +388,17 @@
               (and (tree-contains-p form 'cl-weave::assert-expectation)
                    (tree-contains-p form :not)
                    (tree-contains-p form 'expect-not)))))
+
+  (it "expands expect.extend into the custom matcher registry"
+    (expect (macroexpand-1
+             '(expect.extend
+               (:to-be-small (actual expected)
+                 (declare (ignore expected))
+                 (< actual 10))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'expect-extend)
+                   (tree-contains-p form :to-be-small)))))
 
   (it "expands smart expect into operand capture"
     (expect (macroexpand-1 '(expect (= (+ 1 1) 2)))

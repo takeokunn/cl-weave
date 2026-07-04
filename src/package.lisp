@@ -39,7 +39,10 @@
    #:describe.todo
    #:describe-todo
    #:defmatcher
+   #:extend-expect
    #:expect
+   #:expect.extend
+   #:expect-extend
    #:expect.not
    #:expect-not
    #:expected-failure-missed

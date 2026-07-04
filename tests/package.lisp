@@ -31,7 +31,10 @@
    #:describe-skip
    #:describe-skip-if
    #:describe-todo
+   #:extend-expect
    #:expect
+   #:expect.extend
+   #:expect-extend
    #:expect.not
    #:expect-not
    #:gen-boolean

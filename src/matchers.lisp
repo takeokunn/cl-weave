@@ -16,16 +16,62 @@
 (defvar *snapshot-file-name* "snapshots.sexp")
 (defvar *update-snapshots* nil)
 
+(defun register-matcher (name function)
+  (unless (symbolp name)
+    (error "cl-weave: matcher name must be a symbol, got ~S." name))
+  (unless (functionp function)
+    (error "cl-weave: matcher ~S must be registered with a function, got ~S."
+           name
+           function))
+  (setf (gethash name *matchers*)
+        (make-matcher :name name :function function))
+  name)
+
+(defun matcher-spec-name (spec)
+  (cond
+    ((and (consp spec) (symbolp (first spec))) (first spec))
+    (t (error "cl-weave: matcher spec must start with a symbol name, got ~S." spec))))
+
+(defun matcher-spec-function (spec)
+  (cond
+    ((and (consp spec) (functionp (second spec))) (second spec))
+    (t (error "cl-weave: matcher spec ~S must provide a function as its second value." spec))))
+
+(defun extend-expect (specs)
+  (dolist (spec specs specs)
+    (register-matcher (matcher-spec-name spec)
+                      (matcher-spec-function spec))))
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (defun validate-matcher-lambda-list (actual expected operator)
+    (unless (and (symbolp actual) (symbolp expected))
+      (error "cl-weave: ~S matcher bindings must be symbols, got ~S."
+             operator
+             (list actual expected)))))
+
 (defmacro defmatcher (name (actual expected) &body body)
   (unless (symbolp name)
     (error "cl-weave: defmatcher name must be a symbol, got ~S." name))
-  (unless (and (symbolp actual) (symbolp expected))
-    (error "cl-weave: defmatcher bindings must be symbols, got ~S." (list actual expected)))
-  `(setf (gethash ,name *matchers*)
-         (make-matcher
-          :name ,name
-          :function (lambda (,actual ,expected)
-                      ,@body))))
+  (validate-matcher-lambda-list actual expected 'defmatcher)
+  `(register-matcher ',name
+                     (lambda (,actual ,expected)
+                       ,@body)))
+
+(defmacro expect-extend (&body definitions)
+  `(extend-expect
+    (list
+     ,@(loop for definition in definitions
+             collect
+             (destructuring-bind (name (actual expected) &body body) definition
+               (unless (symbolp name)
+                 (error "cl-weave: expect-extend matcher name must be a symbol, got ~S." name))
+               (validate-matcher-lambda-list actual expected 'expect-extend)
+               `(list ',name
+                      (lambda (,actual ,expected)
+                        ,@body)))))))
+
+(defmacro expect.extend (&body definitions)
+  `(expect-extend ,@definitions))
 
 (defun matcher-named (name)
   (or (gethash name *matchers*)

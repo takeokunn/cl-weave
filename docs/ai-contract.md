@@ -19,6 +19,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `test.concurrent` -> `test-concurrent`
 - `test.sequential` -> `test-sequential`
 - `expect.not` -> `expect-not`
+- `expect.extend` -> `expect-extend`
 - `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
 
 Common Lisp uppercases unescaped symbols while reading source, so `beforeAll`
@@ -64,10 +65,24 @@ For assertion failures, `:assertion` contains:
  :pass nil)
 ```
 
-Custom matchers registered with `cl-weave:defmatcher` use the same assertion
+Custom matchers registered with `cl-weave:defmatcher`,
+`cl-weave:expect.extend`, or `cl-weave:extend-expect` use the same assertion
 payload. The matcher keyword is stored in `:matcher`; the optional second and
 third return values become `:actual` and `:expected`, which lets AI agents read
 domain-specific failure data without parsing human messages.
+
+`extend-expect` accepts a list of matcher specs. Each spec starts with a symbol
+name and a two-argument function:
+
+```lisp
+((:to-have-status #<function>))
+```
+
+The function receives `(actual expected-operands)` and should return:
+
+```lisp
+(values pass-p reported-actual reported-expected)
+```
 
 `:to-throw` accepts no expected value, a condition class designator, a message
 substring, or a predicate function. Failure payloads use:
