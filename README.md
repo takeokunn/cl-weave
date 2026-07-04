@@ -22,6 +22,7 @@ Early MVP. The current focus is a solid core:
 - `it-todo` / `test-todo` todo cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
+- CI-friendly thunk runtime and allocation assertions
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - spec, S-expression, JSON, and JUnit XML reporters
@@ -100,6 +101,8 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect actual :to-equal expected)
 (expect value :to-be-greater-than 10)
 (expect values :to-have-length 3)
+(expect (lambda () (parse-integer "42")) :to-run-under-ms 5)
+(expect (lambda () (loop repeat 10 collect :x)) :to-cons-less-than 4096)
 (expect form :to-match-inline-snapshot "(:ok 42)")
 (let ((*snapshot-directory* #P"tests/__snapshots__/"))
   (with-snapshot-updates
@@ -147,12 +150,31 @@ Built-in matchers:
 - `:to-be-less-than`
 - `:to-be-less-than-or-equal`
 - `:to-throw`
+- `:to-run-under-ms`
+- `:to-cons-less-than`
 - `:to-expand-to`
 - `:to-match-inline-snapshot`
 - `:to-match-snapshot`
 - `:to-have-been-called`
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
+
+### Performance And Allocation
+
+Performance assertions accept thunks so the measured form is executed exactly
+inside the matcher:
+
+```lisp
+(expect (lambda () (parse-integer "42")) :to-run-under-ms 5)
+(expect (lambda () (loop repeat 10 collect :x)) :to-cons-less-than 4096)
+```
+
+Each matcher executes its thunk once. If you assert both runtime and allocation,
+the body runs once per matcher. Failure reports include `:elapsed-seconds`,
+`:elapsed-ms`, `:bytes-consed`, and the returned multiple values in `:values`.
+Allocation measurement uses the implementation's byte-consing counter; it is
+currently backed by SBCL and fails clearly on implementations that do not expose
+one.
 
 ### Table Tests
 
@@ -312,7 +334,6 @@ MVP quality comes first. The intended direction is:
 - richer property generators and shrinking strategies
 - watch mode based on ASDF dependency information
 - subprocess isolation for FFI crash tests
-- allocation and performance assertions
 - MOP-based architecture checks
 
 ## License

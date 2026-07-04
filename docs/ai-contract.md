@@ -100,6 +100,22 @@ Lisp strings. A failing `(expect (= (+ 1 1) 3))` serializes the operand report
 through the `actual` field, so agents can read the exact evaluated values
 without scraping the human spec reporter.
 
+Performance and allocation matchers report measured values instead of the input
+thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:
+
+```lisp
+(:actual (:elapsed-seconds 0.001d0
+          :elapsed-ms 1.0d0
+          :bytes-consed 0
+          :values (:ok))
+ :expected (:max-ms 0))
+```
+
+`:to-cons-less-than` uses the same `:actual` shape and reports
+`(:max-bytes n)` as `:expected`. JSON reporters stringify these Lisp payloads in
+the existing `actual` and `expected` fields so agents can parse the measurement
+without scraping human-oriented output.
+
 ## Test Selection
 
 Agents can narrow execution without changing source files:

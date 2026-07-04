@@ -50,6 +50,9 @@
     ("to-be-less-than" (expect 9 :to-be-less-than 10))
     ("to-be-less-than-or-equal" (expect 10 :to-be-less-than-or-equal 10))
     ("to-throw" (expect (lambda () (error "boom")) :to-throw))
+    ("to-run-under-ms" (expect (lambda () (+ 1 1)) :to-run-under-ms 1000))
+    ("to-cons-less-than"
+     (expect (lambda () nil) :to-cons-less-than most-positive-fixnum))
     ("to-throw rejects non-throwing thunk"
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
@@ -97,7 +100,23 @@
           (expect actual :to-contain '(:form (+ 1 1) :value 2))
           (expect actual :to-contain '(:form 3 :value 3))
           (expect (cl-weave::assertion-detail-expected detail)
-                  :to-equal '(= (+ 1 1) 3)))))))
+                  :to-equal '(= (+ 1 1) 3))))))
+
+  (it "reports performance measurements in assertion failures"
+    (handler-case
+        (progn
+          (expect (lambda () (sleep 0.001)) :to-run-under-ms 0)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-run-under-ms)
+          (expect actual :to-contain :elapsed-ms)
+          (expect actual :to-contain :elapsed-seconds)
+          (expect actual :to-contain :bytes-consed)
+          (expect actual :to-contain :values)
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(:max-ms 0)))))))
 
 (describe "macros"
   (it-each ((1 2 3)
