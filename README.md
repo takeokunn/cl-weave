@@ -18,6 +18,7 @@ Early MVP. The current focus is a solid core:
 - `it-skip` / `test-skip` skipped cases
 - `describe-only` / `it-only` focused runs
 - `it-todo` / `test-todo` todo cases
+- Vitest-style length, instance, and inline snapshot matchers
 - ASDF system definitions
 - spec and S-expression reporters
 - non-zero process exit on failure for CI
@@ -74,6 +75,8 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect actual :to-be expected)
 (expect actual :to-equal expected)
 (expect value :to-be-greater-than 10)
+(expect values :to-have-length 3)
+(expect form :to-match-inline-snapshot "(:ok 42)")
 (expect value :not :to-be nil)
 ```
 
@@ -88,15 +91,19 @@ Built-in matchers:
 - `:to-be-truthy`
 - `:to-be-falsy`
 - `:to-be-null`
+- `:to-be-defined`
 - `:to-satisfy`
 - `:to-be-type-of`
+- `:to-be-instance-of`
 - `:to-contain`
+- `:to-have-length`
 - `:to-be-greater-than`
 - `:to-be-greater-than-or-equal`
 - `:to-be-less-than`
 - `:to-be-less-than-or-equal`
 - `:to-throw`
 - `:to-expand-to`
+- `:to-match-inline-snapshot`
 
 ### Table Tests
 

@@ -29,6 +29,18 @@
     (vector (not (null (find value container :test #'equal))))
     (t nil)))
 
+(defun sequence-length (value)
+  (when (typep value 'sequence)
+    (length value)))
+
+(defun snapshot-string (value)
+  (let ((*print-case* :downcase)
+        (*print-circle* t)
+        (*print-length* nil)
+        (*print-level* nil)
+        (*print-pretty* nil))
+    (write-to-string value :escape t :readably nil)))
+
 (defun thunk-throws-p (thunk)
   (and (functionp thunk)
        (handler-case
@@ -62,14 +74,25 @@
   (declare (ignore expected))
   (null actual))
 
+(defmatcher :to-be-defined (actual expected)
+  (declare (ignore expected))
+  (not (null actual)))
+
 (defmatcher :to-satisfy (actual expected)
   (funcall (expected-one expected :to-satisfy) actual))
 
 (defmatcher :to-be-type-of (actual expected)
   (typep actual (expected-one expected :to-be-type-of)))
 
+(defmatcher :to-be-instance-of (actual expected)
+  (typep actual (expected-one expected :to-be-instance-of)))
+
 (defmatcher :to-contain (actual expected)
   (contains-value-p actual (expected-one expected :to-contain)))
+
+(defmatcher :to-have-length (actual expected)
+  (let ((length (sequence-length actual)))
+    (and length (= length (expected-one expected :to-have-length)))))
 
 (defmatcher :to-be-greater-than (actual expected)
   (> actual (expected-one expected :to-be-greater-than)))
@@ -90,6 +113,10 @@
 (defmatcher :to-expand-to (actual expected)
   (equal (expand-once actual)
          (expected-one expected :to-expand-to)))
+
+(defmatcher :to-match-inline-snapshot (actual expected)
+  (string= (snapshot-string actual)
+           (expected-one expected :to-match-inline-snapshot)))
 
 (defun normalize-expectation (tokens)
   (when (null tokens)

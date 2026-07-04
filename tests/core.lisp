@@ -6,6 +6,8 @@
 (defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
 
+(defclass sample-widget () ())
+
 (defmacro sample-unless (condition &body body)
   `(if ,condition
        nil
@@ -32,11 +34,17 @@
     ("to-be-truthy" (expect :value :to-be-truthy))
     ("to-be-falsy" (expect nil :to-be-falsy))
     ("to-be-null" (expect nil :to-be-null))
+    ("to-be-defined" (expect :value :to-be-defined))
     ("to-satisfy" (expect 4 :to-satisfy #'evenp))
     ("to-be-type-of" (expect 10 :to-be-type-of 'integer))
+    ("to-be-instance-of"
+     (expect (make-instance 'sample-widget) :to-be-instance-of 'sample-widget))
     ("to-contain list" (expect '(:a :b :c) :to-contain :b))
     ("to-contain vector" (expect #(:a :b :c) :to-contain :b))
     ("to-contain string" (expect "common-lisp" :to-contain "lisp"))
+    ("to-have-length list" (expect '(:a :b :c) :to-have-length 3))
+    ("to-have-length vector" (expect #(:a :b :c) :to-have-length 3))
+    ("to-have-length string" (expect "abc" :to-have-length 3))
     ("to-be-greater-than" (expect 10 :to-be-greater-than 9))
     ("to-be-greater-than-or-equal" (expect 10 :to-be-greater-than-or-equal 10))
     ("to-be-less-than" (expect 9 :to-be-less-than 10))
@@ -46,6 +54,8 @@
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
      (expect (lambda () (expect :not-a-function :to-throw)) :to-throw))
+    ("to-match-inline-snapshot"
+     (expect '(:ok 42) :to-match-inline-snapshot "(:ok 42)"))
     ("not" (expect 1 :not :to-be 2)))
 
   (it "signals assertion-failure with structured data"
