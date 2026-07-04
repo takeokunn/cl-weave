@@ -599,6 +599,67 @@
               :to-equal nil)
       (expect hook-events :to-equal nil))))
 
+(describe "bail"
+  (it "stops after the first failing event"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "bail" :parent root)))
+           (events-log nil))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "first"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:first)))
+                    (expect nil :to-be-truthy))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "second"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:second))))))
+      (let ((events (cl-weave::collect-events root :bail t)))
+        (expect (mapcar #'cl-weave::test-event-status events) :to-equal '(:fail))
+        (expect events-log :to-equal '(:first)))))
+
+  (it "accepts an integer failure limit"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "bail" :parent root)))
+           (events-log nil))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "first"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:first)))
+                    (expect nil :to-be-truthy))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "second"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:second))))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "third"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:third)))
+                    (error "boom"))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "fourth"
+        :function (lambda ()
+                    (setf events-log (append events-log '(:fourth))))))
+      (let ((events (cl-weave::collect-events root :bail 2)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:fail :pass :error))
+        (expect events-log :to-equal '(:first :second :third))))))
+
 (describe "asdf integration"
   (it "collects source files from ASDF systems"
     (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))
@@ -627,9 +688,9 @@
           (output nil))
       (with-mocked-functions
           (((symbol-function 'cl-weave:run-system)
-            (lambda (system &key reporter stream name-filter)
+            (lambda (system &key reporter stream name-filter bail)
               (declare (ignore stream))
-              (push (list system reporter name-filter) calls)
+              (push (list system reporter name-filter bail) calls)
               t)))
         (setf output
               (with-output-to-string (stream)
@@ -639,9 +700,10 @@
                          :stream stream
                          :status-stream stream
                          :name-filter "expect"
+                         :bail 1
                          :once t)
                         :to-be-truthy))))
-      (expect calls :to-equal '(("cl-weave" :json "expect")))
+      (expect calls :to-equal '(("cl-weave" :json "expect" 1)))
       (expect output :to-contain "cl-weave watch"))))
 
 (describe "mocking"

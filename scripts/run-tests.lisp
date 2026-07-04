@@ -35,6 +35,33 @@
   #-sbcl
   nil)
 
+(defun requested-bail ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_BAIL")))
+    (cond
+      ((or (null value)
+           (string= value "")
+           (string= value "0")
+           (string-equal value "false")
+           (string-equal value "nil"))
+       nil)
+      ((or (string-equal value "true")
+           (string-equal value "t"))
+       t)
+      (t
+       (multiple-value-bind (parsed position)
+           (let ((*read-eval* nil))
+             (read-from-string value))
+         (unless (and (integerp parsed)
+                      (plusp parsed)
+                      (loop for index from position below (length value)
+                            always (find (char value index)
+                                         '(#\Space #\Tab #\Newline #\Return))))
+           (error "CL_WEAVE_BAIL must be true, false, or a positive integer: ~A" value))
+         parsed))))
+  #-sbcl
+  nil)
+
 (defun requested-output-file ()
   #+sbcl
   (let ((path (sb-ext:posix-getenv "CL_WEAVE_OUTPUT_FILE")))
@@ -76,6 +103,7 @@
     (cl-weave:watch-system "cl-weave-tests"
                            :reporter (requested-reporter)
                            :name-filter (requested-test-filter)
+                           :bail (requested-bail)
                            :include-dependencies t
                            :interval (requested-watch-interval))
     (let ((output-file (requested-output-file)))
@@ -83,6 +111,7 @@
                (cl-weave:run-all
                 :reporter (requested-reporter)
                 :name-filter (requested-test-filter)
+                :bail (requested-bail)
                 :stream stream)))
         (sb-ext:exit
          :code (if (if output-file

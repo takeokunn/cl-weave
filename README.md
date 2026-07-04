@@ -22,6 +22,7 @@ Early MVP. The current focus is a solid core:
 - `describe-only` / `it-only` focused runs
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
+- Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
@@ -75,6 +76,7 @@ nix flake check --print-build-logs
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
@@ -381,6 +383,27 @@ CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scri
 Suites with no selected descendants do not run `before-all` or `after-all`, so
 filtered runs do not leak fixture side effects from unrelated suites.
 
+### Bail
+
+```lisp
+(cl-weave:run-all :bail t)
+(cl-weave:run-all :bail 2)
+```
+
+`:bail t` stops after the first `:fail` or `:error` event. A positive integer
+stops after that many failing or errored events. Skips and todos do not count
+toward the bail limit.
+
+For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `false`, `0`,
+or a positive integer:
+
+```sh
+CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+Bail composes with focus and filtering. Reporters emit only the events that were
+selected and executed before the runner stopped.
+
 ### Mocking
 
 ```lisp
@@ -441,10 +464,11 @@ reporter is the stable external-tool interface. Both include failed and errored
 path summaries for focused reruns. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
-`junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering.
-Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
-artifact file while preserving the process exit code contract. Use `junit` when
-a CI service should ingest test results as XML.
+`junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, and
+accepts `CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_OUTPUT_FILE=path` to
+write reporter output directly to an artifact file while preserving the process
+exit code contract. Use `junit` when a CI service should ingest test results as
+XML.
 
 ### ASDF System Runner and Watch Mode
 
@@ -454,6 +478,7 @@ a CI service should ingest test results as XML.
 (cl-weave:watch-system "my-project-tests"
                        :reporter :json
                        :name-filter "parser"
+                       :bail 1
                        :include-dependencies t
                        :interval 0.5)
 ```

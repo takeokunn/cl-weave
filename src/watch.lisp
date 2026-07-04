@@ -80,15 +80,17 @@
 
 (defun run-system (system &key (reporter :spec)
                          (stream *standard-output*)
-                         (name-filter *test-name-filter*))
+                         (name-filter *test-name-filter*)
+                         bail)
   "Load SYSTEM through ASDF, then run the currently registered cl-weave tests."
   (asdf:load-system system :force t)
-  (run-all :reporter reporter :stream stream :name-filter name-filter))
+  (run-all :reporter reporter :stream stream :name-filter name-filter :bail bail))
 
 (defun watch-system (system &key (reporter :spec)
                             (stream *standard-output*)
                             (status-stream *error-output*)
                             (name-filter *test-name-filter*)
+                            bail
                             include-dependencies
                             (interval 0.5)
                             once)
@@ -108,7 +110,8 @@
            (unless (run-system system
                                :reporter reporter
                                :stream stream
-                               :name-filter name-filter)
+                               :name-filter name-filter
+                               :bail bail)
              (when once
                (return nil)))
            (setf state new-state)

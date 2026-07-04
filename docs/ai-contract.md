@@ -178,6 +178,25 @@ rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
 events with the suite reason in `:reason`; suite hooks and test bodies are not
 executed while the suite is suppressed.
 
+## Bail Contract
+
+Agents can stop after the first failure or after a fixed number of failing
+events:
+
+```lisp
+(cl-weave:run-all :reporter :json :bail t)
+(cl-weave:run-all :reporter :json :bail 2)
+```
+
+The command runner exposes the same control through `CL_WEAVE_BAIL`. Accepted
+values are `true`, `false`, `0`, or a positive integer.
+
+Bail counts only emitted `:fail` and `:error` events. `:pass`, `:skip`, and
+`:todo` events do not advance the counter. When the limit is reached, reporters
+emit only the selected events that were executed before the runner stopped.
+The event shape, summary fields, `schemaVersion`, `path`, and `pathString`
+contracts are unchanged.
+
 ## Retry And Timeout Contract
 
 Case options are passed as a keyword plist immediately after the case name:
@@ -229,8 +248,8 @@ Agents can discover declared source files before choosing a focused run:
 `run-all` after ASDF loading:
 
 ```lisp
-(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser")
-(cl-weave:watch-system "my-project-tests" :reporter :json :once t)
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :bail 1)
+(cl-weave:watch-system "my-project-tests" :reporter :json :bail 1 :once t)
 ```
 
 `watch-system` writes status lines to `:status-stream`, which defaults to
