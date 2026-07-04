@@ -395,6 +395,32 @@
                (equal (getf result :values) expected-values)))
         (mock-results mock)))
 
+(defun one-based-index-expected (index matcher)
+  (unless (and (integerp index) (plusp index))
+    (error "cl-weave: ~A expects a positive integer index, got ~S."
+           matcher
+           index))
+  index)
+
+(defun expected-index-and-tail (expected matcher)
+  (when (null expected)
+    (error "cl-weave: ~A expects an index followed by expected values." matcher))
+  (values (one-based-index-expected (first expected) matcher)
+          (rest expected)))
+
+(defun nth-list-entry (entries index)
+  (let ((tail (nthcdr (1- index) entries)))
+    (values (first tail) (not (null tail)))))
+
+(defun last-list-entry (entries)
+  (let ((tail (last entries)))
+    (values (first tail) (not (null tail)))))
+
+(defun return-results (results)
+  (remove-if-not (lambda (result)
+                   (eq (getf result :type) :return))
+                 results))
+
 (defun mock-report (mock)
   (let ((calls (mock-calls mock))
         (results (mock-results mock)))
@@ -535,6 +561,24 @@
             report
             (list :arguments expected))))
 
+(defmatcher :to-have-been-last-called-with (actual expected)
+  (let ((report (mock-report actual)))
+    (multiple-value-bind (arguments present-p)
+        (last-list-entry (getf report :calls))
+      (values (and present-p (equal arguments expected))
+              report
+              (list :last-arguments expected)))))
+
+(defmatcher :to-have-been-nth-called-with (actual expected)
+  (multiple-value-bind (index expected-arguments)
+      (expected-index-and-tail expected :to-have-been-nth-called-with)
+    (let ((report (mock-report actual)))
+      (multiple-value-bind (arguments present-p)
+          (nth-list-entry (getf report :calls) index)
+        (values (and present-p (equal arguments expected-arguments))
+                report
+                (list :index index :arguments expected-arguments))))))
+
 (defmatcher :to-have-returned (actual expected)
   (declare (ignore expected))
   (let ((report (mock-report actual)))
@@ -554,6 +598,25 @@
     (values (mock-returned-with-p actual expected)
             report
             (list :values expected))))
+
+(defmatcher :to-have-last-returned-with (actual expected)
+  (let* ((report (mock-report actual))
+         (returns (return-results (getf report :results))))
+    (multiple-value-bind (result present-p) (last-list-entry returns)
+      (values (and present-p (equal (getf result :values) expected))
+              report
+              (list :last-values expected)))))
+
+(defmatcher :to-have-nth-returned-with (actual expected)
+  (multiple-value-bind (index expected-values)
+      (expected-index-and-tail expected :to-have-nth-returned-with)
+    (let* ((report (mock-report actual))
+           (returns (return-results (getf report :results))))
+      (multiple-value-bind (result present-p)
+          (nth-list-entry returns index)
+        (values (and present-p (equal (getf result :values) expected-values))
+                report
+                (list :index index :values expected-values))))))
 
 (defmatcher :to-have-thrown (actual expected)
   (declare (ignore expected))

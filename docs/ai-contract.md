@@ -88,8 +88,12 @@ Mock function matchers report call and result histories in `:actual`:
 ```
 
 Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
-The `:to-have-returned-with` matcher compares its operands with the recorded
-Common Lisp multiple values list.
+Return-value matchers compare their operands with the recorded Common Lisp
+multiple values list. Ordered mock matchers use one-based indices:
+`:to-have-been-nth-called-with` reports `(:index n :arguments (...))`, and
+`:to-have-nth-returned-with` reports `(:index n :values (...))`. Nth returned
+assertions count only successful `:return` results; thrown results remain in
+`:results` but do not consume a returned index.
 
 Smart assertions use the same shape. For predicate forms such as
 `(expect (= (+ 1 1) 3))`, the matcher is the predicate symbol and `:actual`

@@ -1926,11 +1926,20 @@
       (expect mock :to-have-been-called)
       (expect mock :to-have-been-called-times 2)
       (expect mock :to-have-been-called-with 1 2)
+      (expect mock :to-have-been-nth-called-with 1 1 2)
+      (expect mock :to-have-been-nth-called-with 2 5 8)
+      (expect mock :to-have-been-last-called-with 5 8)
       (expect (mock-calls mock) :to-equal '((1 2) (5 8)))
       (clear-mock mock)
       (expect mock :not :to-have-been-called)
       (expect (mock-calls mock) :to-equal nil)
       (expect (mock-results mock) :to-equal nil)))
+
+  (it "matches ordered zero-argument mock calls"
+    (let ((mock (make-mock-function (lambda () :pong))))
+      (expect (funcall mock) :to-be :pong)
+      (expect mock :to-have-been-nth-called-with 1)
+      (expect mock :to-have-been-last-called-with)))
 
   (it "records mock return values including multiple values"
     (let ((mock (make-mock-function (lambda (value)
@@ -1938,12 +1947,40 @@
       (multiple-value-bind (value doubled) (funcall mock 4)
         (expect value :to-be 4)
         (expect doubled :to-be 8))
+      (multiple-value-bind (value doubled) (funcall mock 7)
+        (expect value :to-be 7)
+        (expect doubled :to-be 14))
       (expect mock :to-have-returned)
-      (expect mock :to-have-returned-times 1)
+      (expect mock :to-have-returned-times 2)
       (expect mock :to-have-returned-with 4 8)
+      (expect mock :to-have-nth-returned-with 1 4 8)
+      (expect mock :to-have-nth-returned-with 2 7 14)
+      (expect mock :to-have-last-returned-with 7 14)
       (expect (mock-results mock)
               :to-equal
-              '((:type :return :value 4 :values (4 8))))))
+              '((:type :return :value 4 :values (4 8))
+                (:type :return :value 7 :values (7 14))))))
+
+  (it "matches returned order without counting thrown results"
+    (let ((mock (let ((state 0))
+                  (make-mock-function
+                   (lambda ()
+                     (incf state)
+                     (when (= state 2)
+                       (error "mock exploded"))
+                     (values state :ok))))))
+      (multiple-value-bind (value status) (funcall mock)
+        (expect value :to-be 1)
+        (expect status :to-be :ok))
+      (expect (lambda () (funcall mock)) :to-throw "mock exploded")
+      (multiple-value-bind (value status) (funcall mock)
+        (expect value :to-be 3)
+        (expect status :to-be :ok))
+      (expect mock :to-have-returned-times 2)
+      (expect mock :to-have-nth-returned-with 1 1 :ok)
+      (expect mock :to-have-nth-returned-with 2 3 :ok)
+      (expect mock :to-have-last-returned-with 3 :ok)
+      (expect mock :to-have-thrown)))
 
   (it "records thrown conditions from mock functions"
     (let ((mock (make-mock-function (lambda ()
@@ -1973,7 +2010,26 @@
                   1)
           (expect (cl-weave::assertion-detail-expected assertion)
                   :to-equal
-                  '(:return-count 2)))))))
+                  '(:return-count 2))))))
+
+  (it "reports structured ordered mock assertion failures"
+    (handler-case
+        (let ((mock (make-mock-function (lambda (value) value))))
+          (funcall mock :actual)
+          (expect mock :to-have-been-nth-called-with 2 :missing)
+          (error "unreachable"))
+      (assertion-failure (condition)
+        (let ((assertion (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher assertion)
+                  :to-be
+                  :to-have-been-nth-called-with)
+          (expect (getf (cl-weave::assertion-detail-actual assertion)
+                        :call-count)
+                  :to-be
+                  1)
+          (expect (cl-weave::assertion-detail-expected assertion)
+                  :to-equal
+                  '(:index 2 :arguments (:missing))))))))
 
 (describe "reporters"
   (it "prints AI-readable S-expression results"

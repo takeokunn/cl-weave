@@ -202,9 +202,13 @@ Built-in matchers:
 - `:to-have-been-called`
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
+- `:to-have-been-last-called-with`
+- `:to-have-been-nth-called-with`
 - `:to-have-returned`
 - `:to-have-returned-times`
 - `:to-have-returned-with`
+- `:to-have-last-returned-with`
+- `:to-have-nth-returned-with`
 - `:to-have-thrown`
 
 `:to-throw` accepts an optional expected condition class designator, message
@@ -691,16 +695,22 @@ selected and executed before the runner stopped.
 (let ((add (make-mock-function (lambda (left right)
                                  (+ left right)))))
   (expect (funcall add 1 2) :to-be 3)
+  (expect (funcall add 5 8) :to-be 13)
   (expect add :to-have-been-called)
-  (expect add :to-have-been-called-times 1)
+  (expect add :to-have-been-called-times 2)
   (expect add :to-have-been-called-with 1 2)
+  (expect add :to-have-been-nth-called-with 1 1 2)
+  (expect add :to-have-been-last-called-with 5 8)
   (expect add :to-have-returned)
-  (expect add :to-have-returned-times 1)
+  (expect add :to-have-returned-times 2)
   (expect add :to-have-returned-with 3)
-  (expect (mock-calls add) :to-equal '((1 2)))
+  (expect add :to-have-nth-returned-with 1 3)
+  (expect add :to-have-last-returned-with 13)
+  (expect (mock-calls add) :to-equal '((1 2) (5 8)))
   (expect (mock-results add)
           :to-equal
-          '((:type :return :value 3 :values (3))))
+          '((:type :return :value 3 :values (3))
+            (:type :return :value 13 :values (13))))
   (clear-mock add))
 
 (with-mocked-functions (((symbol-function 'now) (lambda () 0)))
@@ -712,6 +722,8 @@ Vitest's `vi.fn`. `mock-calls` returns a copy of the recorded argument lists,
 `mock-results` returns return/throw reports, and `clear-mock` resets both
 histories. `:to-have-returned-with` accepts Common Lisp multiple values as
 matcher operands, for example `(expect mock :to-have-returned-with :ok 42)`.
+Nth mock matchers use one-based indices. Nth returned matchers count only
+successful returns, while `mock-results` still keeps thrown result reports.
 
 `with-mocked-functions` temporarily rewrites global function cells. The
 original function cells are restored with `unwind-protect`.
