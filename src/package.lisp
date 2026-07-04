@@ -12,6 +12,8 @@
    #:describe
    #:describe-each
    #:describe-only
+   #:describe-skip
+   #:describe-todo
    #:expect
    #:gen-boolean
    #:gen-integer

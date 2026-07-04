@@ -18,9 +18,9 @@ Early MVP. The current focus is a solid core:
 - `it-property` deterministic property tests with shrinking
 - `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
-- `it-skip` / `test-skip` skipped cases
+- `describe-skip` / `it-skip` / `test-skip` skipped suites and cases
 - `describe-only` / `it-only` focused runs
-- `it-todo` / `test-todo` todo cases
+- `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
@@ -308,11 +308,17 @@ Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
 ### Skipping
 
 ```lisp
+(describe-skip "upstream-dependent suite" "waiting for upstream behavior"
+  (it "documents a blocked case"
+    (expect :unreachable :to-be :reachable)))
+
 (it-skip "documents a pending case" "waiting for upstream behavior")
 (test-skip "alias for it-skip")
 ```
 
-Skipped cases are reported as `:skip` and do not fail `run-all`.
+Skipped suites report selected descendant cases as `:skip` without running suite
+hooks or test bodies. Skipped cases use the same event status and do not fail
+`run-all`.
 
 ### Focus And Todo
 
@@ -326,10 +332,16 @@ Skipped cases are reported as `:skip` and do not fail `run-all`.
 
 (it-todo "documents a missing edge case" "needs property generator")
 (test-todo "alias for it-todo")
+
+(describe-todo "future protocol" "needs design"
+  (it "documents the expected shape"
+    (expect :draft :to-be :stable)))
 ```
 
 When any suite or case is focused, `run-all` executes only the focused path.
-Todo cases are reported as `:todo`, skip their body, and do not fail `run-all`.
+Todo suites report selected descendant cases as `:todo` without running suite
+hooks or test bodies. Todo cases use the same event status and do not fail
+`run-all`.
 
 ### Filtering
 

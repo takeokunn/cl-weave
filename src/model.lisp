@@ -8,6 +8,8 @@
   name
   parent
   focus
+  skip-reason
+  todo-reason
   (children '())
   (before-all '())
   (after-all '())
@@ -59,11 +61,13 @@
         (append (suite-children parent) (list child)))
   child)
 
-(defun register-suite (name thunk &key focus)
+(defun register-suite (name thunk &key focus skip-reason todo-reason)
   (let* ((parent (or *current-suite* (root-suite)))
          (suite (add-child parent (make-suite :name name
                                               :parent parent
-                                              :focus focus))))
+                                              :focus focus
+                                              :skip-reason skip-reason
+                                              :todo-reason todo-reason))))
     (let ((*current-suite* suite))
       (funcall thunk))
     suite))

@@ -12,6 +12,8 @@
    #:clear-mock
    #:clear-tests
    #:describe-each
+   #:describe-skip
+   #:describe-todo
    #:expect
    #:gen-boolean
    #:gen-form

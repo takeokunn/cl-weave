@@ -111,28 +111,54 @@
          (condition (condition)
            (make-event :error suite test start :condition condition)))))))
 
-(declaim (ftype (function (suite list function &optional t t t) *) collect-children/k))
+(defun suite-suppression (suite inherited-status inherited-reason)
+  (cond
+    (inherited-status
+     (values inherited-status inherited-reason))
+    ((suite-todo-reason suite)
+     (values :todo (suite-todo-reason suite)))
+    ((suite-skip-reason suite)
+     (values :skip (suite-skip-reason suite)))
+    (t
+     (values nil nil))))
+
+(defun suppressed-test-event (suite test status reason)
+  (make-event status suite test (get-internal-real-time) :reason reason))
+
+(declaim (ftype (function (suite list function &optional t t t t t) *) collect-children/k))
 
 (defun collect-suite-events/k
-    (suite continue &optional focus-enabled ancestor-focused name-filter)
+    (suite continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
   (if (selected-suite-p suite focus-enabled ancestor-focused name-filter)
-      (unwind-protect
-           (call-hooks/k
-            (suite-before-all suite)
-            (lambda ()
-              (collect-children/k
-               suite
-               (suite-children suite)
-               (lambda (events)
-                 (funcall continue events))
-               focus-enabled
-               ancestor-focused
-               name-filter)))
-        (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil)))
+      (multiple-value-bind (active-status active-reason)
+          (suite-suppression suite suppressed-status suppressed-reason)
+        (if active-status
+            (collect-children/k
+             suite
+             (suite-children suite)
+             continue
+             focus-enabled
+             ancestor-focused
+             name-filter
+             active-status
+             active-reason)
+            (unwind-protect
+                 (call-hooks/k
+                  (suite-before-all suite)
+                  (lambda ()
+                    (collect-children/k
+                     suite
+                     (suite-children suite)
+                     (lambda (events)
+                       (funcall continue events))
+                     focus-enabled
+                     ancestor-focused
+                     name-filter)))
+              (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil)))))
       (funcall continue '())))
 
 (defun collect-children/k
-    (suite children continue &optional focus-enabled ancestor-focused name-filter)
+    (suite children continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
   (if (null children)
       (funcall continue '())
       (let ((child (first children)))
@@ -158,17 +184,23 @@
                        (funcall continue (append events tail)))
                      focus-enabled
                      ancestor-focused
-                     name-filter))
+                     name-filter
+                     suppressed-status
+                     suppressed-reason))
                   focus-enabled
                   child-focused
-                  name-filter)
+                  name-filter
+                  suppressed-status
+                  suppressed-reason)
                  (collect-children/k
                   suite
                   (rest children)
                   continue
                   focus-enabled
                   ancestor-focused
-                  name-filter))))
+                  name-filter
+                  suppressed-status
+                  suppressed-reason))))
           (test-case
            (let ((selected (selected-test-case-p
                             suite
@@ -177,7 +209,9 @@
                             ancestor-focused
                             name-filter)))
              (if selected
-                 (let ((event (run-test-case suite child)))
+                 (let ((event (if suppressed-status
+                                  (suppressed-test-event suite child suppressed-status suppressed-reason)
+                                  (run-test-case suite child))))
                    (collect-children/k
                     suite
                     (rest children)
@@ -185,14 +219,18 @@
                       (funcall continue (cons event tail)))
                     focus-enabled
                     ancestor-focused
-                    name-filter))
+                    name-filter
+                    suppressed-status
+                    suppressed-reason))
                  (collect-children/k
                   suite
                   (rest children)
                   continue
                   focus-enabled
                   ancestor-focused
-                  name-filter))))
+                  name-filter
+                  suppressed-status
+                  suppressed-reason))))
           (t
            (collect-children/k
             suite
@@ -200,7 +238,9 @@
             continue
             focus-enabled
             ancestor-focused
-            name-filter))))))
+            name-filter
+            suppressed-status
+            suppressed-reason))))))
 
 (defun collect-events (suite &key name-filter)
   (collect-suite-events/k

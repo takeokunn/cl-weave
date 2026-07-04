@@ -152,6 +152,11 @@ Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
 the run is considered successful because no selected test failed.
 
+Suite-level `describe-skip` and `describe-todo` compose with the same selection
+rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
+events with the suite reason in `:reason`; suite hooks and test bodies are not
+executed while the suite is suppressed.
+
 ## Table-Driven Macro Expansion
 
 `it-each`, `test-each`, and `describe-each` are compile-time expansion helpers,

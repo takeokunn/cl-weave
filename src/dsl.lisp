@@ -6,6 +6,16 @@
 (defmacro describe-only (name &body body)
   `(register-suite ,name (lambda () ,@body) :focus t))
 
+(defmacro describe-skip (name &body body)
+  (let ((reason (if (and body (stringp (first body))) (first body) "skipped"))
+        (forms (if (and body (stringp (first body))) (rest body) body)))
+    `(register-suite ,name (lambda () ,@forms) :skip-reason ,reason)))
+
+(defmacro describe-todo (name &body body)
+  (let ((reason (if (and body (stringp (first body))) (first body) "todo"))
+        (forms (if (and body (stringp (first body))) (rest body) body)))
+    `(register-suite ,name (lambda () ,@forms) :todo-reason ,reason)))
+
 (defmacro describe-each (cases name bindings &body body)
   `(progn
      ,@(loop for case in cases

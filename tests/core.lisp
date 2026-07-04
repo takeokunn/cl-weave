@@ -28,7 +28,7 @@
 
 (defun tree-contains-p (tree value)
   (cond
-    ((eql tree value) t)
+    ((equal tree value) t)
     ((consp tree)
      (or (tree-contains-p (car tree) value)
          (tree-contains-p (cdr tree) value)))
@@ -178,6 +178,26 @@
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::register-test)
                    (tree-contains-p form :focus)))))
+
+  (it "expands describe-skip into skipped suite registration"
+    (expect (macroexpand-1
+             '(describe-skip "blocked" "upstream gap"
+                (it "case" (expect 1 :to-be 1))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-suite)
+                   (tree-contains-p form :skip-reason)
+                   (tree-contains-p form "upstream gap")))))
+
+  (it "expands describe-todo into todo suite registration"
+    (expect (macroexpand-1
+             '(describe-todo "pending" "needs design"
+                (it "case" (expect 1 :to-be 1))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-suite)
+                   (tree-contains-p form :todo-reason)
+                   (tree-contains-p form "needs design")))))
 
   (it "expands describe-each into independent suites"
     (expect (macroexpand-1
@@ -383,7 +403,31 @@
            (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
       (expect (cl-weave::test-event-status event) :to-be :skip)
       (expect (cl-weave::test-event-reason event) :to-equal "not implemented")
-      (expect (cl-weave::passed-event-p event) :to-be-truthy))))
+      (expect (cl-weave::passed-event-p event) :to-be-truthy)))
+
+  (it "reports skipped suite descendants without running hooks or bodies"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "blocked"
+                    :parent root
+                    :skip-reason "suite blocked"
+                    :before-all (list (lambda () (error "before-all should not run")))
+                    :after-all (list (lambda () (error "after-all should not run")))
+                    :before-each (list (lambda () (error "before-each should not run")))
+                    :after-each (list (lambda () (error "after-each should not run")))))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "case"
+        :function (lambda () (error "test body should not run"))))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events) :to-equal '(:skip))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("suite blocked"))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("blocked" "case")))))))
 
 (describe "todos"
   (it-todo "documents pending work" "intentional")
@@ -396,7 +440,31 @@
            (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
       (expect (cl-weave::test-event-status event) :to-be :todo)
       (expect (cl-weave::test-event-reason event) :to-equal "pending")
-      (expect (cl-weave::passed-event-p event) :to-be-truthy))))
+      (expect (cl-weave::passed-event-p event) :to-be-truthy)))
+
+  (it "reports todo suite descendants without running hooks or bodies"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "pending"
+                    :parent root
+                    :todo-reason "suite pending"
+                    :before-all (list (lambda () (error "before-all should not run")))
+                    :after-all (list (lambda () (error "after-all should not run")))
+                    :before-each (list (lambda () (error "before-each should not run")))
+                    :after-each (list (lambda () (error "after-each should not run")))))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "case"
+        :function (lambda () (error "test body should not run"))))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events) :to-equal '(:todo))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("suite pending"))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("pending" "case")))))))
 
 (describe "focus"
   (it "runs only focused tests when any focus exists"
