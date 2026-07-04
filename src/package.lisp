@@ -9,6 +9,7 @@
    #:before-all
    #:before-each
    #:clear-tests
+   #:collect-test-plan
    #:describe
    #:describe-each
    #:describe-only
@@ -45,6 +46,7 @@
    #:it-only
    #:it-skip
    #:it-todo
+   #:list-tests
    #:*property-seed*
    #:*property-test-count*
    #:*snapshot-directory*
@@ -58,6 +60,13 @@
    #:run-all
    #:run-isolated
    #:run-system
+   #:test-plan-entry
+   #:test-plan-entry-focused
+   #:test-plan-entry-path
+   #:test-plan-entry-reason
+   #:test-plan-entry-retry
+   #:test-plan-entry-status
+   #:test-plan-entry-timeout-ms
    #:test
    #:test-each
    #:test-only

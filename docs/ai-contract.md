@@ -178,6 +178,73 @@ rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
 events with the suite reason in `:reason`; suite hooks and test bodies are not
 executed while the suite is suppressed.
 
+## Test Plan Contract
+
+Agents can discover selected tests without executing hooks or test bodies:
+
+```lisp
+(cl-weave:list-tests :reporter :json :name-filter "parser")
+(cl-weave:collect-test-plan (cl-weave::root-suite) :name-filter "parser")
+```
+
+The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
+
+```sh
+CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+The JSON test plan reporter prints one object:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "test-plan",
+  "total": 1,
+  "runnable": 1,
+  "skipped": 0,
+  "todos": 0,
+  "tests": [
+    {
+      "status": "run",
+      "path": ["suite", "case"],
+      "pathString": "suite > case",
+      "reason": null,
+      "focused": false,
+      "retry": 0,
+      "timeoutMs": null
+    }
+  ]
+}
+```
+
+The S-expression test plan reporter uses the same data:
+
+```lisp
+(:cl-weave/test-plan
+ :schema-version 1
+ :total 1
+ :runnable 1
+ :skipped 0
+ :todos 0
+ :tests
+ ((:status :run
+   :path ("suite" "case")
+   :path-string "suite > case"
+   :reason nil
+   :focused nil
+   :retry 0
+   :timeout-ms nil)))
+```
+
+Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
+`todo`. Focus and `CL_WEAVE_TEST_FILTER` narrow discovery with the same rules as
+execution. Suite-level skip and todo suppression produces selected descendant
+plan entries without running suite hooks or case bodies. `pathString` can be
+fed back to `CL_WEAVE_TEST_FILTER` for focused execution after discovery.
+
+List mode supports `spec`, `sexp`, and `json` reporters. It exits with status
+`0` after writing the plan, including when no tests match.
+
 ## Bail Contract
 
 Agents can stop after the first failure or after a fixed number of failing

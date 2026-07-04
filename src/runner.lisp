@@ -184,6 +184,29 @@
 (defun suppressed-test-event (suite test status reason)
   (make-event status suite test (get-internal-real-time) :reason reason))
 
+(defun planned-test-status (test suppressed-status)
+  (or suppressed-status
+      (when (test-case-todo-reason test) :todo)
+      (when (test-case-skip-reason test) :skip)
+      :run))
+
+(defun planned-test-reason (test suppressed-status suppressed-reason status)
+  (if suppressed-status
+      suppressed-reason
+      (ecase status
+        (:run nil)
+        (:todo (test-case-todo-reason test))
+        (:skip (test-case-skip-reason test)))))
+
+(defun make-plan-entry (suite test status reason focus-enabled ancestor-focused)
+  (make-test-plan-entry
+   :path (test-path suite test)
+   :status status
+   :reason reason
+   :focused (and focus-enabled (or ancestor-focused (test-case-focus test)))
+   :retry (retry-count test)
+   :timeout-ms (test-case-timeout-ms test)))
+
 (declaim (ftype (function (suite list execution-control function &optional t t t t t) *) collect-children/k))
 
 (defun collect-suite-events/k
@@ -325,6 +348,117 @@
    nil
    (normalized-test-filter name-filter)))
 
+(declaim (ftype (function (suite list function &optional t t t t t) *) collect-children-plan/k))
+
+(defun collect-suite-plan/k
+    (suite continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
+  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter))
+      (funcall continue '())
+      (multiple-value-bind (active-status active-reason)
+          (suite-suppression suite suppressed-status suppressed-reason)
+        (collect-children-plan/k
+         suite
+         (suite-children suite)
+         continue
+         focus-enabled
+         ancestor-focused
+         name-filter
+         active-status
+         active-reason))))
+
+(defun collect-children-plan/k
+    (suite children continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
+  (if (null children)
+      (funcall continue '())
+      (let ((child (first children)))
+        (typecase child
+          (suite
+           (let* ((child-focused (or ancestor-focused (suite-focus child)))
+                  (selected (and (or (not focus-enabled)
+                                     child-focused
+                                     (focused-child-p child))
+                                 (selected-suite-p
+                                  child
+                                  focus-enabled
+                                  child-focused
+                                  name-filter))))
+             (if selected
+                 (collect-suite-plan/k
+                  child
+                  (lambda (entries)
+                    (collect-children-plan/k
+                     suite
+                     (rest children)
+                     (lambda (tail)
+                       (funcall continue (append entries tail)))
+                     focus-enabled
+                     ancestor-focused
+                     name-filter
+                     suppressed-status
+                     suppressed-reason))
+                  focus-enabled
+                  child-focused
+                  name-filter
+                  suppressed-status
+                  suppressed-reason)
+                 (collect-children-plan/k
+                  suite
+                  (rest children)
+                  continue
+                  focus-enabled
+                  ancestor-focused
+                  name-filter
+                  suppressed-status
+                  suppressed-reason))))
+          (test-case
+           (if (selected-test-case-p suite child focus-enabled ancestor-focused name-filter)
+               (let* ((status (planned-test-status child suppressed-status))
+                  (reason (planned-test-reason child suppressed-status suppressed-reason status))
+                      (entry (make-plan-entry
+                              suite
+                              child
+                              status
+                              reason
+                              focus-enabled
+                              ancestor-focused)))
+                 (collect-children-plan/k
+                  suite
+                  (rest children)
+                  (lambda (tail)
+                    (funcall continue (cons entry tail)))
+                  focus-enabled
+                  ancestor-focused
+                  name-filter
+                  suppressed-status
+                  suppressed-reason))
+               (collect-children-plan/k
+                suite
+                (rest children)
+                continue
+                focus-enabled
+                ancestor-focused
+                name-filter
+                suppressed-status
+                suppressed-reason)))
+          (t
+           (collect-children-plan/k
+            suite
+            (rest children)
+            continue
+            focus-enabled
+            ancestor-focused
+            name-filter
+            suppressed-status
+            suppressed-reason))))))
+
+(defun collect-test-plan (suite &key name-filter)
+  (collect-suite-plan/k
+   suite
+   #'identity
+   (focused-suite-p suite)
+   nil
+   (normalized-test-filter name-filter)))
+
 (defun passed-event-p (event)
   (member (test-event-status event) '(:pass :skip :todo)))
 
@@ -339,3 +473,13 @@
       (:json (report-json events stream))
       (:junit (report-junit events stream)))
     (every #'passed-event-p events)))
+
+(defun list-tests (&key (reporter :spec)
+                     (stream *standard-output*)
+                     (name-filter *test-name-filter*))
+  (let ((plan (collect-test-plan (root-suite) :name-filter name-filter)))
+    (ecase reporter
+      (:spec (report-plan-spec plan stream))
+      (:sexp (report-plan-sexp plan stream))
+      (:json (report-plan-json plan stream)))
+    plan))

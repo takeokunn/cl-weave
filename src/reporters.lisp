@@ -219,6 +219,97 @@
   (terpri stream)
   (values))
 
+(defun plan-status-marker (status)
+  (ecase status
+    (:run "RUN")
+    (:skip "SKIP")
+    (:todo "TODO")))
+
+(defun runnable-plan-entry-p (entry)
+  (eq (test-plan-entry-status entry) :run))
+
+(defun skipped-plan-entry-p (entry)
+  (eq (test-plan-entry-status entry) :skip))
+
+(defun todo-plan-entry-p (entry)
+  (eq (test-plan-entry-status entry) :todo))
+
+(defun serializable-plan-entry (entry)
+  (list :status (test-plan-entry-status entry)
+        :path (test-plan-entry-path entry)
+        :path-string (path-string (test-plan-entry-path entry))
+        :reason (test-plan-entry-reason entry)
+        :focused (test-plan-entry-focused entry)
+        :retry (test-plan-entry-retry entry)
+        :timeout-ms (test-plan-entry-timeout-ms entry)))
+
+(defun report-plan-spec (plan stream)
+  (dolist (entry plan)
+    (format stream "~&[~A] ~A"
+            (plan-status-marker (test-plan-entry-status entry))
+            (path-string (test-plan-entry-path entry)))
+    (when (test-plan-entry-focused entry)
+      (write-string " (focused)" stream))
+    (when (test-plan-entry-reason entry)
+      (format stream "~&    reason: ~A" (test-plan-entry-reason entry))))
+  (format stream "~&~%~D runnable, ~D skipped, ~D todo, ~D total~%"
+          (count-if #'runnable-plan-entry-p plan)
+          (count-if #'skipped-plan-entry-p plan)
+          (count-if #'todo-plan-entry-p plan)
+          (length plan))
+  (values))
+
+(defun report-plan-sexp (plan stream)
+  (prin1 (list :cl-weave/test-plan
+               :schema-version 1
+               :total (length plan)
+               :runnable (count-if #'runnable-plan-entry-p plan)
+               :skipped (count-if #'skipped-plan-entry-p plan)
+               :todos (count-if #'todo-plan-entry-p plan)
+               :tests (mapcar #'serializable-plan-entry plan))
+         stream)
+  (terpri stream)
+  (values))
+
+(defun json-write-plan-entry (entry stream)
+  (write-string "{" stream)
+  (write-string "\"status\":" stream)
+  (write-json-string (json-status-string (test-plan-entry-status entry)) stream)
+  (write-string ",\"path\":" stream)
+  (json-write-path (test-plan-entry-path entry) stream)
+  (write-string ",\"pathString\":" stream)
+  (write-json-string (path-string (test-plan-entry-path entry)) stream)
+  (write-string ",\"reason\":" stream)
+  (json-write-nullable-string (test-plan-entry-reason entry) stream)
+  (write-string ",\"focused\":" stream)
+  (write-string (if (test-plan-entry-focused entry) "true" "false") stream)
+  (format stream ",\"retry\":~D" (test-plan-entry-retry entry))
+  (write-string ",\"timeoutMs\":" stream)
+  (let ((timeout-ms (test-plan-entry-timeout-ms entry)))
+    (if timeout-ms
+        (princ timeout-ms stream)
+        (write-string "null" stream)))
+  (write-string "}" stream))
+
+(defun report-plan-json (plan stream)
+  (write-string "{" stream)
+  (write-string "\"schemaVersion\":1" stream)
+  (write-string ",\"kind\":\"test-plan\"" stream)
+  (format stream ",\"total\":~D" (length plan))
+  (format stream ",\"runnable\":~D" (count-if #'runnable-plan-entry-p plan))
+  (format stream ",\"skipped\":~D" (count-if #'skipped-plan-entry-p plan))
+  (format stream ",\"todos\":~D" (count-if #'todo-plan-entry-p plan))
+  (write-string ",\"tests\":[" stream)
+  (loop for entry in plan
+        for first = t then nil
+        do (progn
+             (unless first
+               (write-string "," stream))
+             (json-write-plan-entry entry stream)))
+  (write-string "]}" stream)
+  (terpri stream)
+  (values))
+
 (defun event-message (event)
   (or (test-event-reason event)
       (when (test-event-condition event)

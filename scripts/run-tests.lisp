@@ -70,6 +70,16 @@
   #-sbcl
   nil)
 
+(defun requested-list-p ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_LIST")))
+    (and value
+         (not (string= value ""))
+         (not (string= value "0"))
+         (not (string-equal value "false"))))
+  #-sbcl
+  nil)
+
 (defun requested-watch-p ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_WATCH")))
@@ -99,30 +109,43 @@
   0.5)
 
 #+sbcl
-(if (requested-watch-p)
-    (cl-weave:watch-system "cl-weave-tests"
-                           :reporter (requested-reporter)
-                           :name-filter (requested-test-filter)
-                           :bail (requested-bail)
-                           :include-dependencies t
-                           :interval (requested-watch-interval))
-    (let ((output-file (requested-output-file)))
-      (flet ((run-with-stream (stream)
-               (cl-weave:run-all
-                :reporter (requested-reporter)
-                :name-filter (requested-test-filter)
-                :bail (requested-bail)
-                :stream stream)))
-        (sb-ext:exit
-         :code (if (if output-file
-                       (with-open-file (stream output-file
-                                               :direction :output
-                                               :if-exists :supersede
-                                               :if-does-not-exist :create)
-                         (run-with-stream stream))
-                       (run-with-stream *standard-output*))
-                   0
-                   1)))))
+(let ((reporter (requested-reporter))
+      (output-file (requested-output-file)))
+  (flet ((with-requested-stream (callback)
+           (if output-file
+               (with-open-file (stream output-file
+                                       :direction :output
+                                       :if-exists :supersede
+                                       :if-does-not-exist :create)
+                 (funcall callback stream))
+               (funcall callback *standard-output*))))
+    (cond
+      ((requested-list-p)
+       (with-requested-stream
+        (lambda (stream)
+          (cl-weave:list-tests
+           :reporter reporter
+           :name-filter (requested-test-filter)
+           :stream stream)))
+       (sb-ext:exit :code 0))
+      ((requested-watch-p)
+       (cl-weave:watch-system "cl-weave-tests"
+                              :reporter reporter
+                              :name-filter (requested-test-filter)
+                              :bail (requested-bail)
+                              :include-dependencies t
+                              :interval (requested-watch-interval)))
+      (t
+       (sb-ext:exit
+        :code (if (with-requested-stream
+                    (lambda (stream)
+                      (cl-weave:run-all
+                       :reporter reporter
+                       :name-filter (requested-test-filter)
+                       :bail (requested-bail)
+                       :stream stream)))
+                  0
+                  1))))))
 
 #-sbcl
 (error "scripts/run-tests.lisp currently requires SBCL.")

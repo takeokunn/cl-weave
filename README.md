@@ -22,6 +22,7 @@ Early MVP. The current focus is a solid core:
 - `describe-only` / `it-only` focused runs
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
+- Vitest-style test discovery list mode for AI agents and CI tooling
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
@@ -75,6 +76,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 nix flake check --print-build-logs
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
@@ -383,6 +385,28 @@ CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scri
 Suites with no selected descendants do not run `before-all` or `after-all`, so
 filtered runs do not leak fixture side effects from unrelated suites.
 
+### Test Listing
+
+```lisp
+(cl-weave:list-tests :reporter :json :name-filter "math")
+(cl-weave:collect-test-plan (cl-weave::root-suite) :name-filter "math")
+```
+
+List mode discovers selected tests without executing suite hooks or test
+bodies. It composes with focus, filtering, skipped suites, and todo suites, and
+emits `:run`, `:skip`, or `:todo` plan entries with `path`, `pathString`,
+`reason`, `focused`, `retry`, and `timeout-ms` metadata.
+
+For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
+and exits with status `0`:
+
+```sh
+CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+List mode supports `spec`, `sexp`, and `json` reporters. `CL_WEAVE_OUTPUT_FILE`
+can write the plan payload to an artifact file.
+
 ### Bail
 
 ```lisp
@@ -464,11 +488,12 @@ reporter is the stable external-tool interface. Both include failed and errored
 path summaries for focused reruns. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
-`junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, and
-accepts `CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_OUTPUT_FILE=path` to
-write reporter output directly to an artifact file while preserving the process
-exit code contract. Use `junit` when a CI service should ingest test results as
-XML.
+`junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
+`CL_WEAVE_LIST=1` for discovery without execution, and accepts `CL_WEAVE_BAIL`
+for fast-fail runs. Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output
+directly to an artifact file while preserving the process exit code contract.
+Use `junit` when a CI service should ingest test results as XML. List mode
+supports `spec`, `sexp`, and `json`.
 
 ### ASDF System Runner and Watch Mode
 

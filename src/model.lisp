@@ -41,6 +41,14 @@
   reason
   elapsed-internal-time)
 
+(defstruct test-plan-entry
+  path
+  status
+  reason
+  focused
+  retry
+  timeout-ms)
+
 (define-condition test-failure (error)
   ((detail :initarg :detail :reader failure-detail))
   (:report (lambda (condition stream)

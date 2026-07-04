@@ -599,6 +599,92 @@
               :to-equal nil)
       (expect hook-events :to-equal nil))))
 
+(describe "list mode"
+  (it "collects selected tests without running hooks or bodies"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (events-log nil)
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "plan"
+                    :parent root
+                    :before-all (list (lambda () (push :before-all events-log)))
+                    :after-all (list (lambda () (push :after-all events-log)))
+                    :before-each (list (lambda () (push :before-each events-log)))
+                    :after-each (list (lambda () (push :after-each events-log)))))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "runs later"
+        :function (lambda () (push :body events-log))
+        :retry 2
+        :timeout-ms 250))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "hidden"
+        :function (lambda () (push :hidden events-log))))
+      (let ((plan (cl-weave:collect-test-plan root :name-filter "runs later")))
+        (expect events-log :to-equal nil)
+        (expect (mapcar #'cl-weave:test-plan-entry-status plan) :to-equal '(:run))
+        (expect (mapcar #'cl-weave:test-plan-entry-path plan)
+                :to-equal '(("plan" "runs later")))
+        (expect (cl-weave:test-plan-entry-retry (first plan)) :to-be 2)
+        (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250))))
+
+  (it "lists suppressed suites without running their descendants"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (skipped (cl-weave::add-child
+                     root
+                     (cl-weave::make-suite
+                      :name "blocked"
+                      :parent root
+                      :skip-reason "suite blocked")))
+           (todo (cl-weave::add-child
+                  root
+                  (cl-weave::make-suite
+                   :name "pending"
+                   :parent root
+                   :todo-reason "suite pending"))))
+      (cl-weave::add-child
+       skipped
+       (cl-weave::make-test-case
+        :name "case"
+        :function (lambda () (error "should not run"))))
+      (cl-weave::add-child
+       todo
+       (cl-weave::make-test-case
+        :name "case"
+        :function (lambda () (error "should not run"))))
+      (let ((plan (cl-weave:collect-test-plan root)))
+        (expect (mapcar #'cl-weave:test-plan-entry-status plan)
+                :to-equal '(:skip :todo))
+        (expect (mapcar #'cl-weave:test-plan-entry-reason plan)
+                :to-equal '("suite blocked" "suite pending")))))
+
+  (it "lists focus metadata"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (focused (cl-weave::add-child
+                     root
+                     (cl-weave::make-suite
+                      :name "focused"
+                      :parent root
+                      :focus t))))
+      (cl-weave::add-child
+       focused
+       (cl-weave::make-test-case
+        :name "todo case"
+        :function (lambda () (error "should not run"))
+        :todo-reason "pending"))
+      (let ((plan (cl-weave:collect-test-plan root)))
+        (expect (mapcar #'cl-weave:test-plan-entry-path plan)
+                :to-equal '(("focused" "todo case")))
+        (expect (mapcar #'cl-weave:test-plan-entry-status plan) :to-equal '(:todo))
+        (expect (mapcar #'cl-weave:test-plan-entry-reason plan)
+                :to-equal '("pending"))
+        (expect (mapcar #'cl-weave:test-plan-entry-focused plan)
+                :to-equal '(t))))))
+
 (describe "bail"
   (it "stops after the first failing event"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -802,6 +888,57 @@
       (expect output :to-contain "\"durationMs\":0.000")
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
+
+  (it "prints AI-readable S-expression test plans"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-plan-sexp
+                     (list (cl-weave::make-test-plan-entry
+                            :status :run
+                            :path '("plan" "runs")
+                            :focused t
+                            :retry 2
+                            :timeout-ms 250)
+                           (cl-weave::make-test-plan-entry
+                            :status :skip
+                            :path '("plan" "skips")
+                            :reason "blocked"
+                            :focused nil
+                            :retry 0))
+                     stream))))
+      (expect output :to-contain ":CL-WEAVE/TEST-PLAN")
+      (expect output :to-contain ":SCHEMA-VERSION 1")
+      (expect output :to-contain ":RUNNABLE 1")
+      (expect output :to-contain ":SKIPPED 1")
+      (expect output :to-contain ":PATH-STRING \"plan > runs\"")
+      (expect output :to-contain ":FOCUSED T")
+      (expect output :to-contain ":TIMEOUT-MS 250")))
+
+  (it "prints AI-readable JSON test plans"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-plan-json
+                     (list (cl-weave::make-test-plan-entry
+                            :status :run
+                            :path '("plan" "runs")
+                            :focused t
+                            :retry 2
+                            :timeout-ms 250)
+                           (cl-weave::make-test-plan-entry
+                            :status :skip
+                            :path '("plan" "skips")
+                            :reason "blocked"
+                            :focused nil
+                            :retry 0))
+                     stream))))
+      (expect output :to-contain "\"schemaVersion\":1")
+      (expect output :to-contain "\"kind\":\"test-plan\"")
+      (expect output :to-contain "\"runnable\":1")
+      (expect output :to-contain "\"skipped\":1")
+      (expect output :to-contain "\"status\":\"run\"")
+      (expect output :to-contain "\"pathString\":\"plan > runs\"")
+      (expect output :to-contain "\"focused\":true")
+      (expect output :to-contain "\"retry\":2")
+      (expect output :to-contain "\"timeoutMs\":250")
+      (expect output :to-contain "\"reason\":\"blocked\"")))
 
   (it "prints CI-readable JUnit XML results"
     (let ((output (with-output-to-string (stream)
