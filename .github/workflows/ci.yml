@@ -1,0 +1,20 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  nix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v17
+      - uses: cachix/cachix-action@v17
+        with:
+          name: takeokunn-cl-weave
+          authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+          skipPush: "${{ github.event_name == 'pull_request' }}"
+      - run: nix flake check
