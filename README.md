@@ -105,9 +105,11 @@ nix develop --command env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.co
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
-`cl-weave-test-reports` artifact. JSON schema v2 is intended for AI agents and
-external automation: every event includes both a machine `path` and a stable
-Vitest-style `pathString`. JUnit is intended for CI test result ingestion.
+`cl-weave-test-reports` artifact. JSON result schema v4 is intended for AI
+agents and external automation: the root object identifies itself with
+`kind: "test-results"`, and every event includes both a machine `path` and a
+stable Vitest-style `pathString`. JUnit is intended for CI test result
+ingestion.
 
 ## API
 

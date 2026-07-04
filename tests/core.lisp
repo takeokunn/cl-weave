@@ -18,6 +18,21 @@
          (pathname (ensure-directory-suffix tmp))
          #P"./"))))
 
+(defun test-temporary-pathname (name)
+  (merge-pathnames
+   name
+   (let ((tmp #+sbcl (sb-ext:posix-getenv "TMPDIR")
+              #-sbcl nil))
+     (if (and tmp (plusp (length tmp)))
+         (pathname (ensure-directory-suffix tmp))
+         #P"./"))))
+
+(defun read-text-file (pathname)
+  (with-open-file (stream pathname :direction :input)
+    (let ((contents (make-string (file-length stream))))
+      (read-sequence contents stream)
+      contents)))
+
 (defvar *fixture-value* nil)
 (defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
@@ -1598,6 +1613,34 @@
       (expect observed
               :to-equal (list #P"tmp/__snapshots__/" "cli.snapshots" t))))
 
+  (it "writes JSON result artifacts through the CLI output option"
+    (let* ((output-file (test-temporary-pathname "cl-weave-cli-results.json"))
+           (options (cl-weave/cli::make-cli-options
+                     :reporter :json
+                     :output-file (namestring output-file))))
+      (when (probe-file output-file)
+        (delete-file output-file))
+      (unwind-protect
+           (progn
+             (with-mocked-functions
+                 (((symbol-function 'cl-weave:run-all)
+                   (lambda (&key reporter name-filter shard order seed bail coverage
+                            coverage-output pass-with-no-tests stream)
+                     (declare (ignore name-filter shard order seed bail coverage
+                                      coverage-output pass-with-no-tests))
+                     (expect reporter :to-be :json)
+                     (cl-weave::report-json nil stream)
+                     t)))
+               (expect (with-output-to-string (*standard-output*)
+                         (cl-weave/cli::run-command options))
+                       :to-equal ""))
+             (let ((output (read-text-file output-file)))
+               (expect output :to-contain "\"schemaVersion\":4")
+               (expect output :to-contain "\"kind\":\"test-results\"")
+               (expect output :to-contain "\"events\":[]")))
+        (when (probe-file output-file)
+          (delete-file output-file)))))
+
   (it "parses list and watch commands without executing tests"
     (let ((list-options (cl-weave/cli::parse-cli-arguments
                          '("list" "cl-weave-tests" "--reporter" "sexp")
@@ -1777,7 +1820,8 @@
                             :path '("reporters" "errors")
                             :elapsed-internal-time 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":3")
+      (expect output :to-contain "\"schemaVersion\":4")
+      (expect output :to-contain "\"kind\":\"test-results\"")
       (expect output :to-contain "\"passed\":1")
       (expect output :to-contain "\"skipped\":1")
       (expect output :to-contain "\"failed\":1")

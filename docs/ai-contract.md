@@ -71,7 +71,8 @@ The reporter prints one JSON object:
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
+  "kind": "test-results",
   "passed": 1,
   "skipped": 0,
   "todos": 0,
@@ -713,6 +714,8 @@ the parent runner while still receiving parseable failure data.
 ## Stability
 
 - `:schema-version` and `schemaVersion` change only when the shape changes.
+- JSON result artifacts use `kind: "test-results"` so agents can classify
+  artifacts without filename or command context.
 - `:path` is a list of suite names followed by the case name.
 - `:status` is one of `:pass`, `:skip`, `:todo`, `:fail`, or `:error`; JSON
   uses the corresponding lowercase strings.

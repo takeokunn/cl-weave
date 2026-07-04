@@ -218,7 +218,8 @@
 
 (defun report-json (events stream)
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":3" stream)
+  (write-string "\"schemaVersion\":4" stream)
+  (write-string ",\"kind\":\"test-results\"" stream)
   (format stream ",\"passed\":~D" (count :pass events :key #'test-event-status))
   (format stream ",\"skipped\":~D" (count :skip events :key #'test-event-status))
   (format stream ",\"todos\":~D" (count :todo events :key #'test-event-status))
