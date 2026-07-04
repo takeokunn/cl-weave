@@ -15,7 +15,7 @@ Early MVP. The current focus is a solid core:
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
-- Vitest-shaped `it.each` / `test.concurrent` / `describe.concurrent` / `beforeAll` aliases
+- Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`, and fixture aliases
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -66,27 +66,27 @@ Early MVP. The current focus is a solid core:
 Run the self-test suite:
 
 ```sh
-sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 With Nix:
 
 ```sh
 nix develop
-nix flake check
-nix run . -- run cl-weave-tests --reporter spec
+timeout 600s nix flake check
+timeout 360s nix run . -- run cl-weave-tests --reporter spec
 ```
 
 The packaged CLI is Vitest-shaped and intended for local use, CI, and AI
 agents:
 
 ```sh
-nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
-nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
-nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
-nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
-nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
-nix run . -- watch cl-weave-tests --filter parser
+timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
+timeout 360s nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
+timeout 360s nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
+timeout 120s nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
+timeout 360s nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
+timeout 360s nix run . -- watch cl-weave-tests --filter parser
 ```
 
 ## CI
@@ -94,17 +94,17 @@ nix run . -- watch cl-weave-tests --filter parser
 GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
-nix flake check --print-build-logs
-nix run . -- run cl-weave-tests --reporter json --output cl-weave-cli-results.json
-nix develop --command env CL_WEAVE_REPORTER=jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 600s nix flake check --print-build-logs
+timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-cli-results.json
+nix develop --command timeout 360s env CL_WEAVE_REPORTER=jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 360s env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 360s env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 360s env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 120s env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 360s env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command timeout 360s env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
@@ -366,7 +366,14 @@ survived, errored, and score fields.
 time. `describe-each` expands into independent `describe` forms, so nested
 fixtures and cases keep the same semantics as hand-written suites. Dot aliases
 such as `it.each`, `test.each`, and `describe.each` macro-expand through the
-canonical hyphenated forms.
+canonical hyphenated forms. The full Vitest-shaped surface also includes
+`it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
+`it.skip`, `it.skip-if`, `it.todo`, `it.isolated`, `it.property`, matching
+`test.*` aliases, suite-level `describe.concurrent`, `describe.sequential`,
+`describe.only`, `describe.run-if`, `describe.skip`, `describe.skip-if`,
+`describe.todo`, plus `expect.not` and camel-style fixture aliases.
+`docs/ai-contract.md` is the machine-readable normalization contract for
+agents.
 
 ### Conditional Runs
 
@@ -609,7 +616,7 @@ name filter selects matching paths.
 For command-line and CI usage, `CL_WEAVE_TEST_FILTER` provides the same filter:
 
 ```sh
-CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 120s env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Suites with no selected descendants do not run `before-all` or `after-all`, so
@@ -633,7 +640,7 @@ tests. A test belongs to shard `INDEX` when its ordinal maps to that slot.
 For command-line and CI usage, `CL_WEAVE_SHARD` uses `INDEX/COUNT`:
 
 ```sh
-CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 120s env CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
@@ -660,7 +667,7 @@ reproduce order-dependent failures.
 For command-line and CI usage:
 
 ```sh
-CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 360s env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 ### Test Listing
@@ -681,7 +688,7 @@ For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
 and exits with status `0`:
 
 ```sh
-CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `CL_WEAVE_OUTPUT_FILE`
@@ -720,7 +727,7 @@ For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `yes`, `on`,
 `false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
-CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Bail composes with focus and filtering. Reporters emit only the events that were
@@ -862,8 +869,8 @@ defaults to `*error-output*`.
 The script runner enables watch mode with environment variables:
 
 ```sh
-CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
-CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
+timeout 360s env CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
+timeout 360s env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
 ```
 
 CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,

@@ -12,6 +12,8 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `describe.only` -> `describe-only`
 - `describe.concurrent` -> `describe-concurrent`
 - `describe.sequential` -> `describe-sequential`
+- `describe.run-if` -> `describe-run-if`
+- `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
 - `it.each` -> `it-each`
 - `it.concurrent` -> `it-concurrent`
 - `it.sequential` -> `it-sequential`
@@ -21,6 +23,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `it.only` -> `it-only`
 - `it.run-if` -> `it-run-if`
 - `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
+- `test` -> `it`
 - `test.each` -> `test-each`
 - `test.concurrent` -> `test-concurrent`
 - `test.sequential` -> `test-sequential`
@@ -203,7 +206,7 @@ For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
 same reporter payload directly to an artifact file:
 
 ```sh
-CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 360s env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 `CL_WEAVE_OUTPUT_FILE` affects only reporter output. The process still exits
@@ -217,7 +220,7 @@ CLI/environment settings:
 
 ```sh
 CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAPSHOT_DIR=tests/__snapshots__/ CL_WEAVE_SNAPSHOT_FILE=snapshots.sexp \
-  sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+  timeout 360s sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
@@ -248,7 +251,7 @@ For mismatches, both sides include `:reason :snapshot-mismatch` and matching
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 360s env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The coverage artifact is SBCL `sb-cover` state written with
@@ -549,7 +552,7 @@ Agents can discover selected tests without executing hooks or test bodies:
 The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
 
 ```sh
-CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The JSON test plan reporter prints one object:

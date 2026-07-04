@@ -23,9 +23,14 @@
    #:describe.concurrent
    #:describe.each
    #:describe.only
+   #:describe.run-if
    #:describe.sequential
+   #:describe.skip
+   #:describe.skip-if
+   #:describe.todo
    #:describe-concurrent
    #:describe-each
+   #:describe-only
    #:describe-sequential
    #:describe-run-if
    #:describe-skip
@@ -98,19 +103,29 @@
    #:run-mutations
    #:retry-test
    #:skip-test
+   #:test
    #:test.concurrent
    #:test.each
    #:test-concurrent
    #:test-each
+   #:test.fails
    #:test-fails
    #:test.isolated
    #:test-isolated
+   #:test.only
+   #:test-only
    #:test.property
    #:test-property
    #:test-plan-facts
    #:test-plan-where
+   #:test.run-if
    #:test-run-if
    #:test.sequential
    #:test-sequential
+   #:test.skip
+   #:test-skip
+   #:test.skip-if
    #:test-skip-if
+   #:test.todo
+   #:test-todo
    #:with-mocked-functions))

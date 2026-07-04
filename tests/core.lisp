@@ -65,6 +65,12 @@
          (tree-contains-p (cdr tree) value)))
     (t nil)))
 
+(defmacro expect-macroexpands-through (form canonical-symbol)
+  `(expect (macroexpand-1 ',form)
+           :to-satisfy
+           (lambda (expanded)
+             (tree-contains-p expanded ',canonical-symbol))))
+
 (defun tree-depth (tree)
   (if (consp tree)
       (1+ (reduce #'max tree :key #'tree-depth :initial-value 0))
@@ -557,87 +563,120 @@
             (lambda (form)
               (tree-contains-p form 'cl-weave:it-each))))
 
+  (test "runs the Vitest test alias as a first-class case"
+    (expect (+ 2 2) :to-be 4))
+
   (it "expands Vitest dot aliases through canonical macros"
-    (expect (macroexpand-1
-             '(it.each ((1 2 3))
-                  "adds ~A and ~A"
-                  (left right total)
-                (expect (+ left right) :to-be total)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:it-each)))
-    (expect (macroexpand-1
-             '(test.concurrent "parallel alias"
-                (expect :ok :to-be :ok)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:test-concurrent)))
-    (expect (macroexpand-1
-             '(it.sequential "serial alias"
-                (expect :ok :to-be :ok)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:it-sequential)))
-    (expect (macroexpand-1
-             '(it.isolated "isolated alias"
-                  (:systems ("cl-weave-tests") :timeout 5)
-                (expect :ok :to-be :ok)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:it-isolated)))
-    (expect (macroexpand-1
-             '(it.property "property alias"
-                  ((value (gen-integer :min 0 :max 10)))
-                (expect value :to-satisfy #'integerp)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:it-property)))
-    (expect (macroexpand-1
-             '(test.sequential "serial alias"
-                (expect :ok :to-be :ok)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:test-sequential)))
-    (expect (macroexpand-1
-             '(test.isolated "isolated alias"
-                  (:systems ("cl-weave-tests") :timeout 5)
-                (expect :ok :to-be :ok)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:test-isolated)))
-    (expect (macroexpand-1
-             '(test.property "property alias"
-                  ((value (gen-integer :min 0 :max 10)))
-                (expect value :to-satisfy #'integerp)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:test-property)))
-    (expect (macroexpand-1
-             '(describe.concurrent "parallel alias"
-                (it "case" (expect :ok :to-be :ok))))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:describe-concurrent)))
-    (expect (macroexpand-1
-             '(describe.sequential "serial alias"
-                (it "case" (expect :ok :to-be :ok))))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:describe-sequential)))
-    (expect (macroexpand-1
-             '(describe.only "focused alias"
-                (it "case" (expect :ok :to-be :ok))))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:describe-only)))
-    (expect (macroexpand-1 '(beforeAll (setf *fixture-value* :ready)))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:before-all)))
-    (expect (macroexpand-1 '(expect.not 1 :to-be 2))
-            :to-satisfy
-            (lambda (form)
-              (tree-contains-p form 'cl-weave:expect-not))))
+    (expect-macroexpands-through
+     (test "base alias" (expect :ok :to-be :ok))
+     cl-weave:it)
+    (expect-macroexpands-through
+     (it.concurrent "parallel alias" (expect :ok :to-be :ok))
+     cl-weave:it-concurrent)
+    (expect-macroexpands-through
+     (it.each ((1 2 3))
+         "adds ~A and ~A"
+         (left right total)
+       (expect (+ left right) :to-be total))
+     cl-weave:it-each)
+    (expect-macroexpands-through
+     (it.fails "expected failure alias" (expect :ok :to-be :not-ok))
+     cl-weave:it-fails)
+    (expect-macroexpands-through
+     (it.only "focused alias" (expect :ok :to-be :ok))
+     cl-weave:it-only)
+    (expect-macroexpands-through
+     (it.run-if t "conditional alias" (expect :ok :to-be :ok))
+     cl-weave:it-run-if)
+    (expect-macroexpands-through
+     (it.sequential "serial alias" (expect :ok :to-be :ok))
+     cl-weave:it-sequential)
+    (expect-macroexpands-through
+     (it.skip "skipped alias" "because")
+     cl-weave:it-skip)
+    (expect-macroexpands-through
+     (it.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
+     cl-weave:it-skip-if)
+    (expect-macroexpands-through
+     (it.todo "todo alias" "later")
+     cl-weave:it-todo)
+    (expect-macroexpands-through
+     (it.isolated "isolated alias"
+         (:systems ("cl-weave-tests") :timeout 5)
+       (expect :ok :to-be :ok))
+     cl-weave:it-isolated)
+    (expect-macroexpands-through
+     (it.property "property alias"
+         ((value (gen-integer :min 0 :max 10)))
+       (expect value :to-satisfy #'integerp))
+     cl-weave:it-property)
+    (expect-macroexpands-through
+     (test.concurrent "parallel alias" (expect :ok :to-be :ok))
+     cl-weave:test-concurrent)
+    (expect-macroexpands-through
+     (test.fails "expected failure alias" (expect :ok :to-be :not-ok))
+     cl-weave:test-fails)
+    (expect-macroexpands-through
+     (test.only "focused alias" (expect :ok :to-be :ok))
+     cl-weave:test-only)
+    (expect-macroexpands-through
+     (test.run-if t "conditional alias" (expect :ok :to-be :ok))
+     cl-weave:test-run-if)
+    (expect-macroexpands-through
+     (test.sequential "serial alias" (expect :ok :to-be :ok))
+     cl-weave:test-sequential)
+    (expect-macroexpands-through
+     (test.skip "skipped alias" "because")
+     cl-weave:test-skip)
+    (expect-macroexpands-through
+     (test.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
+     cl-weave:test-skip-if)
+    (expect-macroexpands-through
+     (test.todo "todo alias" "later")
+     cl-weave:test-todo)
+    (expect-macroexpands-through
+     (test.isolated "isolated alias"
+         (:systems ("cl-weave-tests") :timeout 5)
+       (expect :ok :to-be :ok))
+     cl-weave:test-isolated)
+    (expect-macroexpands-through
+     (test.property "property alias"
+         ((value (gen-integer :min 0 :max 10)))
+       (expect value :to-satisfy #'integerp))
+     cl-weave:test-property)
+    (expect-macroexpands-through
+     (describe.concurrent "parallel alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-concurrent)
+    (expect-macroexpands-through
+     (describe.sequential "serial alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-sequential)
+    (expect-macroexpands-through
+     (describe.only "focused alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-only)
+    (expect-macroexpands-through
+     (describe.run-if t "conditional suite alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-run-if)
+    (expect-macroexpands-through
+     (describe.skip "skipped suite alias" "because"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-skip)
+    (expect-macroexpands-through
+     (describe.skip-if t "conditional skipped suite alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-skip-if)
+    (expect-macroexpands-through
+     (describe.todo "todo suite alias" "later")
+     cl-weave:describe-todo)
+    (expect-macroexpands-through
+     (beforeAll (setf *fixture-value* :ready))
+     cl-weave:before-all)
+    (expect-macroexpands-through
+     (expect.not 1 :to-be 2)
+     cl-weave:expect-not))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))
