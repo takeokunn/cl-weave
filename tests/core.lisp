@@ -366,7 +366,18 @@
                    (tree-contains-p form 2)
                    (tree-contains-p form :timeout-ms)
                    (tree-contains-p form 100)
+                   (tree-contains-p form :execution-mode)
                    (tree-contains-p form :concurrent)))))
+
+  (it "expands false concurrent option into sequential execution metadata"
+    (expect (macroexpand-1
+             '(it "generated sequential case" (:concurrent nil)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :execution-mode)
+                   (tree-contains-p form :sequential)))))
 
   (it "expands it-concurrent into concurrent test registration"
     (expect (macroexpand-1
@@ -375,7 +386,19 @@
             :to-satisfy
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :execution-mode)
                    (tree-contains-p form :concurrent)
+                   (tree-contains-p form :retry)))))
+
+  (it "expands it-sequential into sequential test registration"
+    (expect (macroexpand-1
+             '(it-sequential "serial case" (:retry 1)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :execution-mode)
+                   (tree-contains-p form :sequential)
                    (tree-contains-p form :retry)))))
 
   (it "expands it-fails into expected-failure registration"
@@ -408,6 +431,24 @@
               (and (tree-contains-p form 'cl-weave::register-suite)
                    (tree-contains-p form :todo-reason)
                    (tree-contains-p form "needs design")))))
+
+  (it "expands describe execution mode macros into suite metadata"
+    (expect (macroexpand-1
+             '(describe-concurrent "parallel suite"
+                (it "case" (expect 1 :to-be 1))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-suite)
+                   (tree-contains-p form :execution-mode)
+                   (tree-contains-p form :concurrent))))
+    (expect (macroexpand-1
+             '(describe-sequential "serial suite"
+                (it "case" (expect 1 :to-be 1))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-suite)
+                   (tree-contains-p form :execution-mode)
+                   (tree-contains-p form :sequential)))))
 
   (it "expands conditional test registration into run and skip branches"
     (expect (macroexpand-1
@@ -472,6 +513,30 @@
             :to-satisfy
             (lambda (form)
               (tree-contains-p form 'cl-weave:test-concurrent)))
+    (expect (macroexpand-1
+             '(it.sequential "serial alias"
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:it-sequential)))
+    (expect (macroexpand-1
+             '(test.sequential "serial alias"
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:test-sequential)))
+    (expect (macroexpand-1
+             '(describe.concurrent "parallel alias"
+                (it "case" (expect :ok :to-be :ok))))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:describe-concurrent)))
+    (expect (macroexpand-1
+             '(describe.sequential "serial alias"
+                (it "case" (expect :ok :to-be :ok))))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:describe-sequential)))
     (expect (macroexpand-1
              '(describe.only "focused alias"
                 (it "case" (expect :ok :to-be :ok))))
@@ -917,6 +982,53 @@
           (expect (mapcar #'cl-weave::test-event-path events)
                   :to-equal '(("concurrent" "first")
                               ("concurrent" "second")))))))
+
+  (it "inherits concurrent execution mode from suites"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "concurrent suite"
+                    :parent root
+                    :execution-mode :concurrent)))
+           (mutex (sb-thread:make-mutex :name "cl-weave suite concurrent test log"))
+           (events-log nil))
+      (labels ((record (event)
+                 (sb-thread:with-mutex (mutex)
+                   (push event events-log)))
+               (recorded-p (event)
+                 (sb-thread:with-mutex (mutex)
+                   (member event events-log)))
+               (wait-until-recorded (event timeout-seconds)
+                 (let ((deadline (+ (get-internal-real-time)
+                                    (* timeout-seconds internal-time-units-per-second))))
+                   (loop until (or (recorded-p event)
+                                   (> (get-internal-real-time) deadline))
+                         do (sleep 0.01))
+                   (recorded-p event))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "first"
+          :function (lambda ()
+                      (record :first-start)
+                      (unless (wait-until-recorded :second-start 1)
+                        (error "suite concurrent test did not start beside its sibling"))
+                      (record :first-end))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "second"
+          :function (lambda ()
+                      (record :second-start)
+                      (sleep 0.02)
+                      (record :second-end))))
+        (let ((events (cl-weave::collect-events root)))
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass :pass))
+          (expect (mapcar #'cl-weave::test-event-path events)
+                  :to-equal '(("concurrent suite" "first")
+                              ("concurrent suite" "second")))))))
 
   (it "keeps bail semantics sequential for concurrent tests"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -1411,6 +1523,32 @@
         (expect (cl-weave:test-plan-entry-retry (first plan)) :to-be 2)
         (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250)
         (expect (cl-weave:test-plan-entry-concurrent (first plan)) :to-be t))))
+
+  (it "lists inherited and overridden execution modes as concurrent booleans"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite
+                    :name "plan modes"
+                    :parent root
+                    :execution-mode :concurrent))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "inherits"
+        :function (lambda () t)))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "overrides"
+        :function (lambda () t)
+        :execution-mode :sequential))
+      (let ((plan (cl-weave:collect-test-plan root)))
+        (expect (mapcar #'cl-weave:test-plan-entry-path plan)
+                :to-equal '(("plan modes" "inherits")
+                            ("plan modes" "overrides")))
+        (expect (mapcar #'cl-weave:test-plan-entry-concurrent plan)
+                :to-equal '(t nil)))))
 
   (it "records source locations for macro-registered tests"
     (let* ((plan (cl-weave:collect-test-plan

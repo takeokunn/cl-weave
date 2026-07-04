@@ -20,9 +20,13 @@
    #:continue-test
    #:defmatcher
    #:defmutation-operator
+   #:describe.concurrent
    #:describe.each
    #:describe.only
+   #:describe.sequential
+   #:describe-concurrent
    #:describe-each
+   #:describe-sequential
    #:describe-run-if
    #:describe-skip
    #:describe-skip-if
@@ -44,6 +48,7 @@
    #:gen-symbol
    #:gen-tuple
    #:it
+   #:it.concurrent
    #:it.each
    #:it-concurrent
    #:it-each
@@ -52,6 +57,8 @@
    #:it-property
    #:it-only
    #:it-run-if
+   #:it.sequential
+   #:it-sequential
    #:it-skip
    #:it-skip-if
    #:it-todo
@@ -88,5 +95,7 @@
    #:test-plan-facts
    #:test-plan-where
    #:test-run-if
+   #:test.sequential
+   #:test-sequential
    #:test-skip-if
    #:with-mocked-functions))

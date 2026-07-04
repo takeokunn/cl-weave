@@ -6,6 +6,12 @@
 (defmacro describe-only (name &body body)
   `(register-suite ,name (lambda () ,@body) :focus t))
 
+(defmacro describe-concurrent (name &body body)
+  `(register-suite ,name (lambda () ,@body) :execution-mode :concurrent))
+
+(defmacro describe-sequential (name &body body)
+  `(register-suite ,name (lambda () ,@body) :execution-mode :sequential))
+
 (defmacro describe-skip (name &body body)
   (let ((reason (if (and body (stringp (first body))) (first body) "skipped"))
         (forms (if (and body (stringp (first body))) (rest body) body)))
@@ -39,6 +45,12 @@
 (defmacro describe.only (name &body body)
   `(describe-only ,name ,@body))
 
+(defmacro describe.concurrent (name &body body)
+  `(describe-concurrent ,name ,@body))
+
+(defmacro describe.sequential (name &body body)
+  `(describe-sequential ,name ,@body))
+
 (defmacro describe.skip (name &body body)
   `(describe-skip ,name ,@body))
 
@@ -68,7 +80,7 @@
    (when (plist-key-present-p options :timeout-ms)
      `(:timeout-ms ,(getf options :timeout-ms)))
    (when (plist-key-present-p options :concurrent)
-     `(:concurrent ,(getf options :concurrent)))))
+     `(:execution-mode (if ,(getf options :concurrent) :concurrent :sequential)))))
 
 (defun source-location-form ()
   `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))
@@ -99,7 +111,14 @@
 (defmacro it-concurrent (name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
-                    :concurrent t
+                    :execution-mode :concurrent
+                    ,@(source-location-option)
+                    ,@(test-registration-options options))))
+
+(defmacro it-sequential (name &body body)
+  (multiple-value-bind (options forms) (split-test-body body)
+    `(register-test ,name (lambda () ,@forms)
+                    :execution-mode :sequential
                     ,@(source-location-option)
                     ,@(test-registration-options options))))
 
@@ -180,6 +199,9 @@
 (defmacro it.concurrent (name &body body)
   `(it-concurrent ,name ,@body))
 
+(defmacro it.sequential (name &body body)
+  `(it-sequential ,name ,@body))
+
 (defmacro it.each (cases name bindings &body body)
   `(it-each ,cases ,name ,bindings ,@body))
 
@@ -213,6 +235,9 @@
 (defmacro test-concurrent (name &body body)
   `(it-concurrent ,name ,@body))
 
+(defmacro test-sequential (name &body body)
+  `(it-sequential ,name ,@body))
+
 (defmacro test-each (cases name bindings &body body)
   `(it-each ,cases ,name ,bindings ,@body))
 
@@ -236,6 +261,9 @@
 
 (defmacro test.concurrent (name &body body)
   `(test-concurrent ,name ,@body))
+
+(defmacro test.sequential (name &body body)
+  `(test-sequential ,name ,@body))
 
 (defmacro test.each (cases name bindings &body body)
   `(test-each ,cases ,name ,bindings ,@body))

@@ -10,10 +10,14 @@ to the canonical hyphenated forms when reasoning about test plans:
 
 - `describe.each` -> `describe-each`
 - `describe.only` -> `describe-only`
+- `describe.concurrent` -> `describe-concurrent`
+- `describe.sequential` -> `describe-sequential`
 - `it.each` -> `it-each`
 - `it.concurrent` -> `it-concurrent`
+- `it.sequential` -> `it-sequential`
 - `test.each` -> `test-each`
 - `test.concurrent` -> `test-concurrent`
+- `test.sequential` -> `test-sequential`
 - `expect.not` -> `expect-not`
 - `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
 
@@ -641,6 +645,12 @@ Case options are passed as a keyword plist immediately after the case name:
 
 (it-concurrent "parallel-safe case" (:timeout-ms 500)
   (expect (probe-independent-service) :to-be :ready))
+
+(describe.concurrent "parallel-safe suite"
+  (it "inherits concurrent mode"
+    (expect (probe-independent-service) :to-be :ready))
+  (it.sequential "uses shared state"
+    (expect (probe-shared-state) :to-be :ready)))
 ```
 
 `:retry` is the number of extra attempts after the first attempt. Retries apply
@@ -653,9 +663,13 @@ final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `before-each` / `around-each` / `after-each` contract as ordinary test attempts.
 
 `:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
-parallel execution with adjacent concurrent cases. Event arrays and test-plan
-arrays remain in selected definition order. `:bail` disables concurrent
-batching to keep fast-fail semantics exact.
+parallel execution with adjacent concurrent cases. `describe-concurrent` /
+`describe.concurrent` applies the same mode to descendants, while
+`it-sequential`, `test-sequential`, and the dot aliases opt individual cases out.
+Reporter schemas continue to expose the effective mode as the stable
+`concurrent` boolean. Event arrays and test-plan arrays remain in selected
+definition order. `:bail` disables concurrent batching to keep fast-fail
+semantics exact.
 
 ## Expected Failure Contract
 

@@ -8,6 +8,7 @@
   name
   parent
   focus
+  execution-mode
   skip-reason
   todo-reason
   (children '())
@@ -26,6 +27,7 @@
   retry
   timeout-ms
   concurrent
+  execution-mode
   expected-failure-reason
   location)
 
@@ -214,11 +216,18 @@
         (append (suite-children parent) (list child)))
   child)
 
-(defun register-suite (name thunk &key focus skip-reason todo-reason)
+(defun normalize-execution-mode (mode)
+  (unless (member mode '(nil :concurrent :sequential))
+    (error "cl-weave: execution mode must be NIL, :CONCURRENT, or :SEQUENTIAL, got ~S."
+           mode))
+  mode)
+
+(defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
   (let* ((parent (or *current-suite* (root-suite)))
          (suite (add-child parent (make-suite :name name
                                               :parent parent
                                               :focus focus
+                                              :execution-mode (normalize-execution-mode execution-mode)
                                               :skip-reason skip-reason
                                               :todo-reason todo-reason))))
     (let ((*current-suite* suite))
@@ -227,7 +236,7 @@
 
 (defun register-test
     (name function &key focus skip-reason todo-reason retry timeout-ms concurrent
-       expected-failure-reason location)
+       execution-mode expected-failure-reason location)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite (make-test-case :name name
                                      :function function
@@ -237,6 +246,9 @@
                                      :retry retry
                                      :timeout-ms timeout-ms
                                      :concurrent concurrent
+                                     :execution-mode (normalize-execution-mode
+                                                      (or execution-mode
+                                                          (when concurrent :concurrent)))
                                      :expected-failure-reason expected-failure-reason
                                      :location location))))
 

@@ -15,7 +15,7 @@ Early MVP. The current focus is a solid core:
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
-- Vitest-shaped `it.each` / `test.concurrent` / `describe.only` / `beforeAll` aliases
+- Vitest-shaped `it.each` / `test.concurrent` / `describe.concurrent` / `beforeAll` aliases
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -30,7 +30,7 @@ Early MVP. The current focus is a solid core:
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
-- Vitest-style `it-concurrent` / `test-concurrent` parallel cases
+- Vitest-style `it-concurrent` / `test-concurrent` / `describe-concurrent` parallel execution modes
 - Vitest-style `it-fails` / `test-fails` expected-failure cases
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
@@ -553,12 +553,20 @@ reported normally.
 
 (test "uses option form when macros generate cases" (:concurrent t :retry 1)
   (expect (probe-cache) :to-be :warm))
+
+(describe.concurrent "parallel-safe API checks"
+  (it "fetches account" (expect (fetch-account) :to-satisfy #'account-ready-p))
+  (it.sequential "uses shared rate-limit bucket"
+    (expect (probe-rate-limit) :to-be :available)))
 ```
 
 `it-concurrent`, `test-concurrent`, and `(:concurrent t)` mark a case as safe
-to run beside adjacent concurrent cases. Report order stays deterministic:
-events are emitted in the selected definition order. When `:bail` is enabled,
-concurrent batching is disabled so fast-fail behavior remains exact.
+to run beside adjacent concurrent cases. `describe-concurrent` /
+`describe.concurrent` applies the same execution mode to descendants, and
+`it-sequential` / `it.sequential` opts a single case back out. Report order
+stays deterministic: events are emitted in the selected definition order. When
+`:bail` is enabled, concurrent batching is disabled so fast-fail behavior
+remains exact.
 
 ### Filtering
 

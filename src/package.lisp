@@ -22,12 +22,16 @@
    #:coverage-unavailable-reason
    #:defmutation-operator
    #:describe
+   #:describe.concurrent
+   #:describe-concurrent
    #:describe.each
    #:describe-each
    #:describe.only
    #:describe-only
    #:describe.run-if
    #:describe-run-if
+   #:describe.sequential
+   #:describe-sequential
    #:describe.skip
    #:describe-skip
    #:describe.skip-if
@@ -78,6 +82,8 @@
    #:it-only
    #:it.run-if
    #:it-run-if
+   #:it.sequential
+   #:it-sequential
    #:it.skip
    #:it-skip
    #:it.skip-if
@@ -147,6 +153,8 @@
    #:test-only
    #:test.run-if
    #:test-run-if
+   #:test.sequential
+   #:test-sequential
    #:test.skip
    #:test-skip
    #:test.skip-if
