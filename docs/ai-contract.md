@@ -362,6 +362,14 @@ Agents can narrow execution without changing source files:
 format `suite > nested suite > case`. The command runner exposes the same
 contract through `CL_WEAVE_TEST_FILTER`.
 
+CLI flags use canonical kebab-case names and expose Vitest-shaped aliases for
+agent-generated commands: `--testNamePattern` maps to `--filter`,
+`--watchInterval` maps to `--watch-interval`, `--coverageOutput` maps to
+`--coverage-output`, `--passWithNoTests` maps to `--pass-with-no-tests`,
+`--failWithNoTests` maps to `--fail-with-no-tests`, `--snapshotDir` maps to
+`--snapshot-dir`, `--snapshotFile` maps to `--snapshot-file`, and both
+`--update` and `--updateSnapshots` map to `--update-snapshots`.
+
 Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
 the run is considered successful by default because no selected test failed.
@@ -535,7 +543,9 @@ events:
 ```
 
 The command runner exposes the same control through `CL_WEAVE_BAIL`. Accepted
-values are `true`, `false`, `0`, or a positive integer.
+values are `true`, `yes`, `on`, `false`, `no`, `off`, `0`, `nil`, or a positive
+integer. Other boolean environment variables use the same false tokens:
+`0`, `false`, `no`, `off`, and `nil`.
 
 Bail counts only emitted `:fail` and `:error` events. `:pass`, `:skip`, and
 `:todo` events do not advance the counter. When the limit is reached, reporters

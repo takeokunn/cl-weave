@@ -39,6 +39,24 @@
   #-sbcl
   nil)
 
+(defun environment-falsy-p (value)
+  (or (string= value "0")
+      (string-equal value "false")
+      (string-equal value "no")
+      (string-equal value "off")
+      (string-equal value "nil")))
+
+(defun requested-truthy-environment-p (name)
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv name)))
+    (and value
+         (not (string= value ""))
+         (not (environment-falsy-p value))))
+  #-sbcl
+  (declare (ignore name))
+  #-sbcl
+  nil)
+
 (defun requested-pass-with-no-tests ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_PASS_WITH_NO_TESTS")))
@@ -52,7 +70,8 @@
       ((or (string-equal value "0")
            (string-equal value "false")
            (string-equal value "no")
-           (string-equal value "off"))
+           (string-equal value "off")
+           (string-equal value "nil"))
        nil)
       (t
        (error "CL_WEAVE_PASS_WITH_NO_TESTS must be a boolean: ~A" value))))
@@ -150,15 +169,7 @@
   nil)
 
 (defun requested-coverage-p ()
-  #+sbcl
-  (let ((value (sb-ext:posix-getenv "CL_WEAVE_COVERAGE")))
-    (and value
-         (not (string= value ""))
-         (not (string= value "0"))
-         (not (string-equal value "false"))
-         (not (string-equal value "nil"))))
-  #-sbcl
-  nil)
+  (requested-truthy-environment-p "CL_WEAVE_COVERAGE"))
 
 (defun requested-coverage-output ()
   #+sbcl
@@ -169,24 +180,29 @@
   nil)
 
 (defun requested-list-p ()
+  (requested-truthy-environment-p "CL_WEAVE_LIST"))
+
+(defun requested-watch-p ()
+  (requested-truthy-environment-p "CL_WEAVE_WATCH"))
+
+(defun requested-snapshot-directory ()
   #+sbcl
-  (let ((value (sb-ext:posix-getenv "CL_WEAVE_LIST")))
-    (and value
-         (not (string= value ""))
-         (not (string= value "0"))
-         (not (string-equal value "false"))))
+  (let ((path (sb-ext:posix-getenv "CL_WEAVE_SNAPSHOT_DIR")))
+    (when (and path (not (string= path "")))
+      (pathname path)))
   #-sbcl
   nil)
 
-(defun requested-watch-p ()
+(defun requested-snapshot-file ()
   #+sbcl
-  (let ((value (sb-ext:posix-getenv "CL_WEAVE_WATCH")))
-    (and value
-         (not (string= value ""))
-         (not (string= value "0"))
-         (not (string-equal value "false"))))
+  (let ((path (sb-ext:posix-getenv "CL_WEAVE_SNAPSHOT_FILE")))
+    (when (and path (not (string= path "")))
+      path))
   #-sbcl
   nil)
+
+(defun requested-update-snapshots-p ()
+  (requested-truthy-environment-p "CL_WEAVE_UPDATE_SNAPSHOTS"))
 
 (defun requested-watch-interval ()
   #+sbcl
@@ -211,6 +227,9 @@
       (output-file (requested-output-file))
       (coverage (requested-coverage-p))
       (coverage-output (requested-coverage-output))
+      (snapshot-directory (requested-snapshot-directory))
+      (snapshot-file (requested-snapshot-file))
+      (update-snapshots (requested-update-snapshots-p))
       (shard (requested-shard))
       (sequence-order (requested-sequence-order))
       (sequence-seed (requested-sequence-seed)))
@@ -222,45 +241,50 @@
                                        :if-does-not-exist :create)
                  (funcall callback stream))
                (funcall callback *standard-output*))))
-    (cond
-      ((requested-list-p)
-       (with-requested-stream
-        (lambda (stream)
-          (cl-weave:list-tests
-           :reporter reporter
-           :name-filter (requested-test-filter)
-           :shard shard
-           :order sequence-order
-           :seed sequence-seed
-           :stream stream)))
-       (sb-ext:exit :code 0))
-      ((requested-watch-p)
-       (cl-weave:watch-system "cl-weave-tests"
-                              :reporter reporter
-                              :name-filter (requested-test-filter)
-                              :shard shard
-                              :order sequence-order
-                              :seed sequence-seed
-                              :bail (requested-bail)
-                              :include-dependencies t
-                              :interval (requested-watch-interval)))
-      (t
-       (sb-ext:exit
-        :code (if (with-requested-stream
-                    (lambda (stream)
-                      (cl-weave:run-all
-                       :reporter reporter
-                       :name-filter (requested-test-filter)
-                       :shard shard
-                       :order sequence-order
-                       :seed sequence-seed
-                       :bail (requested-bail)
-                       :coverage coverage
-                       :coverage-output coverage-output
-                       :pass-with-no-tests (requested-pass-with-no-tests)
-                       :stream stream)))
-                  0
-                  1))))))
+    (let ((cl-weave:*snapshot-directory*
+            (or snapshot-directory cl-weave:*snapshot-directory*))
+          (cl-weave:*snapshot-file-name*
+            (or snapshot-file cl-weave:*snapshot-file-name*))
+          (cl-weave:*update-snapshots* update-snapshots))
+      (cond
+        ((requested-list-p)
+         (with-requested-stream
+          (lambda (stream)
+            (cl-weave:list-tests
+             :reporter reporter
+             :name-filter (requested-test-filter)
+             :shard shard
+             :order sequence-order
+             :seed sequence-seed
+             :stream stream)))
+         (sb-ext:exit :code 0))
+        ((requested-watch-p)
+         (cl-weave:watch-system "cl-weave-tests"
+                                :reporter reporter
+                                :name-filter (requested-test-filter)
+                                :shard shard
+                                :order sequence-order
+                                :seed sequence-seed
+                                :bail (requested-bail)
+                                :include-dependencies t
+                                :interval (requested-watch-interval)))
+        (t
+         (sb-ext:exit
+          :code (if (with-requested-stream
+                      (lambda (stream)
+                        (cl-weave:run-all
+                         :reporter reporter
+                         :name-filter (requested-test-filter)
+                         :shard shard
+                         :order sequence-order
+                         :seed sequence-seed
+                         :bail (requested-bail)
+                         :coverage coverage
+                         :coverage-output coverage-output
+                         :pass-with-no-tests (requested-pass-with-no-tests)
+                         :stream stream)))
+                    0
+                    1)))))))
 
 #-sbcl
 (error "scripts/run-tests.lisp currently requires SBCL.")

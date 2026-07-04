@@ -1561,6 +1561,38 @@
               :to-equal "cli.snapshots")
       (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t)))
 
+  (it "parses Vitest camelCase option aliases"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("run"
+                      "--testNamePattern"
+                      "cli"
+                      "--coverageOutput=coverage.out"
+                      "--passWithNoTests"
+                      "--snapshotDir"
+                      "tests/__snapshots__/"
+                      "--snapshotFile=vitest.snapshots"
+                      "--update")
+                    (cl-weave/cli::make-cli-options)))
+          (watch-options (cl-weave/cli::parse-cli-arguments
+                          '("watch" "cl-weave-tests" "--watchInterval" "2.5")
+                          (cl-weave/cli::make-cli-options)))
+          (snapshot-options (cl-weave/cli::parse-cli-arguments
+                             '("run" "--updateSnapshots")
+                             (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")
+      (expect (cl-weave/cli::cli-options-coverage-output options)
+              :to-equal "coverage.out")
+      (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be t)
+      (expect (cl-weave/cli::cli-options-snapshot-directory options)
+              :to-equal #P"tests/__snapshots__/")
+      (expect (cl-weave/cli::cli-options-snapshot-file options)
+              :to-equal "vitest.snapshots")
+      (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t)
+      (expect (cl-weave/cli::cli-options-watch-interval watch-options)
+              :to-be 2.5)
+      (expect (cl-weave/cli::cli-options-update-snapshots snapshot-options)
+              :to-be t)))
+
   (it "parses CI snapshot settings from environment variables"
     (with-mocked-functions
         (((symbol-function 'uiop:getenv)
@@ -1589,6 +1621,25 @@
                         '(("CL_WEAVE_PASS_WITH_NO_TESTS" . "false"))
                         :test #'string=)))))
       (let ((options (cl-weave/cli::options-from-environment)))
+        (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
+                :to-be nil))))
+
+  (it "treats Lisp nil environment tokens as false"
+    (with-mocked-functions
+        (((symbol-function 'uiop:getenv)
+          (lambda (name)
+            (cdr (assoc name
+                        '(("CL_WEAVE_COVERAGE" . "nil")
+                          ("CL_WEAVE_LIST" . "nil")
+                          ("CL_WEAVE_WATCH" . "nil")
+                          ("CL_WEAVE_UPDATE_SNAPSHOTS" . "nil")
+                          ("CL_WEAVE_PASS_WITH_NO_TESTS" . "nil"))
+                        :test #'string=)))))
+      (let ((options (cl-weave/cli::options-from-environment)))
+        (expect (cl-weave/cli::cli-options-coverage options) :to-be nil)
+        (expect (cl-weave/cli::cli-options-list options) :to-be nil)
+        (expect (cl-weave/cli::cli-options-watch options) :to-be nil)
+        (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be nil)
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
@@ -1679,9 +1730,11 @@
       (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
       (expect usage :to-contain "--reporter REPORTER")
       (expect usage :to-contain "--shard INDEX/COUNT")
-      (expect usage :to-contain "--fail-with-no-tests")
-      (expect usage :to-contain "--snapshot-dir DIR")
-      (expect usage :to-contain "--snapshot-file FILE"))))
+      (expect usage :to-contain "--testNamePattern TEXT")
+      (expect usage :to-contain "--failWithNoTests")
+      (expect usage :to-contain "--snapshotDir DIR")
+      (expect usage :to-contain "--snapshotFile FILE")
+      (expect usage :to-contain "--updateSnapshots"))))
 
 (describe "asdf integration"
   (it "collects source files from ASDF systems"

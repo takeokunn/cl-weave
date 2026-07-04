@@ -638,8 +638,8 @@ caps backtracking results.
 stops after that many failing or errored events. Skips and todos do not count
 toward the bail limit.
 
-For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `false`, `0`,
-or a positive integer:
+For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `yes`, `on`,
+`false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
 CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
@@ -722,15 +722,24 @@ path summaries for focused reruns. See `docs/ai-contract.md`.
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
-`CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_PASS_WITH_NO_TESTS=false`
-to fail CI when filters select no tests. Set `CL_WEAVE_COVERAGE=1` to wrap
-execution with SBCL `sb-cover`, and set `CL_WEAVE_COVERAGE_FILE=path` to save
-the coverage state as a CI artifact.
+`CL_WEAVE_BAIL` for fast-fail runs. Boolean environment variables treat
+`0`, `false`, `no`, `off`, and `nil` as false. Set
+`CL_WEAVE_PASS_WITH_NO_TESTS=false` to fail CI when filters select no tests.
+Set `CL_WEAVE_COVERAGE=1` to wrap execution with SBCL `sb-cover`, and set
+`CL_WEAVE_COVERAGE_FILE=path` to save the coverage state as a CI artifact.
+Set `CL_WEAVE_SNAPSHOT_DIR`, `CL_WEAVE_SNAPSHOT_FILE`, and
+`CL_WEAVE_UPDATE_SNAPSHOTS=1` to control snapshot location and updates from CI.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
 artifact file while preserving the process exit code contract. Use `tap` for
 line-oriented CI logs, `github` for GitHub Actions annotations, and `junit`
 when a CI service should ingest test results as XML. List mode supports `spec`,
 `sexp`, and `json`.
+
+The CLI keeps kebab-case flags as the canonical Lisp spelling and exposes
+Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
+`--testNamePattern`, `--watchInterval`, `--coverageOutput`,
+`--passWithNoTests`, `--failWithNoTests`, `--snapshotDir`, `--snapshotFile`,
+`--update`, and `--updateSnapshots`.
 
 ### ASDF System Runner and Watch Mode
 

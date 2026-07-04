@@ -34,6 +34,12 @@
          (lambda (,options ,rest)
            ,@body)))
 
+(defmacro define-cli-option-alias (alias target)
+  `(let ((handler (gethash ,target *cli-option-handlers*)))
+     (unless handler
+       (error "Unknown CLI option alias target: ~A" ,target))
+     (setf (gethash ,alias *cli-option-handlers*) handler)))
+
 (defun string-present-p (value)
   (and value (plusp (length value))))
 
@@ -52,14 +58,14 @@
   (let ((value (environment-value name)))
     (and value
          (not (member (string-downcase value)
-                      '("0" "false" "no" "off")
+                      '("0" "false" "no" "off" "nil")
                       :test #'string=)))))
 
 (defun parse-boolean (value name)
   (let ((normalized (string-downcase value)))
     (cond
       ((member normalized '("1" "true" "yes" "on") :test #'string=) t)
-      ((member normalized '("0" "false" "no" "off") :test #'string=) nil)
+      ((member normalized '("0" "false" "no" "off" "nil") :test #'string=) nil)
       (t (error 'cli-error
                 :message (format nil "~A must be a boolean: ~A" name value))))))
 
@@ -118,7 +124,7 @@
   (let ((normalized (string-downcase value)))
     (cond
       ((member normalized '("true" "yes" "on") :test #'string=) t)
-      ((member normalized '("false" "no" "off" "0") :test #'string=) nil)
+      ((member normalized '("false" "no" "off" "0" "nil") :test #'string=) nil)
       (t (parse-positive-integer value "--bail")))))
 
 (defun parse-shard (value)
@@ -248,6 +254,16 @@
   (setf (cli-options-update-snapshots options) t)
   rest)
 
+(define-cli-option-alias "--testNamePattern" "--filter")
+(define-cli-option-alias "--watchInterval" "--watch-interval")
+(define-cli-option-alias "--coverageOutput" "--coverage-output")
+(define-cli-option-alias "--passWithNoTests" "--pass-with-no-tests")
+(define-cli-option-alias "--failWithNoTests" "--fail-with-no-tests")
+(define-cli-option-alias "--snapshotDir" "--snapshot-dir")
+(define-cli-option-alias "--snapshotFile" "--snapshot-file")
+(define-cli-option-alias "--update" "--update-snapshots")
+(define-cli-option-alias "--updateSnapshots" "--update-snapshots")
+
 (defun options-from-environment ()
   (let ((options (make-cli-options)))
     (when (environment-value "CL_WEAVE_SYSTEM")
@@ -374,22 +390,30 @@
             "  --system SYSTEM           ASDF system to load before running tests"
             "  --load FILE               Lisp file to load before running tests"
             "  --reporter REPORTER       spec, sexp, json, tap, github, or junit"
-            "  --filter TEXT             run tests whose Vitest-style path contains TEXT"
+            "  --filter, --testNamePattern TEXT"
+            "                            run tests whose Vitest-style path contains TEXT"
             "  --output FILE             write reporter output to FILE"
             "  --list                    discover tests without executing bodies"
             "  --watch                   rerun an ASDF system when source files change"
-            "  --watch-interval SECONDS  polling interval for watch mode"
+            "  --watch-interval, --watchInterval SECONDS"
+            "                            polling interval for watch mode"
             "  --bail[=N|true|false]     stop after the first or N failures"
             "  --shard INDEX/COUNT       select a deterministic CI shard"
             "  --sequence ORDER          defined, random, or shuffle"
             "  --seed INTEGER            deterministic random sequence seed"
             "  --coverage                wrap execution with SBCL sb-cover"
-            "  --coverage-output FILE    save SBCL coverage state to FILE"
-            "  --pass-with-no-tests      pass when filters select no tests"
-            "  --fail-with-no-tests      fail when filters select no tests"
-            "  --snapshot-dir DIR        external snapshot directory"
-            "  --snapshot-file FILE      external snapshot file name"
-            "  --update-snapshots        update external snapshots during this run"
+            "  --coverage-output, --coverageOutput FILE"
+            "                            save SBCL coverage state to FILE"
+            "  --pass-with-no-tests, --passWithNoTests"
+            "                            pass when filters select no tests"
+            "  --fail-with-no-tests, --failWithNoTests"
+            "                            fail when filters select no tests"
+            "  --snapshot-dir, --snapshotDir DIR"
+            "                            external snapshot directory"
+            "  --snapshot-file, --snapshotFile FILE"
+            "                            external snapshot file name"
+            "  --update-snapshots, --update, --updateSnapshots"
+            "                            update external snapshots during this run"
             "  --help                    print this help")))
 
 (defun ensure-valid-reporter-for-command (options)
