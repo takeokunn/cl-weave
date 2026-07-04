@@ -12,11 +12,21 @@
    #:describe
    #:describe-only
    #:expect
+   #:gen-boolean
+   #:gen-integer
+   #:gen-list
+   #:gen-member
    #:it
    #:it-each
+   #:it-property
    #:it-only
    #:it-skip
    #:it-todo
+   #:*property-seed*
+   #:*property-test-count*
+   #:*snapshot-directory*
+   #:*update-snapshots*
+   #:with-snapshot-updates
    #:clear-mock
    #:make-mock-function
    #:mock-calls

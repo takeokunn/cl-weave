@@ -158,5 +158,6 @@
     (ecase reporter
       (:spec (report-spec events stream))
       (:sexp (report-sexp events stream))
+      (:json (report-json events stream))
       (:junit (report-junit events stream)))
     (every #'passed-event-p events)))

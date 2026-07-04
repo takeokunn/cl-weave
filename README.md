@@ -13,15 +13,17 @@ Early MVP. The current focus is a solid core:
 
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
+- smart S-expression assertions that capture operand values
 - `it-each` compile-time table tests
+- `it-property` deterministic property tests with shrinking
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
 - `it-skip` / `test-skip` skipped cases
 - `describe-only` / `it-only` focused runs
 - `it-todo` / `test-todo` todo cases
-- Vitest-style length, instance, and inline snapshot matchers
+- Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
-- spec, S-expression, and JUnit XML reporters
+- spec, S-expression, JSON, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -39,6 +41,9 @@ Early MVP. The current focus is a solid core:
   (it "adds numbers"
     (expect (+ 1 1) :to-be 2))
 
+  (it "checks predicates as data"
+    (expect (= (+ 1 1) 2)))
+
   (it "compares structures"
     (expect (list :ok 42) :to-equal (list :ok 42))))
 ```
@@ -55,6 +60,20 @@ With Nix:
 nix develop
 nix flake check
 ```
+
+## CI
+
+GitHub Actions runs the same Nix entrypoints used locally:
+
+```sh
+nix flake check --print-build-logs
+nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
+`cl-weave-test-reports` artifact. JSON is intended for AI agents and external
+automation; JUnit is intended for CI test result ingestion.
 
 ## API
 
@@ -74,15 +93,38 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 
 ```lisp
 (expect actual :to-be expected)
+(expect (= actual expected))
+(expect (< low value high))
 (expect actual :to-equal expected)
 (expect value :to-be-greater-than 10)
 (expect values :to-have-length 3)
 (expect form :to-match-inline-snapshot "(:ok 42)")
+(let ((*snapshot-directory* #P"tests/__snapshots__/"))
+  (with-snapshot-updates
+    (expect form :to-match-snapshot "suite/case"))
+  (expect form :to-match-snapshot "suite/case"))
 (expect value :not :to-be nil)
 ```
 
-`expect` captures the original S-expression and reports matcher, actual,
-expected, negation, and pass metadata through conditions and reporters.
+With matcher syntax, `expect` captures the original S-expression and reports
+matcher, actual, expected, negation, and pass metadata through conditions and
+reporters.
+
+With no matcher, `expect` treats the form as a smart assertion. Predicate forms
+using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
+`string-equal` are macro-expanded into single-evaluation operand capture:
+
+```lisp
+(expect (= (parse-integer "42") 41))
+```
+
+The failure report includes the original predicate and a list of operand forms
+with their evaluated values, which is intended to be both REPL-friendly and
+AI-friendly. Any other bare form is checked as truthy.
+
+`with-snapshot-updates` enables deterministic external snapshot creation and
+updates inside a dynamic scope. For command-line usage,
+`CL_WEAVE_UPDATE_SNAPSHOTS=1` enables the same update mode.
 
 Built-in matchers:
 
@@ -105,6 +147,7 @@ Built-in matchers:
 - `:to-throw`
 - `:to-expand-to`
 - `:to-match-inline-snapshot`
+- `:to-match-snapshot`
 - `:to-have-been-called`
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
@@ -120,6 +163,30 @@ Built-in matchers:
 ```
 
 `it-each` expands into independent `it` forms at macro expansion time.
+
+### Property Tests
+
+```lisp
+(it-property "addition is commutative"
+    ((left (gen-integer :min -100 :max 100))
+     (right (gen-integer :min -100 :max 100)))
+  (expect (+ left right) :to-be (+ right left)))
+```
+
+Property generators are plain data objects. `it-property` runs generated examples
+through the normal assertion engine, then reports the original failing values and
+the minimized values through the same structured `assertion-failure` path used by
+`expect`.
+
+Built-in generators:
+
+- `(gen-integer :min -100 :max 100)`
+- `(gen-boolean)`
+- `(gen-member '(:a :b :c))`
+- `(gen-list generator :min-length 0 :max-length 8)`
+
+Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
+`CL_WEAVE_PROPERTY_TESTS` and `CL_WEAVE_PROPERTY_SEED` for reproducible CI runs.
 
 ### Fixtures
 
@@ -201,24 +268,24 @@ original function cells are restored with `unwind-protect`.
 ```lisp
 (cl-weave:run-all :reporter :spec)
 (cl-weave:run-all :reporter :sexp)
+(cl-weave:run-all :reporter :json)
 (cl-weave:run-all :reporter :junit)
 ```
 
 `run-all` returns true when the suite passed and false otherwise.
 
-The `:sexp` reporter is the stable AI-friendly interface. See
-`docs/ai-contract.md`.
+The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
+reporter is the stable external-tool interface. See `docs/ai-contract.md`.
 
-`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, or `junit`.
-Use `junit` when a CI service should ingest test results as XML.
+`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
+`junit`. Use `junit` when a CI service should ingest test results as XML.
 
 ## Roadmap
 
 MVP quality comes first. The intended direction is:
 
-- structured JSON reporter
-- snapshot testing
 - property-based testing and shrinking
+- richer property generators and shrinking strategies
 - watch mode based on ASDF dependency information
 - subprocess isolation for FFI crash tests
 - allocation and performance assertions

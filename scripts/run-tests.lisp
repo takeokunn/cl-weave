@@ -15,6 +15,7 @@
     (cond
       ((or (null reporter) (string= reporter "") (string-equal reporter "spec")) :spec)
       ((string-equal reporter "sexp") :sexp)
+      ((string-equal reporter "json") :json)
       ((string-equal reporter "junit") :junit)
       (t (error "Unknown CL_WEAVE_REPORTER value: ~A" reporter)))))
 

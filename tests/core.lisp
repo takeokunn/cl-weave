@@ -54,8 +54,24 @@
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
      (expect (lambda () (expect :not-a-function :to-throw)) :to-throw))
+    ("smart equality assertion" (expect (= (+ 1 1) 2)))
+    ("smart relational assertion" (expect (< 1 2 3)))
+    ("smart truthy assertion" (expect (member :b '(:a :b :c))))
     ("to-match-inline-snapshot"
      (expect '(:ok 42) :to-match-inline-snapshot "(:ok 42)"))
+    ("to-match-snapshot"
+     (let ((cl-weave::*snapshot-directory* #P"/tmp/cl-weave-core-snapshots/")
+           (cl-weave::*snapshot-file-name* "matchers.snapshots"))
+       (cl-weave:with-snapshot-updates
+         (expect '(:ok 42) :to-match-snapshot "matcher external snapshot"))
+       (expect '(:ok 42) :to-match-snapshot "matcher external snapshot")))
+    ("to-match-snapshot rejects missing snapshots"
+     (let ((cl-weave::*snapshot-directory* #P"/tmp/cl-weave-core-snapshots/")
+           (cl-weave::*snapshot-file-name* "missing.snapshots")
+           (key (symbol-name (gensym "MISSING-SNAPSHOT-"))))
+       (expect (lambda ()
+                 (expect '(:missing 42) :to-match-snapshot key))
+               :to-throw)))
     ("not" (expect 1 :not :to-be 2)))
 
   (it "signals assertion-failure with structured data"
@@ -67,7 +83,21 @@
         (let ((detail (cl-weave::failure-detail condition)))
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
-          (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2)))))))
+          (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
+
+  (it "signals smart assertion failures with operand values"
+    (handler-case
+        (progn
+          (expect (= (+ 1 1) 3))
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be '=)
+          (expect actual :to-contain '(:form (+ 1 1) :value 2))
+          (expect actual :to-contain '(:form 3 :value 3))
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(= (+ 1 1) 3)))))))
 
 (describe "macros"
   (it-each ((1 2 3)
@@ -82,6 +112,13 @@
             (lambda (form)
               (tree-contains-p form 'cl-weave::assert-expectation))))
 
+  (it "expands smart expect into operand capture"
+    (expect (macroexpand-1 '(expect (= (+ 1 1) 2)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::signal-smart-assertion-failure)
+                   (tree-contains-p form 'cl-weave::operand-report-form)))))
+
   (it "expands it-only into focused test registration"
     (expect (macroexpand-1 '(it-only "focused" (expect 1 :to-be 1)))
             :to-satisfy
@@ -95,6 +132,46 @@
             '(if ready
                  nil
                  (progn (setf *fixture-value* :done))))))
+
+(describe "properties"
+  (it-property "checks integer addition commutativity"
+      ((left (gen-integer :min -20 :max 20))
+       (right (gen-integer :min -20 :max 20)))
+    (expect (+ left right) :to-be (+ right left)))
+
+  (it-property "checks list reversal involution"
+      ((values (gen-list (gen-member '(:a :b :c)) :max-length 6)))
+    (expect (reverse (reverse values)) :to-equal values))
+
+  (it-property "checks boolean identity"
+      ((flag (gen-boolean)))
+    (expect (not (not flag)) :to-be flag))
+
+  (it "reports generated and minimized values on failure"
+    (handler-case
+        (let ((cl-weave:*property-test-count* 20)
+              (cl-weave:*property-seed* 1))
+          (cl-weave::run-property
+           (list (gen-integer :min 1 :max 5))
+           (lambda (value)
+             (expect value :to-be 0))
+           '(value)
+           '(property-failure-example)))
+      (assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :property)
+          (expect actual :to-contain :values)
+          (expect actual :to-contain :minimal)))))
+
+  (it "expands it-property into the property runner"
+    (expect (macroexpand-1
+             '(it-property "positive identity"
+                  ((value (gen-integer :min 1 :max 3)))
+                (expect value :to-be value)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave::run-property)))))
 
 (describe "fixtures"
   (before-all
@@ -218,6 +295,27 @@
       (expect output :to-contain ":SKIPPED")
       (expect output :to-contain ":TODOS")
       (expect output :to-contain ":TODO")))
+
+  (it "prints AI-readable JSON results"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-json
+                     (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("reporters" "json")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :skip
+                            :path '("reporters" "quotes")
+                            :reason "needs \"escaping\""
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect output :to-contain "\"schemaVersion\":1")
+      (expect output :to-contain "\"passed\":1")
+      (expect output :to-contain "\"skipped\":1")
+      (expect output :to-contain "\"status\":\"pass\"")
+      (expect output :to-contain "\"path\":[\"reporters\",\"json\"]")
+      (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
+      (expect output :to-contain "\"assertion\":null")))
 
   (it "prints CI-readable JUnit XML results"
     (let ((output (with-output-to-string (stream)

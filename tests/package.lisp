@@ -10,11 +10,16 @@
    #:before-all
    #:before-each
    #:clear-mock
-   #:clear-tests
-   #:expect
-   #:it
-   #:it-each
-   #:it-only
+    #:clear-tests
+    #:expect
+    #:gen-boolean
+    #:gen-integer
+    #:gen-list
+    #:gen-member
+    #:it
+    #:it-each
+    #:it-property
+    #:it-only
    #:it-skip
    #:it-todo
    #:make-mock-function
