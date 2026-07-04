@@ -77,6 +77,7 @@
    #:*property-seed*
    #:*property-test-count*
    #:*snapshot-directory*
+   #:*snapshot-file-name*
    #:*update-snapshots*
    #:with-snapshot-updates
    #:clear-mock

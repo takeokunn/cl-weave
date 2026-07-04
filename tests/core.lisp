@@ -2,6 +2,22 @@
 
 (cl-weave:clear-tests)
 
+(defun ensure-directory-suffix (value)
+  (let ((string (namestring (pathname value))))
+    (if (and (plusp (length string))
+             (char= (char string (1- (length string))) #\/))
+        string
+        (concatenate 'string string "/"))))
+
+(defun test-snapshot-directory (name)
+  (merge-pathnames
+   (make-pathname :directory (list :relative name))
+   (let ((tmp #+sbcl (sb-ext:posix-getenv "TMPDIR")
+              #-sbcl nil))
+     (if (and tmp (plusp (length tmp)))
+         (pathname (ensure-directory-suffix tmp))
+         #P"./"))))
+
 (defvar *fixture-value* nil)
 (defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
@@ -89,13 +105,13 @@
     ("to-match-inline-snapshot"
      (expect '(:ok 42) :to-match-inline-snapshot "(:ok 42)"))
     ("to-match-snapshot"
-     (let ((cl-weave::*snapshot-directory* #P"/tmp/cl-weave-core-snapshots/")
+     (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
            (cl-weave::*snapshot-file-name* "matchers.snapshots"))
        (cl-weave:with-snapshot-updates
          (expect '(:ok 42) :to-match-snapshot "matcher external snapshot"))
        (expect '(:ok 42) :to-match-snapshot "matcher external snapshot")))
     ("to-match-snapshot rejects missing snapshots"
-     (let ((cl-weave::*snapshot-directory* #P"/tmp/cl-weave-core-snapshots/")
+     (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
            (cl-weave::*snapshot-file-name* "missing.snapshots")
            (key (symbol-name (gensym "MISSING-SNAPSHOT-"))))
        (expect (lambda ()
@@ -127,6 +143,53 @@
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(1))
           (expect (cl-weave::assertion-detail-negated detail) :to-be-truthy)
           (expect (cl-weave::assertion-detail-pass detail) :to-be-truthy)))))
+
+  (it "reports missing external snapshots as structured data"
+    (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
+          (cl-weave::*snapshot-file-name* "missing-structured.snapshots")
+          (key (symbol-name (gensym "MISSING-STRUCTURED-SNAPSHOT-"))))
+      (handler-case
+          (progn
+            (expect '(:missing 42) :to-match-snapshot key)
+            (expect nil :to-be-truthy))
+        (cl-weave:assertion-failure (condition)
+          (let* ((detail (cl-weave::failure-detail condition))
+                 (actual (cl-weave::assertion-detail-actual detail))
+                 (expected (cl-weave::assertion-detail-expected detail)))
+            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
+            (expect (getf actual :snapshot-key) :to-equal key)
+            (expect (getf actual :snapshot-file) :to-contain "missing-structured.snapshots")
+            (expect (getf actual :value) :to-equal "(:missing 42)")
+            (expect (getf actual :reason) :to-be :missing-snapshot)
+            (expect (getf expected :snapshot-key) :to-equal key)
+            (expect (getf expected :present) :to-be nil)
+            (expect (getf expected :reason) :to-be :missing-snapshot))))))
+
+  (it "reports external snapshot mismatches with first-difference data"
+    (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
+          (cl-weave::*snapshot-file-name* "mismatch-structured.snapshots")
+          (key (symbol-name (gensym "MISMATCH-STRUCTURED-SNAPSHOT-"))))
+      (cl-weave:with-snapshot-updates
+        (expect '(:ok 42) :to-match-snapshot key))
+      (handler-case
+          (progn
+            (expect '(:ok 43) :to-match-snapshot key)
+            (expect nil :to-be-truthy))
+        (cl-weave:assertion-failure (condition)
+          (let* ((detail (cl-weave::failure-detail condition))
+                 (actual (cl-weave::assertion-detail-actual detail))
+                 (expected (cl-weave::assertion-detail-expected detail))
+                 (difference (getf actual :difference)))
+            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
+            (expect (getf actual :snapshot-key) :to-equal key)
+            (expect (getf actual :reason) :to-be :snapshot-mismatch)
+            (expect (getf actual :value) :to-equal "(:ok 43)")
+            (expect (getf expected :present) :to-be-truthy)
+            (expect (getf expected :value) :to-equal "(:ok 42)")
+            (expect difference :to-equal (getf expected :difference))
+            (expect (getf difference :line) :to-be 1)
+            (expect (getf difference :expected) :to-equal "(:ok 42)")
+            (expect (getf difference :actual) :to-equal "(:ok 43)"))))))
 
   (it "supports public custom matchers with structured failure data"
     (expect 4 :to-be-even)
@@ -1267,6 +1330,10 @@
                       "--coverage"
                       "--coverage-output"
                       "coverage.out"
+                      "--snapshot-dir"
+                      "tests/__snapshots__/"
+                      "--snapshot-file"
+                      "cli.snapshots"
                       "--update-snapshots")
                     (cl-weave/cli::make-cli-options))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :run)
@@ -1283,7 +1350,48 @@
       (expect (cl-weave/cli::cli-options-coverage options) :to-be t)
       (expect (cl-weave/cli::cli-options-coverage-output options)
               :to-equal "coverage.out")
+      (expect (cl-weave/cli::cli-options-snapshot-directory options)
+              :to-equal #P"tests/__snapshots__/")
+      (expect (cl-weave/cli::cli-options-snapshot-file options)
+              :to-equal "cli.snapshots")
       (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t)))
+
+  (it "parses CI snapshot settings from environment variables"
+    (with-mocked-functions
+        (((symbol-function 'uiop:getenv)
+          (lambda (name)
+            (cdr (assoc name
+                        '(("CL_WEAVE_SNAPSHOT_DIR" . "ci/__snapshots__/")
+                          ("CL_WEAVE_SNAPSHOT_FILE" . "ci.snapshots")
+                          ("CL_WEAVE_UPDATE_SNAPSHOTS" . "1"))
+                        :test #'string=)))))
+      (let ((options (cl-weave/cli::options-from-environment)))
+        (expect (cl-weave/cli::cli-options-snapshot-directory options)
+                :to-equal #P"ci/__snapshots__/")
+        (expect (cl-weave/cli::cli-options-snapshot-file options)
+                :to-equal "ci.snapshots")
+        (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t))))
+
+  (it "binds snapshot settings during CLI execution"
+    (let ((observed nil)
+          (options (cl-weave/cli::make-cli-options
+                    :snapshot-directory #P"tmp/__snapshots__/"
+                    :snapshot-file "cli.snapshots"
+                    :update-snapshots t)))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave:run-all)
+            (lambda (&key reporter name-filter shard order seed bail coverage
+                     coverage-output stream)
+              (declare (ignore reporter name-filter shard order seed bail coverage
+                               coverage-output stream))
+              (setf observed
+                    (list cl-weave:*snapshot-directory*
+                          cl-weave:*snapshot-file-name*
+                          cl-weave:*update-snapshots*))
+              t)))
+        (expect (cl-weave/cli::run-command options) :to-be t))
+      (expect observed
+              :to-equal (list #P"tmp/__snapshots__/" "cli.snapshots" t))))
 
   (it "parses list and watch commands without executing tests"
     (let ((list-options (cl-weave/cli::parse-cli-arguments
@@ -1321,7 +1429,9 @@
     (let ((usage (cl-weave/cli::cli-usage)))
       (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
       (expect usage :to-contain "--reporter REPORTER")
-      (expect usage :to-contain "--shard INDEX/COUNT"))))
+      (expect usage :to-contain "--shard INDEX/COUNT")
+      (expect usage :to-contain "--snapshot-dir DIR")
+      (expect usage :to-contain "--snapshot-file FILE"))))
 
 (describe "asdf integration"
   (it "collects source files from ASDF systems"

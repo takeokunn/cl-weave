@@ -64,6 +64,45 @@
 (defun snapshot-file-pathname ()
   (merge-pathnames *snapshot-file-name* *snapshot-directory*))
 
+(defun snapshot-line-list (string)
+  (with-input-from-string (stream string)
+    (loop for line = (read-line stream nil nil)
+          while line
+          collect line)))
+
+(defun snapshot-first-difference (expected actual)
+  (let* ((expected-lines (snapshot-line-list expected))
+         (actual-lines (snapshot-line-list actual))
+         (line-count (max (length expected-lines) (length actual-lines))))
+    (loop for offset below line-count
+          for expected-line = (nth offset expected-lines)
+          for actual-line = (nth offset actual-lines)
+          unless (equal expected-line actual-line)
+            return (list :line (1+ offset)
+                         :expected expected-line
+                         :actual actual-line))))
+
+(defun snapshot-comparison-values (key actual-string entry)
+  (let* ((file (namestring (snapshot-file-pathname)))
+         (expected-present-p (not (null entry)))
+         (expected-string (and entry (cdr entry)))
+         (difference (when expected-present-p
+                       (snapshot-first-difference expected-string actual-string)))
+         (reason (if expected-present-p
+                     :snapshot-mismatch
+                     :missing-snapshot)))
+    (values (list :snapshot-key key
+                  :snapshot-file file
+                  :value actual-string
+                  :reason reason
+                  :difference difference)
+            (list :snapshot-key key
+                  :snapshot-file file
+                  :value expected-string
+                  :present expected-present-p
+                  :reason reason
+                  :difference difference))))
+
 (defun read-snapshot-file ()
   (let ((file (snapshot-file-pathname)))
     (when (probe-file file)
@@ -125,7 +164,10 @@
        (write-snapshot-file
         (replace-snapshot-entry key actual-string entries))
        t)
-      (t nil))))
+      (t
+       (multiple-value-bind (reported-actual reported-expected)
+           (snapshot-comparison-values key actual-string entry)
+         (values nil reported-actual reported-expected))))))
 
 (defun thunk-throws-p (thunk)
   (and (functionp thunk)

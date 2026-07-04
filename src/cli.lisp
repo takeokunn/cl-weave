@@ -21,6 +21,8 @@
   seed
   coverage
   coverage-output
+  snapshot-directory
+  snapshot-file
   update-snapshots
   help)
 
@@ -214,6 +216,16 @@
     (setf (cli-options-coverage-output options) path)
     (rest rest)))
 
+(define-cli-option "--snapshot-dir" (options rest)
+  (let ((directory (require-option-argument "--snapshot-dir" rest)))
+    (setf (cli-options-snapshot-directory options) (pathname directory))
+    (rest rest)))
+
+(define-cli-option "--snapshot-file" (options rest)
+  (let ((file (require-option-argument "--snapshot-file" rest)))
+    (setf (cli-options-snapshot-file options) file)
+    (rest rest)))
+
 (define-cli-option "--update-snapshots" (options rest)
   (setf (cli-options-update-snapshots options) t)
   rest)
@@ -250,6 +262,12 @@
     (when (environment-value "CL_WEAVE_COVERAGE_FILE")
       (setf (cli-options-coverage-output options)
             (environment-value "CL_WEAVE_COVERAGE_FILE")))
+    (when (environment-value "CL_WEAVE_SNAPSHOT_DIR")
+      (setf (cli-options-snapshot-directory options)
+            (pathname (environment-value "CL_WEAVE_SNAPSHOT_DIR"))))
+    (when (environment-value "CL_WEAVE_SNAPSHOT_FILE")
+      (setf (cli-options-snapshot-file options)
+            (environment-value "CL_WEAVE_SNAPSHOT_FILE")))
     (when (truthy-environment-p "CL_WEAVE_LIST")
       (setf (cli-options-list options) t
             (cli-options-command options) :list))
@@ -345,6 +363,8 @@
             "  --seed INTEGER            deterministic random sequence seed"
             "  --coverage                wrap execution with SBCL sb-cover"
             "  --coverage-output FILE    save SBCL coverage state to FILE"
+            "  --snapshot-dir DIR        external snapshot directory"
+            "  --snapshot-file FILE      external snapshot file name"
             "  --update-snapshots        update external snapshots during this run"
             "  --help                    print this help")))
 
@@ -376,7 +396,13 @@
              (null (cli-options-systems options)))
     (error 'cli-error :message "Watch mode requires --system SYSTEM."))
   (load-requested-inputs options)
-  (let ((cl-weave:*update-snapshots* (cli-options-update-snapshots options)))
+  (let ((cl-weave:*update-snapshots* (cli-options-update-snapshots options))
+        (cl-weave:*snapshot-directory*
+          (or (cli-options-snapshot-directory options)
+              cl-weave:*snapshot-directory*))
+        (cl-weave:*snapshot-file-name*
+          (or (cli-options-snapshot-file options)
+              cl-weave:*snapshot-file-name*)))
     (cond
       ((cli-options-list options)
        (call-with-output-stream

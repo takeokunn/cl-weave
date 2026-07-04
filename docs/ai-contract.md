@@ -111,6 +111,39 @@ CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinfor
 with `0` when all selected events pass, skip, or todo, and exits with `1` when
 any selected event fails or errors.
 
+External snapshots are sidecar artifacts controlled by dynamic bindings or
+CLI/environment settings:
+
+```sh
+CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAPSHOT_DIR=tests/__snapshots__/ CL_WEAVE_SNAPSHOT_FILE=snapshots.sexp \
+  sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
+passed to `:to-match-snapshot`. They do not alter reporter schemas, so agents
+can compare reporter artifacts and snapshot artifacts independently.
+
+Snapshot assertion failures use the normal `:assertion` payload. For missing
+snapshots, `:actual` and `:expected` contain `:snapshot-key`, `:snapshot-file`,
+`:value`, `:reason :missing-snapshot`, and `:present nil` on the expected side.
+For mismatches, both sides include `:reason :snapshot-mismatch` and matching
+`:difference` data:
+
+```lisp
+(:matcher :to-match-snapshot
+ :actual (:snapshot-key "suite/case"
+          :snapshot-file "tests/__snapshots__/snapshots.sexp"
+          :value "(:ok 43)"
+          :reason :snapshot-mismatch
+          :difference (:line 1 :expected "(:ok 42)" :actual "(:ok 43)"))
+ :expected (:snapshot-key "suite/case"
+            :snapshot-file "tests/__snapshots__/snapshots.sexp"
+            :value "(:ok 42)"
+            :present t
+            :reason :snapshot-mismatch
+            :difference (:line 1 :expected "(:ok 42)" :actual "(:ok 43)")))
+```
+
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh

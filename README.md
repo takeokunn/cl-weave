@@ -81,6 +81,7 @@ agents:
 
 ```sh
 nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
+nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
 nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
 nix run . -- watch cl-weave-tests --filter parser
@@ -134,7 +135,8 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect (lambda () (parse-integer "42")) :to-run-under-ms 5)
 (expect (lambda () (loop repeat 10 collect :x)) :to-cons-less-than 4096)
 (expect form :to-match-inline-snapshot "(:ok 42)")
-(let ((*snapshot-directory* #P"tests/__snapshots__/"))
+(let ((*snapshot-directory* #P"tests/__snapshots__/")
+      (*snapshot-file-name* "snapshots.sexp"))
   (with-snapshot-updates
     (expect form :to-match-snapshot "suite/case"))
   (expect form :to-match-snapshot "suite/case"))
@@ -162,7 +164,11 @@ AI-friendly. Any other bare form is checked as truthy.
 
 `with-snapshot-updates` enables deterministic external snapshot creation and
 updates inside a dynamic scope. For command-line usage,
-`CL_WEAVE_UPDATE_SNAPSHOTS=1` enables the same update mode.
+`CL_WEAVE_UPDATE_SNAPSHOTS=1`, `CL_WEAVE_SNAPSHOT_DIR`, and
+`CL_WEAVE_SNAPSHOT_FILE` provide the same dynamic settings for CI and agents.
+External snapshot failures report `:snapshot-key`, `:snapshot-file`, `:value`,
+`:reason`, and first-difference data through the normal structured assertion
+payload, so agents do not need to parse human-readable failure strings.
 
 Built-in matchers:
 
