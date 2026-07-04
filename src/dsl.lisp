@@ -23,23 +23,44 @@
                         (destructuring-bind ,bindings ',case
                           ,@body)))))
 
+(defun option-plist-form-p (form)
+  (and (consp form)
+       (evenp (length form))
+       (loop for (key nil) on form by #'cddr
+             always (keywordp key))))
+
+(defun plist-key-present-p (plist key)
+  (loop for (candidate nil) on plist by #'cddr
+        thereis (eq candidate key)))
+
+(defun test-registration-options (options)
+  (append
+   (when (plist-key-present-p options :retry)
+     `(:retry ,(getf options :retry)))
+   (when (plist-key-present-p options :timeout-ms)
+     `(:timeout-ms ,(getf options :timeout-ms)))))
+
+(defun split-test-body (body)
+  (if (and body (option-plist-form-p (first body)))
+      (values (first body) (rest body))
+      (values nil body)))
+
 (defmacro it (name &body body)
-  `(register-test ,name (lambda () ,@body)))
+  (multiple-value-bind (options forms) (split-test-body body)
+    `(register-test ,name (lambda () ,@forms)
+                    ,@(test-registration-options options))))
 
 (defmacro it-only (name &body body)
-  `(register-test ,name (lambda () ,@body) :focus t))
+  (multiple-value-bind (options forms) (split-test-body body)
+    `(register-test ,name (lambda () ,@forms)
+                    :focus t
+                    ,@(test-registration-options options))))
 
 (defmacro it-skip (name &optional (reason "skipped"))
   `(register-test ,name (lambda () nil) :skip-reason ,reason))
 
 (defmacro it-todo (name &optional (reason "todo"))
   `(register-test ,name (lambda () nil) :todo-reason ,reason))
-
-(defun isolated-options-form-p (form)
-  (and (consp form)
-       (evenp (length form))
-       (loop for (key nil) on form by #'cddr
-             always (keywordp key))))
 
 (defun isolated-option-form (options key fallback)
   (if (getf options key)
@@ -56,7 +77,7 @@
       (t systems))))
 
 (defmacro it-isolated (name &body body)
-  (let* ((options (when (and body (isolated-options-form-p (first body)))
+  (let* ((options (when (and body (option-plist-form-p (first body)))
                     (first body)))
          (forms (if options (rest body) body))
          (timeout (isolated-option-form options :timeout '*isolated-timeout-seconds*))

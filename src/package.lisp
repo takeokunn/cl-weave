@@ -64,5 +64,7 @@
    #:test-skip
    #:test-todo
    #:test-failure
+   #:test-timeout
+   #:test-timeout-ms
    #:watch-system
    #:with-mocked-functions))

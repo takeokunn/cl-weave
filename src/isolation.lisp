@@ -25,22 +25,41 @@
     (t (error "cl-weave: isolated systems must be a string, symbol, or list, got ~S."
               systems))))
 
+(defun isolated-temp-name (prefix)
+  (format nil "~A-~36R-~36R-~36R"
+          prefix
+          (get-internal-real-time)
+          (get-universal-time)
+          (random (expt 36 8))))
+
 (defun isolated-temp-pathname (prefix type)
-  (merge-pathnames
-   (make-pathname :name (format nil "~A-~36R" prefix (random (expt 36 8)))
-                  :type type)
-   (uiop:temporary-directory)))
+  (loop repeat 100
+        for pathname = (merge-pathnames
+                        (make-pathname :name (isolated-temp-name prefix)
+                                       :type type)
+                        (uiop:temporary-directory))
+        for stream = (open pathname
+                           :direction :output
+                           :if-exists nil
+                           :if-does-not-exist :create)
+        when stream
+          do (close stream)
+             (return pathname)
+        finally (error "cl-weave: failed to allocate isolated temp file for ~A.~A"
+                       prefix
+                       type)))
 
 (defun isolated-temp-directory (prefix)
-  (let ((pathname
-          (merge-pathnames
-           (make-pathname :directory (list :relative
-                                           (format nil "~A-~36R"
-                                                   prefix
-                                                   (random (expt 36 8)))))
-           (uiop:temporary-directory))))
-    (ensure-directories-exist pathname)
-    pathname))
+  (loop repeat 100
+        for pathname = (merge-pathnames
+                        (make-pathname :directory (list :relative
+                                                        (isolated-temp-name prefix)))
+                        (uiop:temporary-directory))
+        unless (probe-file pathname)
+          do (ensure-directories-exist pathname)
+             (return pathname)
+        finally (error "cl-weave: failed to allocate isolated temp directory for ~A"
+                       prefix)))
 
 (defun read-file-string-or-empty (pathname)
   (if (probe-file pathname)

@@ -179,6 +179,18 @@
               (and (tree-contains-p form 'cl-weave::register-test)
                    (tree-contains-p form :focus)))))
 
+  (it "expands it options into retry and timeout metadata"
+    (expect (macroexpand-1
+             '(it "eventually stable" (:retry 2 :timeout-ms 100)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :retry)
+                   (tree-contains-p form 2)
+                   (tree-contains-p form :timeout-ms)
+                   (tree-contains-p form 100)))))
+
   (it "expands describe-skip into skipped suite registration"
     (expect (macroexpand-1
              '(describe-skip "blocked" "upstream gap"
@@ -391,6 +403,59 @@
 
   (it "keeps before-all state across cases"
     (expect *fixture-events* :to-equal '(:before-each :after-each :before-each :before-all))))
+
+(describe "retry and timeout"
+  (it "retries failing tests until they pass"
+    (let* ((attempts 0)
+           (test (cl-weave::make-test-case
+                  :name "eventual pass"
+                  :retry 2
+                  :function (lambda ()
+                              (incf attempts)
+                              (when (< attempts 3)
+                                (expect attempts :to-be 3)))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect attempts :to-be 3)
+      (expect (cl-weave::test-event-status event) :to-be :pass)))
+
+  (it "stops retrying after the configured retry budget"
+    (let* ((attempts 0)
+           (test (cl-weave::make-test-case
+                  :name "always fails"
+                  :retry 2
+                  :function (lambda ()
+                              (incf attempts)
+                              (expect attempts :to-be 10))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect attempts :to-be 3)
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::test-event-assertion event) :to-be-defined)))
+
+  (it "reports timed out tests as structured failures"
+    (let* ((test (cl-weave::make-test-case
+                  :name "slow"
+                  :timeout-ms 10
+                  :function (lambda () (sleep 0.1))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::test-event-condition event)
+              :to-be-instance-of 'cl-weave:test-timeout)
+      (expect (cl-weave:test-timeout-ms (cl-weave::test-event-condition event))
+              :to-be 10)))
+
+  (it "runs after-each cleanup when an attempt times out"
+    (let* ((events nil)
+           (suite (cl-weave::make-suite
+                   :name "timeout cleanup"
+                   :after-each (list (lambda () (push :after-each events)))))
+           (test (cl-weave::make-test-case
+                  :name "slow"
+                  :timeout-ms 10
+                  :function (lambda () (sleep 0.1)))))
+      (cl-weave::add-child suite test)
+      (let ((event (cl-weave::run-test-case suite test)))
+        (expect (cl-weave::test-event-status event) :to-be :fail)
+        (expect events :to-equal '(:after-each))))))
 
 (describe "skips"
   (it-skip "does not run skipped tests" "documented gap")

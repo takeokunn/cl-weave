@@ -22,6 +22,7 @@ Early MVP. The current focus is a solid core:
 - `describe-only` / `it-only` focused runs
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
+- Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
 - Vitest-style mock functions with call history assertions
@@ -342,6 +343,21 @@ When any suite or case is focused, `run-all` executes only the focused path.
 Todo suites report selected descendant cases as `:todo` without running suite
 hooks or test bodies. Todo cases use the same event status and do not fail
 `run-all`.
+
+### Retry And Timeout
+
+```lisp
+(it "eventually observes an external state" (:retry 2 :timeout-ms 500)
+  (expect (probe-state) :to-be :ready))
+
+(test "alias with the same options" (:retry 1)
+  (expect (+ 20 22) :to-be 42))
+```
+
+`:retry` is the number of extra attempts after the first attempt. Fixtures and
+dynamic `*test-context*` are recreated for every attempt. `:timeout-ms` fails the
+case if a single attempt exceeds the configured wall-clock budget. Timeout
+failures are reported as `test-timeout` conditions.
 
 ### Filtering
 

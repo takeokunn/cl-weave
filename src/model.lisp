@@ -21,7 +21,9 @@
   function
   focus
   skip-reason
-  todo-reason)
+  todo-reason
+  retry
+  timeout-ms)
 
 (defstruct assertion-detail
   form
@@ -46,6 +48,12 @@
                      (assertion-detail-form (failure-detail condition))))))
 
 (define-condition assertion-failure (test-failure) ())
+
+(define-condition test-timeout (error)
+  ((timeout-ms :initarg :timeout-ms :reader test-timeout-ms))
+  (:report (lambda (condition stream)
+             (format stream "Test exceeded timeout of ~Dms"
+                     (test-timeout-ms condition)))))
 
 (defun root-suite ()
   (or *root-suite*
@@ -72,13 +80,15 @@
       (funcall thunk))
     suite))
 
-(defun register-test (name function &key focus skip-reason todo-reason)
+(defun register-test (name function &key focus skip-reason todo-reason retry timeout-ms)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite (make-test-case :name name
                                      :function function
                                      :focus focus
                                      :skip-reason skip-reason
-                                     :todo-reason todo-reason))))
+                                     :todo-reason todo-reason
+                                     :retry retry
+                                     :timeout-ms timeout-ms))))
 
 (defun register-before-all (function)
   (let ((suite (or *current-suite* (root-suite))))

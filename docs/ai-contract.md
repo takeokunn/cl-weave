@@ -157,6 +157,24 @@ rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
 events with the suite reason in `:reason`; suite hooks and test bodies are not
 executed while the suite is suppressed.
 
+## Retry And Timeout Contract
+
+Case options are passed as a keyword plist immediately after the case name:
+
+```lisp
+(it "eventually stable" (:retry 2 :timeout-ms 500)
+  (expect (probe) :to-be :ready))
+```
+
+`:retry` is the number of extra attempts after the first attempt. Retries apply
+only to `:fail` and `:error` attempt events. The runner emits only the final
+event, so reporter schemas do not expose intermediate attempts.
+
+`:timeout-ms` is a per-attempt wall-clock budget. When an attempt times out, the
+final event status is `:fail`, `:condition` prints a `test-timeout`, and
+`:assertion` is `nil`. Fixture hooks are still executed through the same
+`before-each` / `after-each` contract as ordinary test attempts.
+
 ## Table-Driven Macro Expansion
 
 `it-each`, `test-each`, and `describe-each` are compile-time expansion helpers,

@@ -49,6 +49,52 @@
    :reason reason
    :elapsed-internal-time (- (get-internal-real-time) start)))
 
+(defun retry-count (test)
+  (let ((retry (test-case-retry test)))
+    (if (and (integerp retry) (plusp retry))
+        retry
+        0)))
+
+(defun timeout-seconds (test)
+  (let ((timeout-ms (test-case-timeout-ms test)))
+    (when (and (numberp timeout-ms) (plusp timeout-ms))
+      (/ timeout-ms 1000.0))))
+
+(defun call-test-case-with-timeout/k (suite test timeout continue)
+  (if timeout
+      (sb-ext:with-timeout timeout
+        (call-test-case/k suite test continue))
+      (call-test-case/k suite test continue)))
+
+(defun run-test-attempt (suite test start)
+  (handler-case
+      (call-test-case-with-timeout/k
+       suite
+       test
+       (timeout-seconds test)
+       (lambda ()
+         (make-event :pass suite test start)))
+    (sb-ext:timeout ()
+      (let ((condition (make-condition 'test-timeout
+                                       :timeout-ms (test-case-timeout-ms test))))
+        (make-event :fail suite test start :condition condition)))
+    (assertion-failure (condition)
+      (make-event :fail suite test start
+                  :condition condition
+                  :assertion (failure-detail condition)))
+    (condition (condition)
+      (make-event :error suite test start :condition condition))))
+
+(defun retryable-event-p (event)
+  (member (test-event-status event) '(:fail :error)))
+
+(defun run-test-attempts/k (suite test start remaining-retries)
+  (let ((event (run-test-attempt suite test start)))
+    (if (and (plusp remaining-retries)
+             (retryable-event-p event))
+        (run-test-attempts/k suite test start (1- remaining-retries))
+        event)))
+
 (defun focused-child-p (child)
   (typecase child
     (suite
@@ -98,18 +144,7 @@
       ((test-case-skip-reason test)
        (make-event :skip suite test start :reason (test-case-skip-reason test)))
       (t
-       (handler-case
-           (call-test-case/k
-            suite
-            test
-            (lambda ()
-              (make-event :pass suite test start)))
-         (assertion-failure (condition)
-           (make-event :fail suite test start
-                       :condition condition
-                       :assertion (failure-detail condition)))
-         (condition (condition)
-           (make-event :error suite test start :condition condition)))))))
+       (run-test-attempts/k suite test start (retry-count test))))))
 
 (defun suite-suppression (suite inherited-status inherited-reason)
   (cond
