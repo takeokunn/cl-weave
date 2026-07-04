@@ -14,7 +14,8 @@ Early MVP. The current focus is a solid core:
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
 - `it-each` compile-time table tests
-- `before-each` / `after-each` dynamic fixtures
+- `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
+- `it-skip` / `test-skip` skipped cases
 - ASDF system definitions
 - spec and S-expression reporters
 - non-zero process exit on failure for CI
@@ -113,18 +114,34 @@ Built-in matchers:
 (defvar *state*)
 
 (describe "with fixture"
-  (before-each
+  (before-all
     (setf *state* (make-hash-table)))
 
+  (before-each
+    (setf (gethash :trace *state*) nil))
+
   (after-each
-    (clrhash *state*))
+    (remhash :trace *state*))
+
+  (after-all
+    (setf *state* nil))
 
   (it "uses dynamic state"
     (setf (gethash :x *state*) 1)
     (expect (gethash :x *state*) :to-be 1)))
 ```
 
-Fixture bodies run around every test in the current suite and nested suites.
+`before-all` / `after-all` bodies run once around a suite. `before-each` /
+`after-each` bodies run around every test in the current suite and nested suites.
+
+### Skipping
+
+```lisp
+(it-skip "documents a pending case" "waiting for upstream behavior")
+(test-skip "alias for it-skip")
+```
+
+Skipped cases are reported as `:skip` and do not fail `run-all`.
 
 ### Mocking
 

@@ -35,62 +35,75 @@
   (append (mapcar #'suite-name (rest (suite-lineage suite)))
           (list (test-case-name test))))
 
-(defun make-event (status suite test start &key condition assertion)
+(defun make-event (status suite test start &key condition assertion reason)
   (make-test-event
    :status status
    :path (test-path suite test)
    :condition condition
    :assertion assertion
+   :reason reason
    :elapsed-internal-time (- (get-internal-real-time) start)))
 
 (defun run-test-case (suite test)
   (let ((start (get-internal-real-time)))
-    (handler-case
-        (call-test-case/k
-         suite
-         test
-         (lambda ()
-           (make-event :pass suite test start)))
-      (assertion-failure (condition)
-        (make-event :fail suite test start
-                    :condition condition
-                    :assertion (failure-detail condition)))
-      (condition (condition)
-        (make-event :error suite test start :condition condition)))))
+    (if (test-case-skip-reason test)
+        (make-event :skip suite test start :reason (test-case-skip-reason test))
+        (handler-case
+            (call-test-case/k
+             suite
+             test
+             (lambda ()
+               (make-event :pass suite test start)))
+          (assertion-failure (condition)
+            (make-event :fail suite test start
+                        :condition condition
+                        :assertion (failure-detail condition)))
+          (condition (condition)
+            (make-event :error suite test start :condition condition))))))
 
 (declaim (ftype (function (suite list function) *) collect-children/k))
 
 (defun collect-suite-events/k (suite continue)
-  (collect-children/k
-   suite
-   (suite-children suite)
-   (lambda (events)
-     (funcall continue events))))
+  (unwind-protect
+       (call-hooks/k
+        (suite-before-all suite)
+        (lambda ()
+          (collect-children/k
+           suite
+           (suite-children suite)
+           (lambda (events)
+             (funcall continue events)))))
+    (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil))))
 
 (defun collect-children/k (suite children continue)
   (if (null children)
       (funcall continue '())
       (let ((child (first children)))
-        (collect-children/k
-         suite
-         (rest children)
-         (lambda (tail)
-           (typecase child
-             (suite
-              (collect-suite-events/k
-               child
-               (lambda (events)
-                 (funcall continue (append events tail)))))
-              (test-case
-               (funcall continue (cons (run-test-case suite child) tail)))
-              (t
-               (funcall continue tail))))))))
+        (typecase child
+          (suite
+           (collect-suite-events/k
+            child
+            (lambda (events)
+              (collect-children/k
+               suite
+               (rest children)
+               (lambda (tail)
+                 (funcall continue (append events tail)))))))
+          (test-case
+           (let ((event (run-test-case suite child)))
+             (collect-children/k
+              suite
+              (rest children)
+              (lambda (tail)
+                (funcall continue (cons event tail))))))
+          (t
+           (collect-children/k suite (rest children) continue))))))
 
 (defun collect-events (suite)
   (collect-suite-events/k suite #'identity))
 
 (defun passed-event-p (event)
-  (eq (test-event-status event) :pass))
+  (member (test-event-status event) '(:pass :skip)))
 
 (defun run-all (&key (reporter :spec) (stream *standard-output*))
   (let ((events (collect-events (root-suite))))

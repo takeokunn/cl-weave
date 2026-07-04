@@ -8,12 +8,15 @@
   name
   parent
   (children '())
+  (before-all '())
+  (after-all '())
   (before-each '())
   (after-each '()))
 
 (defstruct test-case
   name
-  function)
+  function
+  skip-reason)
 
 (defstruct assertion-detail
   form
@@ -28,6 +31,7 @@
   path
   condition
   assertion
+  reason
   elapsed-internal-time)
 
 (define-condition test-failure (error)
@@ -59,9 +63,21 @@
       (funcall thunk))
     suite))
 
-(defun register-test (name function)
+(defun register-test (name function &key skip-reason)
   (let ((suite (or *current-suite* (root-suite))))
-    (add-child suite (make-test-case :name name :function function))))
+    (add-child suite (make-test-case :name name
+                                     :function function
+                                     :skip-reason skip-reason))))
+
+(defun register-before-all (function)
+  (let ((suite (or *current-suite* (root-suite))))
+    (setf (suite-before-all suite)
+          (append (suite-before-all suite) (list function)))))
+
+(defun register-after-all (function)
+  (let ((suite (or *current-suite* (root-suite))))
+    (setf (suite-after-all suite)
+          (append (suite-after-all suite) (list function)))))
 
 (defun register-before-each (function)
   (let ((suite (or *current-suite* (root-suite))))

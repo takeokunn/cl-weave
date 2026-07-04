@@ -7,6 +7,7 @@
 (defun status-marker (status)
   (ecase status
     (:pass "PASS")
+    (:skip "SKIP")
     (:fail "FAIL")
     (:error "ERROR")))
 
@@ -24,22 +25,26 @@
 
 (defun report-spec (events stream)
   (let ((passed 0)
+        (skipped 0)
         (failed 0)
         (errored 0))
     (dolist (event events)
       (ecase (test-event-status event)
         (:pass (incf passed))
+        (:skip (incf skipped))
         (:fail (incf failed))
         (:error (incf errored)))
       (format stream "~&[~A] ~A (~,3Fs)"
               (status-marker (test-event-status event))
               (path-string (test-event-path event))
               (event-duration-seconds event))
-      (unless (eq (test-event-status event) :pass)
+      (when (test-event-reason event)
+        (format stream "~&    reason: ~A" (test-event-reason event)))
+      (unless (member (test-event-status event) '(:pass :skip))
         (format stream "~&    condition: ~A" (test-event-condition event))
         (report-assertion-detail (test-event-assertion event) stream)))
-    (format stream "~&~%~D passed, ~D failed, ~D errored, ~D total~%"
-            passed failed errored (length events))
+    (format stream "~&~%~D passed, ~D skipped, ~D failed, ~D errored, ~D total~%"
+            passed skipped failed errored (length events))
     (values)))
 
 (defun serializable-event (event)
@@ -47,7 +52,8 @@
         :path (test-event-path event)
         :seconds (event-duration-seconds event)
         :condition (when (test-event-condition event)
-                     (princ-to-string (test-event-condition event)))
+                      (princ-to-string (test-event-condition event)))
+        :reason (test-event-reason event)
         :assertion (let ((detail (test-event-assertion event)))
                       (when detail
                         (list :form (assertion-detail-form detail)
@@ -59,9 +65,10 @@
 
 (defun report-sexp (events stream)
   (prin1 (list :cl-weave/results
-               :schema-version 1
-               :passed (count :pass events :key #'test-event-status)
-               :failed (count :fail events :key #'test-event-status)
+                :schema-version 1
+                :passed (count :pass events :key #'test-event-status)
+                :skipped (count :skip events :key #'test-event-status)
+                :failed (count :fail events :key #'test-event-status)
                :errored (count :error events :key #'test-event-status)
                :events (mapcar #'serializable-event events))
          stream)

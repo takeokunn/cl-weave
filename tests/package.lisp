@@ -4,11 +4,14 @@
    #:describe)
   (:import-from #:cl-weave
    #:*test-context*
+   #:after-all
    #:after-each
    #:assertion-failure
+   #:before-all
    #:before-each
    #:clear-tests
    #:expect
    #:it
    #:it-each
+   #:it-skip
    #:with-mocked-functions))

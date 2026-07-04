@@ -6,6 +6,9 @@
 (defmacro it (name &body body)
   `(register-test ,name (lambda () ,@body)))
 
+(defmacro it-skip (name &optional (reason "skipped"))
+  `(register-test ,name (lambda () nil) :skip-reason ,reason))
+
 (defmacro it-each (cases name bindings &body body)
   `(progn
      ,@(loop for case in cases
@@ -15,6 +18,15 @@
 
 (defmacro test (name &body body)
   `(it ,name ,@body))
+
+(defmacro test-skip (name &optional (reason "skipped"))
+  `(it-skip ,name ,reason))
+
+(defmacro before-all (&body body)
+  `(register-before-all (lambda () ,@body)))
+
+(defmacro after-all (&body body)
+  `(register-after-all (lambda () ,@body)))
 
 (defmacro before-each (&body body)
   `(register-before-each (lambda () ,@body)))

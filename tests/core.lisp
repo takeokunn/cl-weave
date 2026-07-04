@@ -3,6 +3,7 @@
 (cl-weave:clear-tests)
 
 (defvar *fixture-value* nil)
+(defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
 
 (defmacro sample-unless (condition &body body)
@@ -79,18 +80,43 @@
                  (progn (setf *fixture-value* :done)))))
 
 (describe "fixtures"
+  (before-all
+    (setf *fixture-events* (list :before-all)))
+
   (before-each
     (setf *fixture-value* 41)
+    (push :before-each *fixture-events*)
     (setf (gethash :trace *test-context*) '(:before)))
 
   (after-each
+    (push :after-each *fixture-events*)
     (setf *fixture-value* nil))
 
+  (after-all
+    (setf *fixture-events* nil))
+
   (it "runs before-each with dynamic context"
+    (expect *fixture-events* :to-equal '(:before-each :before-all))
     (expect *fixture-value* :to-be 41)
     (expect (gethash :trace *test-context*) :to-equal '(:before))
     (incf *fixture-value*)
-    (expect *fixture-value* :to-be 42)))
+    (expect *fixture-value* :to-be 42))
+
+  (it "keeps before-all state across cases"
+    (expect *fixture-events* :to-equal '(:before-each :after-each :before-each :before-all))))
+
+(describe "skips"
+  (it-skip "does not run skipped tests" "documented gap")
+
+  (it "reports skipped tests without failing the suite"
+    (let* ((test (cl-weave::make-test-case
+                  :name "skipped case"
+                  :function (lambda () (error "should not run"))
+                  :skip-reason "not implemented"))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect (cl-weave::test-event-status event) :to-be :skip)
+      (expect (cl-weave::test-event-reason event) :to-equal "not implemented")
+      (expect (cl-weave::passed-event-p event) :to-be-truthy))))
 
 (describe "mocking"
   (it "restores symbol functions"
@@ -105,11 +131,17 @@
 (describe "reporters"
   (it "prints AI-readable S-expression results"
     (let ((output (with-output-to-string (stream)
-                    (cl-weave::report-sexp
-                     (list (cl-weave::make-test-event
-                            :status :pass
-                            :path '("reporters" "prints")
-                            :elapsed-internal-time 0))
-                     stream))))
+                      (cl-weave::report-sexp
+                      (list (cl-weave::make-test-event
+                             :status :pass
+                             :path '("reporters" "prints")
+                             :elapsed-internal-time 0)
+                            (cl-weave::make-test-event
+                             :status :skip
+                             :path '("reporters" "skips")
+                             :reason "example"
+                             :elapsed-internal-time 0))
+                      stream))))
       (expect output :to-contain ":CL-WEAVE/RESULTS")
+      (expect output :to-contain ":SKIPPED")
       (expect output :to-contain ":SCHEMA-VERSION"))))
