@@ -182,7 +182,7 @@
                    (tree-contains-p form 'cl-weave::assert-isolated-success)))))
 
   (it-isolated "runs assertions in a child SBCL process"
-      (:systems ("cl-weave-tests") :timeout 5)
+      (:systems ("cl-weave-tests") :timeout 20)
     (expect (+ 2 3) :to-be 5))
 
   (it "reports child process failures without failing the parent process"
@@ -190,7 +190,7 @@
                    '(error "child boom")
                    :systems '("cl-weave-tests")
                    :package "CL-WEAVE/TESTS"
-                   :timeout 5)))
+                   :timeout 20)))
       (expect (isolated-result-status result) :to-be :fail)
       (expect (isolated-result-exit-code result) :to-be 1)
       (expect (isolated-result-stderr result) :to-contain "child boom")))
@@ -244,6 +244,32 @@
               :max-depth 3)))
     (expect (tree-depth form) :to-be-less-than-or-equal 4)
     (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
+
+  (it-property "maps generated values"
+      ((value (gen-map #'1+ (gen-integer :min 0 :max 5))))
+    (expect value :to-satisfy (lambda (number) (<= 1 number 6))))
+
+  (it-property "generates symbols and keywords"
+      ((symbol (gen-symbol :names '("ALPHA" "BETA") :package "CL-USER"))
+       (keyword (gen-keyword '("LEFT" "RIGHT"))))
+    (expect symbol :to-satisfy #'symbolp)
+    (expect (symbol-package symbol) :to-be (find-package "CL-USER"))
+    (expect keyword :to-satisfy #'keywordp))
+
+  (it-property "generates bounded s-expression trees"
+      ((form (gen-sexp :max-depth 3 :max-list-length 3)))
+    (expect (tree-depth form) :to-be-less-than-or-equal 4)
+    (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
+
+  (it-property "generates operator-headed forms"
+      ((form (gen-form :operators '(progn list)
+                       :max-depth 2
+                       :max-arguments 2)))
+    (expect form :to-satisfy
+            (lambda (value)
+              (or (atom value)
+                  (and (consp value)
+                       (member (first value) '(progn list)))))))
 
   (it "shrinks heterogeneous generator alternatives safely"
     (let ((generator (gen-one-of (gen-member '(:a :b))

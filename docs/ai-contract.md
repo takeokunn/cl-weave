@@ -185,9 +185,14 @@ values in `:actual`:
  :expected (value command))
 ```
 
-Generator combinators do not create new event types. `gen-one-of`,
-`gen-recursive`, `gen-tuple`, and `gen-such-that` only affect generated values
-and shrink candidates before the same `assertion-failure` payload is reported.
+Generator combinators do not create new event types. `src/property.lisp` owns
+generator data, value production, shrinking, and property execution;
+`src/dsl.lisp` only expands `it-property` into that runner. `gen-map`,
+`gen-one-of`, `gen-recursive`, `gen-tuple`, and `gen-such-that` only affect
+generated values and shrink candidates before the same `assertion-failure`
+payload is reported. `gen-symbol`, `gen-keyword`, `gen-sexp`, and `gen-form`
+are convenience generators for Lisp-native property tests and macro-expansion
+inputs.
 
 ## Isolated Process Contract
 

@@ -14,6 +14,7 @@
      (:file "model")
      (:file "isolation")
      (:file "matchers")
+     (:file "property")
      (:file "dsl")
      (:file "reporters")
      (:file "runner")

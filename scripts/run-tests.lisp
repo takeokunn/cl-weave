@@ -8,6 +8,7 @@
                   "src/model.lisp"
                   "src/isolation.lisp"
                   "src/matchers.lisp"
+                  "src/property.lisp"
                   "src/dsl.lisp"
                   "src/reporters.lisp"
                   "src/runner.lisp"

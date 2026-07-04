@@ -13,12 +13,17 @@
     #:clear-tests
     #:expect
     #:gen-boolean
+    #:gen-form
     #:gen-integer
+    #:gen-keyword
     #:gen-list
+    #:gen-map
     #:gen-member
     #:gen-one-of
     #:gen-recursive
+    #:gen-sexp
     #:gen-such-that
+    #:gen-symbol
     #:gen-tuple
     #:it
     #:it-each

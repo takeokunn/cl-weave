@@ -14,11 +14,16 @@
    #:expect
    #:gen-boolean
    #:gen-integer
+   #:gen-keyword
    #:gen-list
+   #:gen-map
    #:gen-member
    #:gen-one-of
    #:gen-recursive
+   #:gen-form
+   #:gen-sexp
    #:gen-such-that
+   #:gen-symbol
    #:gen-tuple
    #:*isolated-timeout-seconds*
    #:assert-isolated-success

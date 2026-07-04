@@ -224,9 +224,14 @@ Built-in generators:
 - `(gen-integer :min -100 :max 100)`
 - `(gen-boolean)`
 - `(gen-member '(:a :b :c))`
+- `(gen-map function generator :name :derived)`
 - `(gen-list generator :min-length 0 :max-length 8)`
 - `(gen-one-of generator-a generator-b ...)`
 - `(gen-recursive base-generator builder :max-depth 4)`
+- `(gen-symbol :names '("x" "y") :package "CL-USER")`
+- `(gen-keyword '("left" "right"))`
+- `(gen-sexp :max-depth 4 :max-list-length 4)`
+- `(gen-form :operators '(progn list cons) :max-depth 4 :max-arguments 3)`
 - `(gen-tuple generator-a generator-b ...)`
 - `(gen-such-that predicate generator :attempts 100)`
 
@@ -234,9 +239,10 @@ Generator combinators keep data and logic separate: generators describe how
 values are produced and shrunk, while `it-property` owns execution, failure
 capture, and reporting. `gen-list` shrinks both list structure and individual
 elements; `gen-recursive` gives the builder a self-referential generator for
-bounded S-expression and AST shapes; `gen-tuple` shrinks each slot through its
-corresponding generator; `gen-such-that` keeps generated and shrunk values
-inside the predicate.
+bounded S-expression and AST shapes; `gen-sexp` and `gen-form` provide common
+Lisp data and macro-expansion inputs without embedding runner logic in tests;
+`gen-tuple` shrinks each slot through its corresponding generator;
+`gen-such-that` keeps generated and shrunk values inside the predicate.
 
 ```lisp
 (it-property "command shape is stable"
@@ -249,13 +255,9 @@ inside the predicate.
     (expect count :to-satisfy #'plusp)))
 
 (it-property "forms stay bounded"
-    ((form (gen-recursive
-            (gen-member '(:x :y 0 1))
-            (lambda (self)
-              (gen-one-of
-               (gen-list self :min-length 1 :max-length 3)
-               (gen-tuple (gen-member '(quote if progn)) self)))
-            :max-depth 3)))
+    ((form (gen-form :operators '(quote if progn)
+                     :max-depth 3
+                     :max-arguments 2)))
   (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
 ```
 
@@ -429,7 +431,7 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit` or
 
 MVP quality comes first. The intended direction is:
 
-- richer recursive data generators
+- mutation testing and coverage integration
 
 ## License
 
