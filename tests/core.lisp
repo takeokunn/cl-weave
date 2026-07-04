@@ -1792,6 +1792,27 @@
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
 
+  (it "escapes JSON strings with portable control-character rules"
+    (let ((escaped (cl-weave::json-escaped-string
+                    (coerce (list #\" #\\
+                                  (code-char 8)
+                                  (code-char 9)
+                                  (code-char 10)
+                                  (code-char 12)
+                                  (code-char 13)
+                                  (code-char 1))
+                            'string))))
+      (expect escaped :to-equal
+              (concatenate 'string
+                           "\\\""
+                           "\\\\"
+                           "\\b"
+                           "\\t"
+                           "\\n"
+                           "\\f"
+                           "\\r"
+                           "\\u0001"))))
+
   (it "prints AI-readable S-expression test plans"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-plan-sexp
@@ -1883,6 +1904,26 @@
       (expect output :to-contain "<skipped message=\"needs &lt;thing&gt;\"/>")
       (expect output :to-contain "<skipped message=\"TODO: pending\"/>")
       (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">")))
+
+  (it "sanitizes JUnit XML strings with portable control-character rules"
+    (let ((escaped (cl-weave::xml-escaped-string
+                    (coerce (list #\< #\> #\& #\" #\'
+                                  (code-char 9)
+                                  (code-char 10)
+                                  (code-char 13)
+                                  (code-char 1))
+                            'string))))
+      (expect escaped :to-equal
+              (concatenate 'string
+                           "&lt;"
+                           "&gt;"
+                           "&amp;"
+                           "&quot;"
+                           "&apos;"
+                           (string (code-char 9))
+                           (string (code-char 10))
+                           (string (code-char 13))
+                           "?"))))
 
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
