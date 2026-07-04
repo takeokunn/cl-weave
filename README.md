@@ -38,7 +38,7 @@ Early MVP. The current focus is a solid core:
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - ASDF-aware system runner and watch mode
-- spec, S-expression, JSON, TAP, GitHub Actions, and JUnit XML reporters
+- spec, S-expression, JSON, JSONL/NDJSON, TAP, GitHub Actions, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -82,6 +82,7 @@ agents:
 
 ```sh
 nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
+nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
 nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
 nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
@@ -95,6 +96,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 ```sh
 nix flake check --print-build-logs
 nix run . -- run cl-weave-tests --reporter json --output cl-weave-cli-results.json
+nix develop --command env CL_WEAVE_REPORTER=jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
@@ -647,7 +649,7 @@ and exits with status `0`:
 CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
-List mode supports `spec`, `sexp`, and `json` reporters. `CL_WEAVE_OUTPUT_FILE`
+List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `CL_WEAVE_OUTPUT_FILE`
 can write the plan payload to an artifact file.
 
 AI agents can also query plans as plain Lisp facts:
@@ -754,6 +756,7 @@ must stay alive.
 (cl-weave:run-all :reporter :spec)
 (cl-weave:run-all :reporter :sexp)
 (cl-weave:run-all :reporter :json)
+(cl-weave:run-all :reporter :jsonl)
 (cl-weave:run-all :reporter :tap)
 (cl-weave:run-all :reporter :github)
 (cl-weave:run-all :reporter :junit)
@@ -771,10 +774,12 @@ Projects remain responsible for loading code with SBCL coverage instrumentation;
 cl-weave only manages the test-run reset/save boundary.
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
-reporter is the stable external-tool interface. Both include failed and errored
-path summaries for focused reruns. See `docs/ai-contract.md`.
+reporter is the stable external-tool interface. The `:jsonl` reporter emits one
+JSON object per line for streaming CI logs and agent ingestion. These structured
+reporters include failed and errored path summaries for focused reruns. See
+`docs/ai-contract.md`.
 
-`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`,
+`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`, `ndjson`,
 `tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
@@ -790,7 +795,7 @@ Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
 artifact file while preserving the process exit code contract. Use `tap` for
 line-oriented CI logs, `github` for GitHub Actions annotations, and `junit`
 when a CI service should ingest test results as XML. List mode supports `spec`,
-`sexp`, and `json`.
+`sexp`, `json`, and `jsonl`.
 
 The CLI keeps kebab-case flags as the canonical Lisp spelling and exposes
 Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
@@ -827,7 +832,8 @@ CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run
 ```
 
 CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
-`CL_WEAVE_REPORTER=tap`, or `CL_WEAVE_REPORTER=json`.
+`CL_WEAVE_REPORTER=tap`, `CL_WEAVE_REPORTER=json`, or
+`CL_WEAVE_REPORTER=jsonl`.
 
 ## License
 

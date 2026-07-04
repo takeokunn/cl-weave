@@ -149,6 +149,25 @@ Common Lisp does not expose reliable source line numbers across implementations,
 so the stable contract is the source file path only. JSON reporters emit
 `null` when a test was constructed manually without location metadata.
 
+The JSONL reporter is a streaming contract for CI logs and AI agents:
+
+```lisp
+(cl-weave:run-all :reporter :jsonl)
+```
+
+It prints one JSON object per line:
+
+```jsonl
+{"schemaVersion":1,"kind":"test-results-start","total":1}
+{"schemaVersion":1,"kind":"test-event","event":{"status":"pass","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"seconds":0.0,"durationMs":0.0,"condition":null,"reason":null,"assertion":null}}
+{"schemaVersion":1,"kind":"test-results-summary","passed":1,"skipped":0,"todos":0,"failed":0,"errored":0,"failedPaths":[],"erroredPaths":[]}
+```
+
+`test-event.event` uses the same object shape as JSON result `events` entries.
+`test-results-summary` uses the same counts and rerun path summaries as the JSON
+result root object. The alias `CL_WEAVE_REPORTER=ndjson` selects the same
+reporter as `jsonl`.
+
 For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
 same reporter payload directly to an artifact file:
 
@@ -555,7 +574,16 @@ execution. Suite-level skip and todo suppression produces selected descendant
 plan entries without running suite hooks or case bodies. `pathString` can be
 fed back to `CL_WEAVE_TEST_FILTER` for focused execution after discovery.
 
-List mode supports `spec`, `sexp`, and `json` reporters. It exits with status
+The JSONL test plan reporter uses the same entry shape as JSON test plan
+`tests` entries:
+
+```jsonl
+{"schemaVersion":1,"kind":"test-plan-start","total":1}
+{"schemaVersion":1,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false}}
+{"schemaVersion":1,"kind":"test-plan-summary","total":1,"runnable":1,"skipped":0,"todos":0}
+```
+
+List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. It exits with status
 `0` after writing the plan, including when no tests match.
 
 Agents that need symbolic selection can avoid parsing reporter output and use

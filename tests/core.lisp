@@ -1666,6 +1666,8 @@
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
+      (expect (cl-weave/cli::parse-reporter "jsonl") :to-be :jsonl)
+      (expect (cl-weave/cli::parse-reporter "ndjson") :to-be :jsonl)
       (expect (cl-weave/cli::parse-reporter "github") :to-be :github)
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "parser")
       (expect (cl-weave/cli::cli-options-output-file options)
@@ -2112,6 +2114,34 @@
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
 
+  (it "prints AI-readable JSONL result streams"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-jsonl
+                     (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("reporters" "jsonl")
+                            :location '(:file "tests/reporters.lisp")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "fails")
+                            :reason "bad"
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect (with-input-from-string (stream output)
+                (loop for line = (read-line stream nil nil)
+                      while line
+                      count line))
+              :to-be 4)
+      (expect output :to-contain "\"kind\":\"test-results-start\"")
+      (expect output :to-contain "\"total\":2")
+      (expect output :to-contain "\"kind\":\"test-event\"")
+      (expect output :to-contain "\"event\":{\"status\":\"pass\"")
+      (expect output :to-contain "\"pathString\":\"reporters > jsonl\"")
+      (expect output :to-contain "\"kind\":\"test-results-summary\"")
+      (expect output :to-contain "\"failed\":1")
+      (expect output :to-contain "\"failedPaths\":[\"reporters > fails\"]")))
+
   (it "escapes JSON strings with portable control-character rules"
     (let ((escaped (cl-weave::json-escaped-string
                     (coerce (list #\" #\\
@@ -2192,6 +2222,37 @@
       (expect output :to-contain "\"timeoutMs\":250")
       (expect output :to-contain "\"concurrent\":true")
       (expect output :to-contain "\"reason\":\"blocked\"")))
+
+  (it "prints AI-readable JSONL test plans"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-plan-jsonl
+                     (list (cl-weave::make-test-plan-entry
+                            :status :run
+                            :path '("plan" "runs")
+                            :location '(:file "tests/plan.lisp")
+                            :focused t
+                            :retry 2
+                            :timeout-ms 250
+                            :concurrent t)
+                           (cl-weave::make-test-plan-entry
+                            :status :skip
+                            :path '("plan" "skips")
+                            :reason "blocked"
+                            :focused nil
+                            :retry 0))
+                     stream))))
+      (expect (with-input-from-string (stream output)
+                (loop for line = (read-line stream nil nil)
+                      while line
+                      count line))
+              :to-be 4)
+      (expect output :to-contain "\"kind\":\"test-plan-start\"")
+      (expect output :to-contain "\"kind\":\"test-plan-entry\"")
+      (expect output :to-contain "\"test\":{\"status\":\"run\"")
+      (expect output :to-contain "\"pathString\":\"plan > runs\"")
+      (expect output :to-contain "\"kind\":\"test-plan-summary\"")
+      (expect output :to-contain "\"runnable\":1")
+      (expect output :to-contain "\"skipped\":1")))
 
   (it "prints CI-readable JUnit XML results"
     (let ((output (with-output-to-string (stream)

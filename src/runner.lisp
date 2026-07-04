@@ -907,6 +907,7 @@
          (:spec (report-spec events stream))
          (:sexp (report-sexp events stream))
          (:json (report-json events stream))
+         (:jsonl (report-jsonl events stream))
          (:tap (report-tap events stream))
          (:github (report-github events stream))
          (:junit (report-junit events stream)))
@@ -928,5 +929,6 @@
     (ecase reporter
       (:spec (report-plan-spec plan stream))
       (:sexp (report-plan-sexp plan stream))
-      (:json (report-plan-json plan stream)))
+      (:json (report-plan-json plan stream))
+      (:jsonl (report-plan-jsonl plan stream)))
     plan))

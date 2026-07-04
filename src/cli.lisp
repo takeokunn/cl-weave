@@ -105,6 +105,7 @@
       ((string= normalized "spec") :spec)
       ((string= normalized "sexp") :sexp)
       ((string= normalized "json") :json)
+      ((member normalized '("jsonl" "ndjson") :test #'string=) :jsonl)
       ((string= normalized "tap") :tap)
       ((string= normalized "github") :github)
       ((string= normalized "junit") :junit)
@@ -389,7 +390,7 @@
             "Options:"
             "  --system SYSTEM           ASDF system to load before running tests"
             "  --load FILE               Lisp file to load before running tests"
-            "  --reporter REPORTER       spec, sexp, json, tap, github, or junit"
+            "  --reporter REPORTER       spec, sexp, json, jsonl, tap, github, or junit"
             "  --filter, --testNamePattern TEXT"
             "                            run tests whose Vitest-style path contains TEXT"
             "  --output FILE             write reporter output to FILE"
@@ -420,7 +421,7 @@
   (when (and (cli-options-list options)
              (member (cli-options-reporter options) '(:tap :github :junit)))
     (error 'cli-error
-           :message "List mode supports spec, sexp, and json reporters.")))
+           :message "List mode supports spec, sexp, json, and jsonl reporters.")))
 
 (defun load-requested-inputs (options)
   (dolist (system (cli-options-systems options))
