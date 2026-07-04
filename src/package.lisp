@@ -10,6 +10,7 @@
    #:before-each
    #:clear-tests
    #:describe
+   #:describe-each
    #:describe-only
    #:expect
    #:gen-boolean
@@ -56,6 +57,7 @@
    #:run-isolated
    #:run-system
    #:test
+   #:test-each
    #:test-only
    #:test-skip
    #:test-todo

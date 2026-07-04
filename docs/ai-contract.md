@@ -152,6 +152,27 @@ Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
 the run is considered successful because no selected test failed.
 
+## Table-Driven Macro Expansion
+
+`it-each`, `test-each`, and `describe-each` are compile-time expansion helpers,
+not runtime loop constructs.
+
+```lisp
+(it-each ((1 2 3)
+          (13 21 34))
+    "adds ~A and ~A"
+    (left right total)
+  (expect (+ left right) :to-be total))
+```
+
+`it-each` and `test-each` emit independent `it` registrations. `describe-each`
+emits independent `describe` registrations, and the generated suite bodies use
+the same fixture, assertion, filtering, and reporter contracts as hand-written
+suites.
+
+Reporters do not expose table metadata. Agents should treat expanded table cases
+as ordinary events whose identity is the formatted path emitted by the runner.
+
 ## ASDF Runner Contract
 
 Agents can discover declared source files before choosing a focused run:

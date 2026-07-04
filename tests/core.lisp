@@ -143,6 +143,22 @@
       (left right total)
     (expect (+ left right) :to-be total))
 
+  (test-each ((2 3 5)
+              (5 8 13))
+      "aliases test-each for ~A and ~A"
+      (left right total)
+    (expect (+ left right) :to-be total))
+
+  (describe-each ((3 4 7)
+                  (8 13 21))
+      "table suite ~A plus ~A"
+      (left right total)
+    (before-each
+      (setf (gethash :table-total *test-context*) total))
+    (it "runs generated nested cases with fixtures"
+      (expect (+ left right) :to-be total)
+      (expect (gethash :table-total *test-context*) :to-be total)))
+
   (it "expands expect into the assertion engine"
     (expect (macroexpand-1 '(expect (+ 1 1) :to-be 2))
             :to-satisfy
@@ -162,6 +178,27 @@
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::register-test)
                    (tree-contains-p form :focus)))))
+
+  (it "expands describe-each into independent suites"
+    (expect (macroexpand-1
+             '(describe-each ((1 2 3))
+                  "suite ~A"
+                  (left right total)
+                (it "adds" (expect (+ left right) :to-be total))))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::describe)
+                   (tree-contains-p form 'destructuring-bind)))))
+
+  (it "expands test-each through the it-each macro"
+    (expect (macroexpand-1
+             '(test-each ((1 2 3))
+                  "adds ~A and ~A"
+                  (left right total)
+                (expect (+ left right) :to-be total)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:it-each))))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))

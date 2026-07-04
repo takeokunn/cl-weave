@@ -10,26 +10,27 @@
    #:before-all
    #:before-each
    #:clear-mock
-    #:clear-tests
-    #:expect
-    #:gen-boolean
-    #:gen-form
-    #:gen-integer
-    #:gen-keyword
-    #:gen-list
-    #:gen-map
-    #:gen-member
-    #:gen-one-of
-    #:gen-recursive
-    #:gen-sexp
-    #:gen-such-that
-    #:gen-symbol
-    #:gen-tuple
-    #:it
-    #:it-each
-    #:it-isolated
-    #:it-property
-    #:it-only
+   #:clear-tests
+   #:describe-each
+   #:expect
+   #:gen-boolean
+   #:gen-form
+   #:gen-integer
+   #:gen-keyword
+   #:gen-list
+   #:gen-map
+   #:gen-member
+   #:gen-one-of
+   #:gen-recursive
+   #:gen-sexp
+   #:gen-such-that
+   #:gen-symbol
+   #:gen-tuple
+   #:it
+   #:it-each
+   #:it-isolated
+   #:it-property
+   #:it-only
    #:it-skip
    #:it-todo
    #:isolated-result-exit-code
@@ -39,4 +40,5 @@
    #:make-mock-function
    #:mock-calls
    #:run-isolated
+   #:test-each
    #:with-mocked-functions))

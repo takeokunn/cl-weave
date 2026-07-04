@@ -14,7 +14,7 @@ Early MVP. The current focus is a solid core:
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
-- `it-each` compile-time table tests
+- `it-each` / `test-each` and `describe-each` compile-time table tests
 - `it-property` deterministic property tests with shrinking
 - `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
@@ -201,9 +201,24 @@ structured reporters, which keeps architecture tests AI-readable.
     "adds ~A and ~A"
     (left right total)
   (expect (+ left right) :to-be total))
+
+(test-each ((2 3 5)
+            (5 8 13))
+    "also adds ~A and ~A"
+    (left right total)
+  (expect (+ left right) :to-be total))
+
+(describe-each ((:json "application/json")
+                (:sexp "application/s-expression"))
+    "~A reporter"
+    (reporter content-type)
+  (it "declares its content type"
+    (expect content-type :to-satisfy #'stringp)))
 ```
 
-`it-each` expands into independent `it` forms at macro expansion time.
+`it-each` and `test-each` expand into independent `it` forms at macro expansion
+time. `describe-each` expands into independent `describe` forms, so nested
+fixtures and cases keep the same semantics as hand-written suites.
 
 ### Property Tests
 

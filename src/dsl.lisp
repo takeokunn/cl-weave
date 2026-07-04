@@ -6,6 +6,13 @@
 (defmacro describe-only (name &body body)
   `(register-suite ,name (lambda () ,@body) :focus t))
 
+(defmacro describe-each (cases name bindings &body body)
+  `(progn
+     ,@(loop for case in cases
+             collect `(describe ,(apply #'format nil name case)
+                        (destructuring-bind ,bindings ',case
+                          ,@body)))))
+
 (defmacro it (name &body body)
   `(register-test ,name (lambda () ,@body)))
 
@@ -73,6 +80,9 @@
 
 (defmacro test (name &body body)
   `(it ,name ,@body))
+
+(defmacro test-each (cases name bindings &body body)
+  `(it-each ,cases ,name ,bindings ,@body))
 
 (defmacro test-only (name &body body)
   `(it-only ,name ,@body))
