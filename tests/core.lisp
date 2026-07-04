@@ -2224,6 +2224,42 @@
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
+  (it "parses bail control from CI environment data"
+    (labels ((bail-from (value)
+               (with-mocked-functions
+                   (((symbol-function 'uiop:getenv)
+                     (lambda (name)
+                       (when (string= name "CL_WEAVE_BAIL")
+                         value))))
+                 (cl-weave/cli::cli-options-bail
+                  (cl-weave/cli::options-from-environment)))))
+      (dolist (value '("0" "false" "no" "off" "nil"))
+        (expect (bail-from value) :to-be nil))
+      (dolist (value '("true" "yes" "on" "t"))
+        (expect (bail-from value) :to-be t))
+      (expect (bail-from "3") :to-be 3)
+      (dolist (value '("maybe" "-1" "1.5"))
+        (expect (lambda ()
+                  (bail-from value))
+                :to-throw
+                "--bail must be true, false, or a positive integer"))))
+
+  (it "requires explicit CI sequence seeds to be positive integers"
+    (labels ((seed-from (value)
+               (with-mocked-functions
+                   (((symbol-function 'uiop:getenv)
+                     (lambda (name)
+                       (when (string= name "CL_WEAVE_SEQUENCE_SEED")
+                         value))))
+                 (cl-weave/cli::cli-options-seed
+                  (cl-weave/cli::options-from-environment)))))
+      (expect (seed-from "42") :to-be 42)
+      (dolist (value '("0" "-1" "1.5" "abc"))
+        (expect (lambda ()
+                  (seed-from value))
+                :to-throw
+                "CL_WEAVE_SEQUENCE_SEED"))))
+
   (it "binds snapshot settings during CLI execution"
     (let ((observed nil)
           (options (cl-weave/cli::make-cli-options

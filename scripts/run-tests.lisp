@@ -100,13 +100,10 @@
        t)
       (t
        (multiple-value-bind (parsed position)
-           (let ((*read-eval* nil))
-             (read-from-string value))
-         (unless (and (integerp parsed)
+           (parse-integer value :junk-allowed t)
+         (unless (and parsed
                       (plusp parsed)
-                      (loop for index from position below (length value)
-                            always (find (char value index)
-                                         '(#\Space #\Tab #\Newline #\Return))))
+                      (= position (length value)))
            (error "cl-weave: CL_WEAVE_BAIL must be true, false, or a positive integer: ~A" value))
          parsed))))
   #-sbcl

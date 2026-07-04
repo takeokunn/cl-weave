@@ -119,9 +119,15 @@
 (defun parse-bail (value)
   (let ((normalized (string-downcase value)))
     (cond
-      ((member normalized '("true" "yes" "on") :test #'string=) t)
+      ((member normalized '("true" "yes" "on" "t") :test #'string=) t)
       ((member normalized '("false" "no" "off" "0" "nil") :test #'string=) nil)
-      (t (parse-positive-integer value "--bail")))))
+      (t
+       (let ((parsed (ignore-errors
+                       (parse-complete-integer value "--bail"))))
+         (unless (and parsed (plusp parsed))
+           (error 'cli-error
+                  :message (format nil "--bail must be true, false, or a positive integer: ~A" value)))
+         parsed)))))
 
 (defun parse-shard (value)
   (let ((slash (position #\/ value)))
