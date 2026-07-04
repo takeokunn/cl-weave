@@ -209,14 +209,17 @@ Built-in generators:
 - `(gen-member '(:a :b :c))`
 - `(gen-list generator :min-length 0 :max-length 8)`
 - `(gen-one-of generator-a generator-b ...)`
+- `(gen-recursive base-generator builder :max-depth 4)`
 - `(gen-tuple generator-a generator-b ...)`
 - `(gen-such-that predicate generator :attempts 100)`
 
 Generator combinators keep data and logic separate: generators describe how
 values are produced and shrunk, while `it-property` owns execution, failure
 capture, and reporting. `gen-list` shrinks both list structure and individual
-elements; `gen-tuple` shrinks each slot through its corresponding generator;
-`gen-such-that` keeps generated and shrunk values inside the predicate.
+elements; `gen-recursive` gives the builder a self-referential generator for
+bounded S-expression and AST shapes; `gen-tuple` shrinks each slot through its
+corresponding generator; `gen-such-that` keeps generated and shrunk values
+inside the predicate.
 
 ```lisp
 (it-property "command shape is stable"
@@ -227,6 +230,16 @@ elements; `gen-tuple` shrinks each slot through its corresponding generator;
   (destructuring-bind (kind count) command
     (expect kind :to-satisfy #'keywordp)
     (expect count :to-satisfy #'plusp)))
+
+(it-property "forms stay bounded"
+    ((form (gen-recursive
+            (gen-member '(:x :y 0 1))
+            (lambda (self)
+              (gen-one-of
+               (gen-list self :min-length 1 :max-length 3)
+               (gen-tuple (gen-member '(quote if progn)) self)))
+            :max-depth 3)))
+  (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
 ```
 
 Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or

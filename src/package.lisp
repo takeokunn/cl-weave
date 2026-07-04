@@ -17,6 +17,7 @@
    #:gen-list
    #:gen-member
    #:gen-one-of
+   #:gen-recursive
    #:gen-such-that
    #:gen-tuple
    #:it

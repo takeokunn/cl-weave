@@ -27,6 +27,7 @@
 
 (defvar *property-test-count* 100)
 (defvar *property-seed* 8675309)
+(defvar *recursive-generator-depth* nil)
 
 (defstruct property-rng
   state)
@@ -47,6 +48,12 @@
   (mapcar (lambda (generator)
             (ensure-property-generator generator label))
           generators))
+
+(defun property-shrink-candidates (generator value)
+  (handler-case
+      (funcall (property-generator-shrink generator) value)
+    (error ()
+      nil)))
 
 (defun environment-integer (name fallback)
   (or #+sbcl
@@ -152,7 +159,7 @@
      :shrink (lambda (value)
                (remove-duplicates
                 (loop for generator in choices
-                      append (funcall (property-generator-shrink generator) value))
+                      append (property-shrink-candidates generator value))
                 :test #'equal)))))
 
 (defun gen-tuple (&rest generators)
@@ -193,6 +200,40 @@
    :shrink (lambda (value)
              (remove-if-not predicate
                             (funcall (property-generator-shrink generator) value)))))
+
+(defun gen-recursive (base-generator builder &key (max-depth 4))
+  (ensure-property-generator base-generator "gen-recursive")
+  (unless (functionp builder)
+    (error "cl-weave: gen-recursive requires BUILDER to be a function, got ~S."
+           builder))
+  (unless (and (integerp max-depth) (not (minusp max-depth)))
+    (error "cl-weave: gen-recursive requires a non-negative integer MAX-DEPTH, got ~S."
+           max-depth))
+  (let (self step)
+    (labels ((produce-value (rng)
+               (let ((depth (or *recursive-generator-depth* max-depth)))
+                 (if (<= depth 0)
+                     (funcall (property-generator-produce base-generator) rng)
+                     (let ((*recursive-generator-depth* (1- depth)))
+                       (if (zerop (property-random-below rng 3))
+                           (funcall (property-generator-produce base-generator) rng)
+                           (funcall (property-generator-produce step) rng))))))
+             (shrink-value (value)
+               (remove-duplicates
+                (append (property-shrink-candidates base-generator value)
+                        (property-shrink-candidates step value))
+                :test #'equal)))
+      (setf self
+            (make-property-generator
+             :name :recursive-self
+             :produce #'produce-value
+             :shrink #'shrink-value))
+      (setf step (funcall builder self))
+      (ensure-property-generator step "gen-recursive builder")
+      (make-property-generator
+       :name :recursive
+       :produce #'produce-value
+       :shrink #'shrink-value))))
 
 (defun generated-property-values (generators rng)
   (mapcar (lambda (generator)

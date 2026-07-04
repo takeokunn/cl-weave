@@ -145,9 +145,9 @@ values in `:actual`:
  :expected (value command))
 ```
 
-Generator combinators do not create new event types. `gen-one-of`, `gen-tuple`,
-and `gen-such-that` only affect generated values and shrink candidates before
-the same `assertion-failure` payload is reported.
+Generator combinators do not create new event types. `gen-one-of`,
+`gen-recursive`, `gen-tuple`, and `gen-such-that` only affect generated values
+and shrink candidates before the same `assertion-failure` payload is reported.
 
 ## Stability
 

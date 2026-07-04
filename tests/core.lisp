@@ -26,6 +26,11 @@
          (tree-contains-p (cdr tree) value)))
     (t nil)))
 
+(defun tree-depth (tree)
+  (if (consp tree)
+      (1+ (reduce #'max tree :key #'tree-depth :initial-value 0))
+      0))
+
 (describe "expect"
   (matcher-pass-cases
     ("to-be" (expect 2 :to-be 2))
@@ -181,6 +186,29 @@
       ((value (gen-one-of (gen-member '(:left :right))
                           (gen-member '(:up :down)))))
     (expect '(:left :right :up :down) :to-contain value))
+
+  (it-property "generates bounded recursive s-expressions"
+      ((form (gen-recursive
+              (gen-member '(:x :y 0 1))
+              (lambda (self)
+                (gen-one-of
+                 (gen-list self :min-length 1 :max-length 3)
+                 (gen-tuple (gen-member '(quote if progn)) self)))
+              :max-depth 3)))
+    (expect (tree-depth form) :to-be-less-than-or-equal 4)
+    (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
+
+  (it "shrinks heterogeneous generator alternatives safely"
+    (let ((generator (gen-one-of (gen-member '(:a :b))
+                                 (gen-list (gen-member '(:x :y))
+                                           :min-length 1
+                                           :max-length 2))))
+      (expect (funcall (cl-weave::property-generator-shrink generator) :b)
+              :to-equal '(:a))
+      (expect (funcall (cl-weave::property-generator-shrink generator) '(:x :y))
+              :to-satisfy
+              (lambda (candidates)
+                (member '(:x) candidates :test #'equal)))))
 
   (it "reports generated and minimized values on failure"
     (handler-case
