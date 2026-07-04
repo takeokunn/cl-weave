@@ -302,12 +302,14 @@
         while changed
         finally (return current)))
 
-(defun signal-property-failure (names form values minimal condition)
+(defun signal-property-failure (names form values minimal seed case-index condition)
   (signal-assertion-failure
    (make-assertion-detail
     :form form
     :matcher :property
-    :actual (list :values values
+    :actual (list :seed seed
+                  :case-index case-index
+                  :values values
                   :minimal minimal
                   :condition (princ-to-string condition))
     :expected names
@@ -315,11 +317,12 @@
     :pass nil)))
 
 (defun run-property (generators function names form)
-  (let ((rng (make-property-rng-from-seed (property-seed))))
-    (loop repeat (property-test-count)
+  (let* ((seed (property-seed))
+         (rng (make-property-rng-from-seed seed)))
+    (loop for case-index from 0 below (property-test-count)
           for values = (generated-property-values generators rng)
           for condition = (property-failure-condition function values)
           when condition
             do (let ((minimal (shrink-property-values generators values function)))
-                 (signal-property-failure names form values minimal condition))))
+                 (signal-property-failure names form values minimal seed case-index condition))))
   t)

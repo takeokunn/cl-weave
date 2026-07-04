@@ -366,6 +366,10 @@
         (let* ((detail (cl-weave::failure-detail condition))
                (actual (cl-weave::assertion-detail-actual detail)))
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :property)
+          (expect actual :to-contain :seed)
+          (expect actual :to-contain :case-index)
+          (expect (getf actual :seed) :to-be 1)
+          (expect (getf actual :case-index) :to-be 0)
           (expect actual :to-contain :values)
           (expect actual :to-contain :minimal)))))
 

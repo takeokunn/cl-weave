@@ -241,10 +241,13 @@ Agents can discover declared source files before choosing a focused run:
 
 `it-property` failures are normal assertion failures with matcher `:property`.
 The assertion payload keeps the original generated values and the minimized
-values in `:actual`:
+values in `:actual`, plus the deterministic seed and zero-based generated case
+index needed for focused reproduction:
 
 ```lisp
-(:actual (:values (17 (:open 2))
+(:actual (:seed 12345
+          :case-index 7
+          :values (17 (:open 2))
           :minimal (1 (:open 1))
           :condition "Assertion failed ...")
  :expected (value command))
