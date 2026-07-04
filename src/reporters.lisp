@@ -4,6 +4,9 @@
   (/ (test-event-elapsed-internal-time event)
      internal-time-units-per-second))
 
+(defun event-duration-ms (event)
+  (* (event-duration-seconds event) 1000))
+
 (defun status-marker (status)
   (ecase status
     (:pass "PASS")
@@ -97,7 +100,10 @@
   (write-json-string (json-status-string (test-event-status event)) stream)
   (write-string ",\"path\":" stream)
   (json-write-path (test-event-path event) stream)
+  (write-string ",\"pathString\":" stream)
+  (write-json-string (path-string (test-event-path event)) stream)
   (format stream ",\"seconds\":~,6F" (event-duration-seconds event))
+  (format stream ",\"durationMs\":~,3F" (event-duration-ms event))
   (write-string ",\"condition\":" stream)
   (json-write-nullable-string
    (when (test-event-condition event)
@@ -175,7 +181,7 @@
 
 (defun report-json (events stream)
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":1" stream)
+  (write-string "\"schemaVersion\":2" stream)
   (format stream ",\"passed\":~D" (count :pass events :key #'test-event-status))
   (format stream ",\"skipped\":~D" (count :skip events :key #'test-event-status))
   (format stream ",\"todos\":~D" (count :todo events :key #'test-event-status))

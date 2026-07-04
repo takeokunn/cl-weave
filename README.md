@@ -78,8 +78,9 @@ nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --n
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
-`cl-weave-test-reports` artifact. JSON is intended for AI agents and external
-automation; JUnit is intended for CI test result ingestion.
+`cl-weave-test-reports` artifact. JSON schema v2 is intended for AI agents and
+external automation: every event includes both a machine `path` and a stable
+Vitest-style `pathString`. JUnit is intended for CI test result ingestion.
 
 ## API
 

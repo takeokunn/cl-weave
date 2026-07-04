@@ -701,11 +701,13 @@
                             :reason "needs \"escaping\""
                             :elapsed-internal-time 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":1")
+      (expect output :to-contain "\"schemaVersion\":2")
       (expect output :to-contain "\"passed\":1")
       (expect output :to-contain "\"skipped\":1")
       (expect output :to-contain "\"status\":\"pass\"")
       (expect output :to-contain "\"path\":[\"reporters\",\"json\"]")
+      (expect output :to-contain "\"pathString\":\"reporters > json\"")
+      (expect output :to-contain "\"durationMs\":0.000")
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
 

@@ -63,7 +63,7 @@ The reporter prints one JSON object:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "passed": 1,
   "skipped": 0,
   "todos": 0,
@@ -73,7 +73,9 @@ The reporter prints one JSON object:
     {
       "status": "pass",
       "path": ["suite", "case"],
+      "pathString": "suite > case",
       "seconds": 0.0,
+      "durationMs": 0.0,
       "condition": null,
       "reason": null,
       "assertion": null
@@ -99,6 +101,10 @@ For smart assertions, `matcher`, `actual`, and `expected` are still printable
 Lisp strings. A failing `(expect (= (+ 1 1) 3))` serializes the operand report
 through the `actual` field, so agents can read the exact evaluated values
 without scraping the human spec reporter.
+
+`path` is the canonical machine path. `pathString` is the same path rendered in
+the Vitest-style human format used by filtering. `seconds` is retained for
+JUnit parity; `durationMs` is the preferred field for dashboards and agents.
 
 Performance and allocation matchers report measured values instead of the input
 thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:
