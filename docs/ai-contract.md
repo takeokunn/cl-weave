@@ -84,6 +84,17 @@ The reporter prints one JSON object:
 }
 ```
 
+For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
+same reporter payload directly to an artifact file:
+
+```sh
+CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+`CL_WEAVE_OUTPUT_FILE` affects only reporter output. The process still exits
+with `0` when all selected events pass, skip, or todo, and exits with `1` when
+any selected event fails or errors.
+
 For assertion failures, `assertion` contains:
 
 ```json

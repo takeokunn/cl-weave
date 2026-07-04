@@ -439,8 +439,10 @@ The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
-`junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering. Use
-`junit` when a CI service should ingest test results as XML.
+`junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering.
+Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
+artifact file while preserving the process exit code contract. Use `junit` when
+a CI service should ingest test results as XML.
 
 ### ASDF System Runner and Watch Mode
 

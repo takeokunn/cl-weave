@@ -35,6 +35,14 @@
   #-sbcl
   nil)
 
+(defun requested-output-file ()
+  #+sbcl
+  (let ((path (sb-ext:posix-getenv "CL_WEAVE_OUTPUT_FILE")))
+    (when (and path (not (string= path "")))
+      path))
+  #-sbcl
+  nil)
+
 (defun requested-watch-p ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_WATCH")))
@@ -70,11 +78,22 @@
                            :name-filter (requested-test-filter)
                            :include-dependencies t
                            :interval (requested-watch-interval))
-    (sb-ext:exit :code (if (cl-weave:run-all
-                            :reporter (requested-reporter)
-                            :name-filter (requested-test-filter))
-                           0
-                           1)))
+    (let ((output-file (requested-output-file)))
+      (flet ((run-with-stream (stream)
+               (cl-weave:run-all
+                :reporter (requested-reporter)
+                :name-filter (requested-test-filter)
+                :stream stream)))
+        (sb-ext:exit
+         :code (if (if output-file
+                       (with-open-file (stream output-file
+                                               :direction :output
+                                               :if-exists :supersede
+                                               :if-does-not-exist :create)
+                         (run-with-stream stream))
+                       (run-with-stream *standard-output*))
+                   0
+                   1)))))
 
 #-sbcl
 (error "scripts/run-tests.lisp currently requires SBCL.")
