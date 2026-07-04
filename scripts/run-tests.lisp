@@ -19,8 +19,20 @@
       ((string-equal reporter "junit") :junit)
       (t (error "Unknown CL_WEAVE_REPORTER value: ~A" reporter)))))
 
+(defun requested-test-filter ()
+  #+sbcl
+  (let ((filter (sb-ext:posix-getenv "CL_WEAVE_TEST_FILTER")))
+    (when (and filter (not (string= filter "")))
+      filter))
+  #-sbcl
+  nil)
+
 #+sbcl
-(sb-ext:exit :code (if (cl-weave:run-all :reporter (requested-reporter)) 0 1))
+(sb-ext:exit :code (if (cl-weave:run-all
+                        :reporter (requested-reporter)
+                        :name-filter (requested-test-filter))
+                       0
+                       1))
 
 #-sbcl
 (error "scripts/run-tests.lisp currently requires SBCL.")

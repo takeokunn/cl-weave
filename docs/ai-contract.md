@@ -100,6 +100,22 @@ Lisp strings. A failing `(expect (= (+ 1 1) 3))` serializes the operand report
 through the `actual` field, so agents can read the exact evaluated values
 without scraping the human spec reporter.
 
+## Test Selection
+
+Agents can narrow execution without changing source files:
+
+```lisp
+(cl-weave:run-all :reporter :json :name-filter "suite > case")
+```
+
+`name-filter` is a case-insensitive substring matched against the human path
+format `suite > nested suite > case`. The command runner exposes the same
+contract through `CL_WEAVE_TEST_FILTER`.
+
+Filtering changes which events are emitted; it does not change the event shape
+or reporter schema versions. If no test matches, reporters emit zero events and
+the run is considered successful because no selected test failed.
+
 ## Stability
 
 - `:schema-version` and `schemaVersion` change only when the shape changes.

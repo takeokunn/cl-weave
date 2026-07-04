@@ -20,6 +20,7 @@ Early MVP. The current focus is a solid core:
 - `it-skip` / `test-skip` skipped cases
 - `describe-only` / `it-only` focused runs
 - `it-todo` / `test-todo` todo cases
+- Vitest-style test name filtering for focused local and CI runs
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
@@ -69,6 +70,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 nix flake check --print-build-logs
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
@@ -240,6 +242,26 @@ Skipped cases are reported as `:skip` and do not fail `run-all`.
 When any suite or case is focused, `run-all` executes only the focused path.
 Todo cases are reported as `:todo`, skip their body, and do not fail `run-all`.
 
+### Filtering
+
+```lisp
+(cl-weave:run-all :name-filter "math > adds")
+```
+
+`name-filter` is a case-insensitive substring matched against the rendered test
+path, for example `suite > nested suite > case`. Filtering composes with
+`describe-only` and `it-only`: focus narrows the candidate set first, then the
+name filter selects matching paths.
+
+For command-line and CI usage, `CL_WEAVE_TEST_FILTER` provides the same filter:
+
+```sh
+CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+Suites with no selected descendants do not run `before-all` or `after-all`, so
+filtered runs do not leak fixture side effects from unrelated suites.
+
 ### Mocking
 
 ```lisp
@@ -270,6 +292,7 @@ original function cells are restored with `unwind-protect`.
 (cl-weave:run-all :reporter :sexp)
 (cl-weave:run-all :reporter :json)
 (cl-weave:run-all :reporter :junit)
+(cl-weave:run-all :reporter :json :name-filter "properties")
 ```
 
 `run-all` returns true when the suite passed and false otherwise.
@@ -278,7 +301,8 @@ The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
-`junit`. Use `junit` when a CI service should ingest test results as XML.
+`junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering. Use
+`junit` when a CI service should ingest test results as XML.
 
 ## Roadmap
 

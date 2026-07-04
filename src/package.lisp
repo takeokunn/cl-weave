@@ -30,6 +30,7 @@
    #:clear-mock
    #:make-mock-function
    #:mock-calls
+   #:*test-name-filter*
    #:run-all
    #:test
    #:test-only

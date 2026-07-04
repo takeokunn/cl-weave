@@ -1,5 +1,7 @@
 (in-package #:cl-weave)
 
+(defvar *test-name-filter* nil)
+
 (defun suite-lineage (suite)
   (loop for current = suite then (suite-parent current)
         while current
@@ -35,6 +37,9 @@
   (append (mapcar #'suite-name (rest (suite-lineage suite)))
           (list (test-case-name test))))
 
+(defun filter-path-string (path)
+  (format nil "~{~A~^ > ~}" path))
+
 (defun make-event (status suite test start &key condition assertion reason)
   (make-test-event
    :status status
@@ -54,6 +59,36 @@
 
 (defun focused-suite-p (suite)
   (some #'focused-child-p (suite-children suite)))
+
+(defun normalized-test-filter (filter)
+  (when (and filter (not (string= filter "")))
+    (string-downcase filter)))
+
+(defun test-path-matches-filter-p (path filter)
+  (or (null filter)
+      (search filter
+              (string-downcase (filter-path-string path))
+              :test #'char=)))
+
+(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter)
+  (and (or (not focus-enabled)
+           ancestor-focused
+           (test-case-focus test))
+       (test-path-matches-filter-p (test-path suite test) name-filter)))
+
+(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter)
+  (some (lambda (child)
+          (typecase child
+            (suite
+             (let ((child-focused (or ancestor-focused (suite-focus child))))
+               (and (or (not focus-enabled)
+                        child-focused
+                        (focused-child-p child))
+                    (selected-suite-p child focus-enabled child-focused name-filter))))
+            (test-case
+             (selected-test-case-p suite child focus-enabled ancestor-focused name-filter))
+            (t nil)))
+        (suite-children suite)))
 
 (defun run-test-case (suite test)
   (let ((start (get-internal-real-time)))
@@ -76,31 +111,42 @@
          (condition (condition)
            (make-event :error suite test start :condition condition)))))))
 
-(declaim (ftype (function (suite list function &optional t t) *) collect-children/k))
+(declaim (ftype (function (suite list function &optional t t t) *) collect-children/k))
 
-(defun collect-suite-events/k (suite continue &optional focus-enabled ancestor-focused)
-  (unwind-protect
-       (call-hooks/k
-        (suite-before-all suite)
-        (lambda ()
-          (collect-children/k
-           suite
-           (suite-children suite)
-           (lambda (events)
-             (funcall continue events))
-           focus-enabled
-           ancestor-focused)))
-    (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil))))
+(defun collect-suite-events/k
+    (suite continue &optional focus-enabled ancestor-focused name-filter)
+  (if (selected-suite-p suite focus-enabled ancestor-focused name-filter)
+      (unwind-protect
+           (call-hooks/k
+            (suite-before-all suite)
+            (lambda ()
+              (collect-children/k
+               suite
+               (suite-children suite)
+               (lambda (events)
+                 (funcall continue events))
+               focus-enabled
+               ancestor-focused
+               name-filter)))
+        (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil)))
+      (funcall continue '())))
 
-(defun collect-children/k (suite children continue &optional focus-enabled ancestor-focused)
+(defun collect-children/k
+    (suite children continue &optional focus-enabled ancestor-focused name-filter)
   (if (null children)
       (funcall continue '())
       (let ((child (first children)))
         (typecase child
           (suite
-           (let ((selected (or (not focus-enabled)
-                               ancestor-focused
-                               (focused-child-p child))))
+           (let* ((child-focused (or ancestor-focused (suite-focus child)))
+                  (selected (and (or (not focus-enabled)
+                                     child-focused
+                                     (focused-child-p child))
+                                 (selected-suite-p
+                                  child
+                                  focus-enabled
+                                  child-focused
+                                  name-filter))))
              (if selected
                  (collect-suite-events/k
                   child
@@ -111,19 +157,25 @@
                      (lambda (tail)
                        (funcall continue (append events tail)))
                      focus-enabled
-                     ancestor-focused))
+                     ancestor-focused
+                     name-filter))
                   focus-enabled
-                  (or ancestor-focused (suite-focus child)))
+                  child-focused
+                  name-filter)
                  (collect-children/k
                   suite
                   (rest children)
                   continue
                   focus-enabled
-                  ancestor-focused))))
+                  ancestor-focused
+                  name-filter))))
           (test-case
-           (let ((selected (or (not focus-enabled)
-                               ancestor-focused
-                               (test-case-focus child))))
+           (let ((selected (selected-test-case-p
+                            suite
+                            child
+                            focus-enabled
+                            ancestor-focused
+                            name-filter)))
              (if selected
                  (let ((event (run-test-case suite child)))
                    (collect-children/k
@@ -132,29 +184,39 @@
                     (lambda (tail)
                       (funcall continue (cons event tail)))
                     focus-enabled
-                    ancestor-focused))
+                    ancestor-focused
+                    name-filter))
                  (collect-children/k
                   suite
                   (rest children)
                   continue
                   focus-enabled
-                  ancestor-focused))))
+                  ancestor-focused
+                  name-filter))))
           (t
            (collect-children/k
             suite
             (rest children)
             continue
             focus-enabled
-            ancestor-focused))))))
+            ancestor-focused
+            name-filter))))))
 
-(defun collect-events (suite)
-  (collect-suite-events/k suite #'identity (focused-suite-p suite) nil))
+(defun collect-events (suite &key name-filter)
+  (collect-suite-events/k
+   suite
+   #'identity
+   (focused-suite-p suite)
+   nil
+   (normalized-test-filter name-filter)))
 
 (defun passed-event-p (event)
   (member (test-event-status event) '(:pass :skip :todo)))
 
-(defun run-all (&key (reporter :spec) (stream *standard-output*))
-  (let ((events (collect-events (root-suite))))
+(defun run-all (&key (reporter :spec)
+                  (stream *standard-output*)
+                  (name-filter *test-name-filter*))
+  (let ((events (collect-events (root-suite) :name-filter name-filter)))
     (ecase reporter
       (:spec (report-spec events stream))
       (:sexp (report-sexp events stream))

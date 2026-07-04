@@ -33,6 +33,11 @@ jobs:
         run: |
           nix develop --command timeout 60s env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp > cl-weave-results.json
 
+      - name: Run filtered smoke test
+        timeout-minutes: 2
+        run: |
+          nix develop --command timeout 60s env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+
       - name: Run JUnit reporter
         timeout-minutes: 2
         run: |
