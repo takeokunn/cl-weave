@@ -9,6 +9,7 @@
                   "src/isolation.lisp"
                   "src/matchers.lisp"
                   "src/property.lisp"
+                  "src/mutation.lisp"
                   "src/dsl.lisp"
                   "src/reporters.lisp"
                   "src/runner.lisp"

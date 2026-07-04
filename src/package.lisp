@@ -10,9 +10,11 @@
    #:before-each
    #:clear-tests
    #:collect-test-plan
+   #:collect-mutations
    #:coverage-support-available-p
    #:coverage-unavailable
    #:coverage-unavailable-reason
+   #:defmutation-operator
    #:describe
    #:describe-each
    #:describe-only
@@ -60,6 +62,18 @@
    #:it-skip-if
    #:it-todo
    #:list-tests
+   #:mutation
+   #:mutation-form
+   #:mutation-id
+   #:mutation-operator
+   #:mutation-original
+   #:mutation-path
+   #:mutation-replacement
+   #:mutation-result
+   #:mutation-result-condition
+   #:mutation-result-mutation
+   #:mutation-result-status
+   #:mutation-summary
    #:*property-seed*
    #:*property-test-count*
    #:*snapshot-directory*
@@ -72,8 +86,11 @@
    #:*test-sequence-seed*
    #:*test-name-filter*
    #:asdf-system-files
+   #:report-mutations-json
+   #:report-mutations-sexp
    #:run-all
    #:run-isolated
+   #:run-mutations
    #:run-system
    #:reset-coverage
    #:save-coverage

@@ -11,7 +11,9 @@
    #:before-each
    #:clear-mock
    #:clear-tests
+   #:collect-mutations
    #:defmatcher
+   #:defmutation-operator
    #:describe-each
    #:describe-run-if
    #:describe-skip
@@ -49,7 +51,18 @@
    #:isolated-result-timed-out-p
    #:make-mock-function
    #:mock-calls
+   #:mutation-form
+   #:mutation-id
+   #:mutation-operator
+   #:mutation-original
+   #:mutation-path
+   #:mutation-replacement
+   #:mutation-result-status
+   #:mutation-summary
+   #:report-mutations-json
+   #:report-mutations-sexp
    #:run-isolated
+   #:run-mutations
    #:test-concurrent
    #:test-each
    #:test-fails

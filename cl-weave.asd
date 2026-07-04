@@ -15,6 +15,7 @@
      (:file "isolation")
      (:file "matchers")
      (:file "property")
+     (:file "mutation")
      (:file "dsl")
      (:file "reporters")
      (:file "runner")

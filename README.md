@@ -16,6 +16,7 @@ Early MVP. The current focus is a solid core:
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
 - `it-property` deterministic property tests with shrinking
+- form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
 - `describe-skip` / `it-skip` / `test-skip` skipped suites and cases
@@ -225,6 +226,37 @@ without ad-hoc reflection helpers:
 
 These matchers report normalized slot and method-specializer lists through the
 structured reporters, which keeps architecture tests AI-readable.
+
+### Mutation Testing
+
+`collect-mutations` walks a Lisp form and returns one-at-a-time mutant data.
+`run-mutations` accepts a predicate that returns true when the mutant survives
+the caller's checks and false when the mutant is killed:
+
+```lisp
+(cl-weave:run-mutations
+ '(+ 1 1)
+ (lambda (form mutation)
+   (declare (ignore mutation))
+   (= (eval form) 2)))
+```
+
+Mutation operators are data-backed and macro-extensible:
+
+```lisp
+(cl-weave:defmutation-operator :keyword-toggle (form path)
+  (declare (ignore path))
+  (when (eq form :enabled)
+    (list :disabled)))
+
+(cl-weave:collect-mutations '(:enabled)
+                            :operators '(:keyword-toggle))
+```
+
+The built-in operators cover arithmetic calls, comparison calls, boolean
+literals, and `if` branch swaps. `report-mutations-sexp` and
+`report-mutations-json` emit stable, AI-readable mutation reports with killed,
+survived, errored, and score fields.
 
 ### Table Tests
 
@@ -658,12 +690,6 @@ CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run
 
 CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 `CL_WEAVE_REPORTER=tap`, or `CL_WEAVE_REPORTER=json`.
-
-## Roadmap
-
-MVP quality comes first. The intended direction is:
-
-- mutation testing
 
 ## License
 

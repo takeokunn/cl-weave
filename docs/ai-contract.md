@@ -121,6 +121,72 @@ The coverage artifact is SBCL `sb-cover` state written with
 `sb-cover:save-coverage-in-file`. Agents should treat it as a sidecar file and
 continue to parse S-expression or JSON reporter output for test results.
 
+## Mutation Reports
+
+Mutation reports are explicit API output, not part of `run-all` reporter
+payloads. Agents can call `run-mutations`, then serialize the resulting list
+with `report-mutations-sexp` or `report-mutations-json`.
+
+```lisp
+(let ((results (cl-weave:run-mutations
+                '(+ 1 1)
+                (lambda (form mutation)
+                  (declare (ignore mutation))
+                  (= (eval form) 2)))))
+  (cl-weave:report-mutations-sexp results *standard-output*)
+  (cl-weave:report-mutations-json results *standard-output*))
+```
+
+The S-expression mutation schema is:
+
+```lisp
+(:cl-weave/mutations
+ :schema-version 1
+ :summary (:total 1 :killed 1 :survived 0 :errored 0 :score 1.0)
+ :results
+ ((:status :killed
+   :condition nil
+   :mutation (:id 1
+              :operator :arithmetic-operator
+              :path ()
+              :original (+ 1 1)
+              :replacement (- 1 1)
+              :form (- 1 1)))))
+```
+
+The JSON mutation schema is:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "mutations",
+  "total": 1,
+  "killed": 1,
+  "survived": 0,
+  "errored": 0,
+  "score": 1.0,
+  "results": [
+    {
+      "status": "killed",
+      "condition": null,
+      "mutation": {
+        "id": 1,
+        "operator": "ARITHMETIC-OPERATOR",
+        "path": [],
+        "original": "(+ 1 1)",
+        "replacement": "(- 1 1)",
+        "form": "(- 1 1)"
+      }
+    }
+  ]
+}
+```
+
+`status` is one of `killed`, `survived`, or `errored`. Assertion failures from
+cl-weave expectations count as killed mutants. Other signaled errors are kept
+as `errored` so agents can distinguish production-code kills from harness
+faults.
+
 ## TAP Reporter
 
 ```lisp

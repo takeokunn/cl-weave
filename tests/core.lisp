@@ -475,6 +475,70 @@
             (lambda (form)
               (tree-contains-p form 'cl-weave::run-property)))))
 
+(defmutation-operator :keyword-toggle (form path)
+  (declare (ignore path))
+  (when (eq form :enabled)
+    (list :disabled)))
+
+(describe "mutation testing"
+  (it "collects one-at-a-time form mutations"
+    (let ((mutations (collect-mutations '(if (= value 1) (+ value 2) nil))))
+      (expect (mapcar #'mutation-operator mutations) :to-contain :comparison-operator)
+      (expect (mapcar #'mutation-operator mutations) :to-contain :arithmetic-operator)
+      (expect (mapcar #'mutation-operator mutations) :to-contain :boolean-literal)
+      (expect (mapcar #'mutation-operator mutations) :to-contain :conditional-branch)
+      (expect (mapcar #'mutation-form mutations) :to-contain
+              '(if (/= value 1) (+ value 2) nil))
+      (expect (mapcar #'mutation-form mutations) :to-contain
+              '(if (= value 1) (- value 2) nil))))
+
+  (it "supports macro-defined custom mutation operators"
+    (let ((mutations (collect-mutations '(:enabled)
+                                        :operators '(:keyword-toggle))))
+      (expect (length mutations) :to-be 1)
+      (expect (mutation-operator (first mutations)) :to-be :keyword-toggle)
+      (expect (mutation-path (first mutations)) :to-equal '(0))
+      (expect (mutation-original (first mutations)) :to-be :enabled)
+      (expect (mutation-replacement (first mutations)) :to-be :disabled)
+      (expect (mutation-form (first mutations)) :to-equal '(:disabled))))
+
+  (it "marks surviving and killed mutants"
+    (let* ((results (run-mutations '(+ 1 1)
+                                   (lambda (form mutation)
+                                     (declare (ignore mutation))
+                                     (= (eval form) 2))))
+           (summary (mutation-summary results)))
+      (expect (mapcar #'mutation-result-status results) :to-contain :killed)
+      (expect (getf summary :total) :to-be 1)
+      (expect (getf summary :killed) :to-be 1)
+      (expect (getf summary :survived) :to-be 0)
+      (expect (getf summary :score) :to-be 1.0)))
+
+  (it "keeps unexpected harness errors visible"
+    (let* ((results (run-mutations '(+ 1 1)
+                                   (lambda (form mutation)
+                                     (declare (ignore form mutation))
+                                     (error "harness failed"))))
+           (summary (mutation-summary results)))
+      (expect (mapcar #'mutation-result-status results) :to-contain :errored)
+      (expect (getf summary :errored) :to-be 1)))
+
+  (it "prints AI-readable mutation reports"
+    (let* ((results (run-mutations '(+ 1 1)
+                                   (lambda (form mutation)
+                                     (declare (ignore mutation))
+                                     (= (eval form) 2))))
+           (sexp-output (with-output-to-string (stream)
+                          (report-mutations-sexp results stream)))
+           (json-output (with-output-to-string (stream)
+                          (report-mutations-json results stream))))
+      (expect sexp-output :to-contain ":CL-WEAVE/MUTATIONS")
+      (expect sexp-output :to-contain ":SCHEMA-VERSION 1")
+      (expect sexp-output :to-contain ":OPERATOR :ARITHMETIC-OPERATOR")
+      (expect json-output :to-contain "\"kind\":\"mutations\"")
+      (expect json-output :to-contain "\"killed\":1")
+      (expect json-output :to-contain "\"operator\":\"ARITHMETIC-OPERATOR\""))))
+
 (describe "fixtures"
   (before-all
     (setf *fixture-events* (list :before-all)))
