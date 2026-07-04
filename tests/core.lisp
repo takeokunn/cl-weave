@@ -179,7 +179,20 @@
                                (declare (ignore value))
                                99)))
       (expect (sample-size '(a b c)) :to-be 99))
-    (expect (sample-size '(a b c)) :to-be 3)))
+    (expect (sample-size '(a b c)) :to-be 3))
+
+  (it "records mock function calls"
+    (let ((mock (make-mock-function (lambda (left right)
+                                      (+ left right)))))
+      (expect (funcall mock 1 2) :to-be 3)
+      (expect (funcall mock 5 8) :to-be 13)
+      (expect mock :to-have-been-called)
+      (expect mock :to-have-been-called-times 2)
+      (expect mock :to-have-been-called-with 1 2)
+      (expect (mock-calls mock) :to-equal '((1 2) (5 8)))
+      (clear-mock mock)
+      (expect mock :not :to-have-been-called)
+      (expect (mock-calls mock) :to-equal nil))))
 
 (describe "reporters"
   (it "prints AI-readable S-expression results"

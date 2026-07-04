@@ -19,6 +19,7 @@ Early MVP. The current focus is a solid core:
 - `describe-only` / `it-only` focused runs
 - `it-todo` / `test-todo` todo cases
 - Vitest-style length, instance, and inline snapshot matchers
+- Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - spec, S-expression, and JUnit XML reporters
 - non-zero process exit on failure for CI
@@ -104,6 +105,9 @@ Built-in matchers:
 - `:to-throw`
 - `:to-expand-to`
 - `:to-match-inline-snapshot`
+- `:to-have-been-called`
+- `:to-have-been-called-times`
+- `:to-have-been-called-with`
 
 ### Table Tests
 
@@ -172,11 +176,25 @@ Todo cases are reported as `:todo`, skip their body, and do not fail `run-all`.
 ### Mocking
 
 ```lisp
+(let ((add (make-mock-function (lambda (left right)
+                                 (+ left right)))))
+  (expect (funcall add 1 2) :to-be 3)
+  (expect add :to-have-been-called)
+  (expect add :to-have-been-called-times 1)
+  (expect add :to-have-been-called-with 1 2)
+  (expect (mock-calls add) :to-equal '((1 2)))
+  (clear-mock add))
+
 (with-mocked-functions (((symbol-function 'now) (lambda () 0)))
   (expect (now) :to-be 0))
 ```
 
-The original function cells are restored with `unwind-protect`.
+`make-mock-function` creates an inspectable function object, close to
+Vitest's `vi.fn`. `mock-calls` returns a copy of the recorded argument lists,
+and `clear-mock` resets the call history.
+
+`with-mocked-functions` temporarily rewrites global function cells. The
+original function cells are restored with `unwind-protect`.
 
 ### Reporters
 

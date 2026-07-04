@@ -6,6 +6,12 @@
 
 (defvar *matchers* (make-hash-table :test #'eq))
 
+(defstruct mock-state
+  implementation
+  calls)
+
+(defvar *mock-states* (make-hash-table :test #'eq))
+
 (defmacro defmatcher (name (actual expected) &body body)
   `(setf (gethash ,name *matchers*)
          (make-matcher
@@ -52,6 +58,37 @@
 
 (defun expand-once (form)
   (macroexpand-1 form))
+
+(defun register-mock-call (state arguments)
+  (setf (mock-state-calls state)
+        (append (mock-state-calls state) (list arguments))))
+
+(defun mock-state-for (mock)
+  (or (gethash mock *mock-states*)
+      (error "Value is not a cl-weave mock function: ~S" mock)))
+
+(defun make-mock-function (&optional (implementation (lambda (&rest arguments)
+                                                       (declare (ignore arguments))
+                                                       nil)))
+  (let* ((state (make-mock-state :implementation implementation
+                                 :calls nil))
+         (mock (lambda (&rest arguments)
+                 (register-mock-call state arguments)
+                 (apply (mock-state-implementation state) arguments))))
+    (setf (gethash mock *mock-states*) state)
+    mock))
+
+(defun mock-calls (mock)
+  (copy-tree (mock-state-calls (mock-state-for mock))))
+
+(defun clear-mock (mock)
+  (setf (mock-state-calls (mock-state-for mock)) nil)
+  mock)
+
+(defun mock-called-with-p (mock expected-arguments)
+  (some (lambda (actual-arguments)
+          (equal actual-arguments expected-arguments))
+        (mock-calls mock)))
 
 (defmatcher :to-be (actual expected)
   (eql actual (expected-one expected :to-be)))
@@ -117,6 +154,17 @@
 (defmatcher :to-match-inline-snapshot (actual expected)
   (string= (snapshot-string actual)
            (expected-one expected :to-match-inline-snapshot)))
+
+(defmatcher :to-have-been-called (actual expected)
+  (declare (ignore expected))
+  (not (null (mock-calls actual))))
+
+(defmatcher :to-have-been-called-times (actual expected)
+  (= (length (mock-calls actual))
+     (expected-one expected :to-have-been-called-times)))
+
+(defmatcher :to-have-been-called-with (actual expected)
+  (mock-called-with-p actual expected))
 
 (defun normalize-expectation (tokens)
   (when (null tokens)

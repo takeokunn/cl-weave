@@ -9,6 +9,7 @@
    #:assertion-failure
    #:before-all
    #:before-each
+   #:clear-mock
    #:clear-tests
    #:expect
    #:it
@@ -16,4 +17,6 @@
    #:it-only
    #:it-skip
    #:it-todo
+   #:make-mock-function
+   #:mock-calls
    #:with-mocked-functions))
