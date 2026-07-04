@@ -36,6 +36,18 @@
   produce
   shrink)
 
+(defun ensure-property-generator (value label)
+  (unless (property-generator-p value)
+    (error "cl-weave: ~A must be a property generator, got ~S." label value))
+  value)
+
+(defun ensure-property-generators (generators label)
+  (when (null generators)
+    (error "cl-weave: ~A requires at least one property generator." label))
+  (mapcar (lambda (generator)
+            (ensure-property-generator generator label))
+          generators))
+
 (defun environment-integer (name fallback)
   (or #+sbcl
       (let ((value (sb-ext:posix-getenv name)))
@@ -97,6 +109,7 @@
                  (list first-value))))))
 
 (defun gen-list (element-generator &key (min-length 0) (max-length 8))
+  (ensure-property-generator element-generator "gen-list")
   (when (> min-length max-length)
     (error "cl-weave: gen-list requires MIN-LENGTH <= MAX-LENGTH, got ~S and ~S."
            min-length max-length))
@@ -108,13 +121,78 @@
                                                      (1+ (- max-length min-length))))
                     collect (funcall (property-generator-produce element-generator) rng)))
    :shrink (lambda (value)
-             (remove-duplicates
-              (remove-if-not
-               (lambda (candidate)
-                 (and (listp candidate)
-                      (<= min-length (length candidate) max-length)))
-               (list nil (subseq value 0 (truncate (length value) 2))))
-              :test #'equal))))
+             (let ((structural-candidates
+                     (list nil (subseq value 0 (truncate (length value) 2))))
+                   (element-candidates
+                     (loop for index from 0
+                           for element in value
+                           append
+                           (loop for shrunk in
+                                 (funcall (property-generator-shrink element-generator)
+                                          element)
+                                 collect (let ((next (copy-list value)))
+                                           (setf (nth index next) shrunk)
+                                           next)))))
+               (remove-duplicates
+                (remove-if-not
+                 (lambda (candidate)
+                   (and (listp candidate)
+                        (<= min-length (length candidate) max-length)))
+                 (append structural-candidates element-candidates))
+                :test #'equal)))))
+
+(defun gen-one-of (&rest generators)
+  (let ((choices (ensure-property-generators generators "gen-one-of")))
+    (make-property-generator
+     :name :one-of
+     :produce (lambda (rng)
+                (let ((generator (nth (property-random-below rng (length choices))
+                                      choices)))
+                  (funcall (property-generator-produce generator) rng)))
+     :shrink (lambda (value)
+               (remove-duplicates
+                (loop for generator in choices
+                      append (funcall (property-generator-shrink generator) value))
+                :test #'equal)))))
+
+(defun gen-tuple (&rest generators)
+  (let ((elements (ensure-property-generators generators "gen-tuple")))
+    (make-property-generator
+     :name :tuple
+     :produce (lambda (rng)
+                (loop for generator in elements
+                      collect (funcall (property-generator-produce generator) rng)))
+     :shrink (lambda (value)
+               (remove-duplicates
+                (loop for generator in elements
+                      for index from 0
+                      for element in value
+                      append
+                      (loop for shrunk in
+                            (funcall (property-generator-shrink generator) element)
+                            collect (let ((next (copy-list value)))
+                                      (setf (nth index next) shrunk)
+                                      next)))
+                :test #'equal)))))
+
+(defun gen-such-that (predicate generator &key (attempts 100))
+  (ensure-property-generator generator "gen-such-that")
+  (unless (and (integerp attempts) (plusp attempts))
+    (error "cl-weave: gen-such-that requires a positive integer ATTEMPTS, got ~S."
+           attempts))
+  (make-property-generator
+   :name :such-that
+   :produce (lambda (rng)
+              (loop repeat attempts
+                    for value = (funcall (property-generator-produce generator) rng)
+                    when (funcall predicate value)
+                      return value
+                    finally
+                       (error "cl-weave: gen-such-that could not produce a matching value in ~D attempts."
+                              attempts)))
+   :shrink (lambda (value)
+             (remove-if-not predicate
+                            (funcall (property-generator-shrink generator) value)))))
 
 (defun generated-property-values (generators rng)
   (mapcar (lambda (generator)

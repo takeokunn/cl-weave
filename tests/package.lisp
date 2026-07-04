@@ -16,6 +16,9 @@
     #:gen-integer
     #:gen-list
     #:gen-member
+    #:gen-one-of
+    #:gen-such-that
+    #:gen-tuple
     #:it
     #:it-each
     #:it-property

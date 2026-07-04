@@ -166,6 +166,22 @@
       ((flag (gen-boolean)))
     (expect (not (not flag)) :to-be flag))
 
+  (it-property "composes tuple generators"
+      ((pair (gen-tuple (gen-integer :min 0 :max 10)
+                        (gen-member '(:ok :retry)))))
+    (destructuring-bind (count state) pair
+      (expect count :to-satisfy (lambda (value) (<= 0 value 10)))
+      (expect '(:ok :retry) :to-contain state)))
+
+  (it-property "filters generated values"
+      ((even (gen-such-that #'evenp (gen-integer :min 0 :max 20))))
+    (expect even :to-satisfy #'evenp))
+
+  (it-property "chooses among generator alternatives"
+      ((value (gen-one-of (gen-member '(:left :right))
+                          (gen-member '(:up :down)))))
+    (expect '(:left :right :up :down) :to-contain value))
+
   (it "reports generated and minimized values on failure"
     (handler-case
         (let ((cl-weave:*property-test-count* 20)

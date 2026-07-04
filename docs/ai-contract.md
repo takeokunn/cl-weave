@@ -132,6 +132,23 @@ Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
 the run is considered successful because no selected test failed.
 
+## Property Failure Contract
+
+`it-property` failures are normal assertion failures with matcher `:property`.
+The assertion payload keeps the original generated values and the minimized
+values in `:actual`:
+
+```lisp
+(:actual (:values (17 (:open 2))
+          :minimal (1 (:open 1))
+          :condition "Assertion failed ...")
+ :expected (value command))
+```
+
+Generator combinators do not create new event types. `gen-one-of`, `gen-tuple`,
+and `gen-such-that` only affect generated values and shrink candidates before
+the same `assertion-failure` payload is reported.
+
 ## Stability
 
 - `:schema-version` and `schemaVersion` change only when the shape changes.

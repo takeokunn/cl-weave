@@ -208,6 +208,26 @@ Built-in generators:
 - `(gen-boolean)`
 - `(gen-member '(:a :b :c))`
 - `(gen-list generator :min-length 0 :max-length 8)`
+- `(gen-one-of generator-a generator-b ...)`
+- `(gen-tuple generator-a generator-b ...)`
+- `(gen-such-that predicate generator :attempts 100)`
+
+Generator combinators keep data and logic separate: generators describe how
+values are produced and shrunk, while `it-property` owns execution, failure
+capture, and reporting. `gen-list` shrinks both list structure and individual
+elements; `gen-tuple` shrinks each slot through its corresponding generator;
+`gen-such-that` keeps generated and shrunk values inside the predicate.
+
+```lisp
+(it-property "command shape is stable"
+    ((command (gen-tuple (gen-one-of (gen-member '(:open :close))
+                                     (gen-member '(:resize)))
+                         (gen-such-that #'plusp
+                                        (gen-integer :min 1 :max 20)))))
+  (destructuring-bind (kind count) command
+    (expect kind :to-satisfy #'keywordp)
+    (expect count :to-satisfy #'plusp)))
+```
 
 Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
 `CL_WEAVE_PROPERTY_TESTS` and `CL_WEAVE_PROPERTY_SEED` for reproducible CI runs.
@@ -330,8 +350,7 @@ reporter is the stable external-tool interface. See `docs/ai-contract.md`.
 
 MVP quality comes first. The intended direction is:
 
-- property-based testing and shrinking
-- richer property generators and shrinking strategies
+- richer recursive data generators
 - watch mode based on ASDF dependency information
 - subprocess isolation for FFI crash tests
 - MOP-based architecture checks
