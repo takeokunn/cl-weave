@@ -247,6 +247,12 @@
 (defmacro test-fails (name &body body)
   `(it-fails ,name ,@body))
 
+(defmacro test-isolated (name &body body)
+  `(it-isolated ,name ,@body))
+
+(defmacro test-property (name bindings &body body)
+  `(it-property ,name ,bindings ,@body))
+
 (defmacro test-skip (name &optional (reason "skipped"))
   `(it-skip ,name ,reason))
 
@@ -271,8 +277,14 @@
 (defmacro test.fails (name &body body)
   `(test-fails ,name ,@body))
 
+(defmacro test.isolated (name &body body)
+  `(test-isolated ,name ,@body))
+
 (defmacro test.only (name &body body)
   `(test-only ,name ,@body))
+
+(defmacro test.property (name bindings &body body)
+  `(test-property ,name ,bindings ,@body))
 
 (defmacro test.run-if (condition name &body body)
   `(test-run-if ,condition ,name ,@body))

@@ -55,15 +55,23 @@
    #:it.each
    #:it-concurrent
    #:it-each
+   #:it.fails
    #:it-fails
+   #:it.isolated
    #:it-isolated
+   #:it.property
    #:it-property
+   #:it.only
    #:it-only
+   #:it.run-if
    #:it-run-if
    #:it.sequential
    #:it-sequential
+   #:it.skip
    #:it-skip
+   #:it.skip-if
    #:it-skip-if
+   #:it.todo
    #:it-todo
    #:isolated-result-exit-code
    #:isolated-result-status
@@ -95,6 +103,10 @@
    #:test-concurrent
    #:test-each
    #:test-fails
+   #:test.isolated
+   #:test-isolated
+   #:test.property
+   #:test-property
    #:test-plan-facts
    #:test-plan-where
    #:test-run-if

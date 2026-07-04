@@ -579,11 +579,39 @@
             (lambda (form)
               (tree-contains-p form 'cl-weave:it-sequential)))
     (expect (macroexpand-1
+             '(it.isolated "isolated alias"
+                  (:systems ("cl-weave-tests") :timeout 5)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:it-isolated)))
+    (expect (macroexpand-1
+             '(it.property "property alias"
+                  ((value (gen-integer :min 0 :max 10)))
+                (expect value :to-satisfy #'integerp)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:it-property)))
+    (expect (macroexpand-1
              '(test.sequential "serial alias"
                 (expect :ok :to-be :ok)))
             :to-satisfy
             (lambda (form)
               (tree-contains-p form 'cl-weave:test-sequential)))
+    (expect (macroexpand-1
+             '(test.isolated "isolated alias"
+                  (:systems ("cl-weave-tests") :timeout 5)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:test-isolated)))
+    (expect (macroexpand-1
+             '(test.property "property alias"
+                  ((value (gen-integer :min 0 :max 10)))
+                (expect value :to-satisfy #'integerp)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:test-property)))
     (expect (macroexpand-1
              '(describe.concurrent "parallel alias"
                 (it "case" (expect :ok :to-be :ok))))

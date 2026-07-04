@@ -152,8 +152,12 @@
    #:test-each
    #:test.fails
    #:test-fails
+   #:test.isolated
+   #:test-isolated
    #:test.only
    #:test-only
+   #:test.property
+   #:test-property
    #:test.run-if
    #:test-run-if
    #:test.sequential

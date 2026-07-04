@@ -15,9 +15,21 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `it.each` -> `it-each`
 - `it.concurrent` -> `it-concurrent`
 - `it.sequential` -> `it-sequential`
+- `it.isolated` -> `it-isolated`
+- `it.property` -> `it-property`
+- `it.fails` -> `it-fails`
+- `it.only` -> `it-only`
+- `it.run-if` -> `it-run-if`
+- `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
 - `test.each` -> `test-each`
 - `test.concurrent` -> `test-concurrent`
 - `test.sequential` -> `test-sequential`
+- `test.isolated` -> `test-isolated`
+- `test.property` -> `test-property`
+- `test.fails` -> `test-fails`
+- `test.only` -> `test-only`
+- `test.run-if` -> `test-run-if`
+- `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
 - `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
