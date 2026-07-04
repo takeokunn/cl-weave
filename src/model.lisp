@@ -24,6 +24,7 @@
   todo-reason
   retry
   timeout-ms
+  concurrent
   expected-failure-reason)
 
 (defstruct assertion-detail
@@ -48,7 +49,8 @@
   reason
   focused
   retry
-  timeout-ms)
+  timeout-ms
+  concurrent)
 
 (define-condition test-failure (error)
   ((detail :initarg :detail :reader failure-detail))
@@ -96,7 +98,7 @@
     suite))
 
 (defun register-test
-    (name function &key focus skip-reason todo-reason retry timeout-ms expected-failure-reason)
+    (name function &key focus skip-reason todo-reason retry timeout-ms concurrent expected-failure-reason)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite (make-test-case :name name
                                      :function function
@@ -105,6 +107,7 @@
                                      :todo-reason todo-reason
                                      :retry retry
                                      :timeout-ms timeout-ms
+                                     :concurrent concurrent
                                      :expected-failure-reason expected-failure-reason))))
 
 (defun register-before-all (function)

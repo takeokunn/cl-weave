@@ -340,7 +340,76 @@
    :reason reason
    :focused (and focus-enabled (or ancestor-focused (test-case-focus test)))
    :retry (retry-count test)
-   :timeout-ms (test-case-timeout-ms test)))
+   :timeout-ms (test-case-timeout-ms test)
+   :concurrent (test-case-concurrent test)))
+
+(defun concurrent-test-case-p (test)
+  (and (typep test 'test-case)
+       (test-case-concurrent test)))
+
+(defun concurrent-batching-enabled-p (control suppressed-status)
+  (and (null suppressed-status)
+       (null (execution-control-bail-limit control))))
+
+(defun collect-leading-concurrent-tests
+    (suite children focus-enabled ancestor-focused name-filter shard-paths)
+  (labels ((walk (remaining selected)
+             (let ((child (first remaining)))
+               (if (and (concurrent-test-case-p child)
+                        (selected-test-case-p
+                         suite
+                         child
+                         focus-enabled
+                         ancestor-focused
+                         name-filter
+                         shard-paths))
+                   (walk (rest remaining) (cons child selected))
+                   (values (nreverse selected) remaining)))))
+    (walk children '())))
+
+(defun run-concurrent-test-cases (suite tests)
+  #+sb-thread
+  (let ((captured-root-suite *root-suite*)
+        (captured-current-suite *current-suite*)
+        (captured-test-context *test-context*)
+        (captured-test-name-filter *test-name-filter*)
+        (captured-test-sequence-order *test-sequence-order*)
+        (captured-test-sequence-seed *test-sequence-seed*)
+        (captured-isolated-timeout-seconds *isolated-timeout-seconds*)
+        (captured-snapshot-directory *snapshot-directory*)
+        (captured-snapshot-file-name *snapshot-file-name*)
+        (captured-update-snapshots *update-snapshots*)
+        (captured-property-test-count *property-test-count*)
+        (captured-property-seed *property-seed*)
+        (captured-recursive-generator-depth *recursive-generator-depth*))
+    (labels ((run-captured-test (test)
+               (let ((*root-suite* captured-root-suite)
+                     (*current-suite* captured-current-suite)
+                     (*test-context* captured-test-context)
+                     (*test-name-filter* captured-test-name-filter)
+                     (*test-sequence-order* captured-test-sequence-order)
+                     (*test-sequence-seed* captured-test-sequence-seed)
+                     (*isolated-timeout-seconds* captured-isolated-timeout-seconds)
+                     (*snapshot-directory* captured-snapshot-directory)
+                     (*snapshot-file-name* captured-snapshot-file-name)
+                     (*update-snapshots* captured-update-snapshots)
+                     (*property-test-count* captured-property-test-count)
+                     (*property-seed* captured-property-seed)
+                     (*recursive-generator-depth* captured-recursive-generator-depth))
+                 (run-test-case suite test))))
+      (let ((threads
+              (loop for test in tests
+                    collect (let ((worker-test test))
+                              (sb-thread:make-thread
+                               (lambda ()
+                                 (run-captured-test worker-test))
+                               :name (format nil "cl-weave: ~A"
+                                             (test-case-name worker-test)))))))
+        (mapcar #'sb-thread:join-thread threads))))
+  #-sb-thread
+  (mapcar (lambda (test)
+            (run-test-case suite test))
+          tests))
 
 (declaim (ftype (function (suite list execution-control function &optional t t t t t t) *) collect-children/k))
 
@@ -441,25 +510,50 @@
                             name-filter
                             shard-paths)))
              (if selected
-                 (let ((event (record-event/control
-                               control
-                               (if suppressed-status
-                                   (suppressed-test-event suite child suppressed-status suppressed-reason)
-                                   (run-test-case suite child)))))
-                   (if (execution-control-stopped control)
-                       (funcall continue (list event))
-                       (collect-children/k
-                        suite
-                        (rest children)
-                        control
-                        (lambda (tail)
-                          (funcall continue (cons event tail)))
-                        focus-enabled
-                        ancestor-focused
-                        name-filter
-                        shard-paths
-                        suppressed-status
-                        suppressed-reason)))
+                 (if (and (concurrent-test-case-p child)
+                          (concurrent-batching-enabled-p control suppressed-status))
+                     (multiple-value-bind (tests rest-children)
+                         (collect-leading-concurrent-tests
+                          suite
+                          children
+                          focus-enabled
+                          ancestor-focused
+                          name-filter
+                          shard-paths)
+                       (let ((events (mapcar (lambda (event)
+                                               (record-event/control control event))
+                                             (run-concurrent-test-cases suite tests))))
+                         (collect-children/k
+                          suite
+                          rest-children
+                          control
+                          (lambda (tail)
+                            (funcall continue (append events tail)))
+                          focus-enabled
+                          ancestor-focused
+                          name-filter
+                          shard-paths
+                          suppressed-status
+                          suppressed-reason)))
+                     (let ((event (record-event/control
+                                   control
+                                   (if suppressed-status
+                                       (suppressed-test-event suite child suppressed-status suppressed-reason)
+                                       (run-test-case suite child)))))
+                       (if (execution-control-stopped control)
+                           (funcall continue (list event))
+                           (collect-children/k
+                            suite
+                            (rest children)
+                            control
+                            (lambda (tail)
+                              (funcall continue (cons event tail)))
+                            focus-enabled
+                            ancestor-focused
+                            name-filter
+                            shard-paths
+                            suppressed-status
+                            suppressed-reason))))
                  (collect-children/k
                   suite
                   (rest children)

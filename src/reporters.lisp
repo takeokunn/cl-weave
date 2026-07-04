@@ -298,7 +298,8 @@
         :reason (test-plan-entry-reason entry)
         :focused (test-plan-entry-focused entry)
         :retry (test-plan-entry-retry entry)
-        :timeout-ms (test-plan-entry-timeout-ms entry)))
+        :timeout-ms (test-plan-entry-timeout-ms entry)
+        :concurrent (test-plan-entry-concurrent entry)))
 
 (defun report-plan-spec (plan stream)
   (dolist (entry plan)
@@ -346,6 +347,8 @@
     (if timeout-ms
         (princ timeout-ms stream)
         (write-string "null" stream)))
+  (write-string ",\"concurrent\":" stream)
+  (write-string (if (test-plan-entry-concurrent entry) "true" "false") stream)
   (write-string "}" stream))
 
 (defun report-plan-json (plan stream)

@@ -203,7 +203,7 @@
 
   (it "expands it options into retry and timeout metadata"
     (expect (macroexpand-1
-             '(it "eventually stable" (:retry 2 :timeout-ms 100)
+             '(it "eventually stable" (:retry 2 :timeout-ms 100 :concurrent t)
                 (expect :ok :to-be :ok)))
             :to-satisfy
             (lambda (form)
@@ -211,7 +211,18 @@
                    (tree-contains-p form :retry)
                    (tree-contains-p form 2)
                    (tree-contains-p form :timeout-ms)
-                   (tree-contains-p form 100)))))
+                   (tree-contains-p form 100)
+                   (tree-contains-p form :concurrent)))))
+
+  (it "expands it-concurrent into concurrent test registration"
+    (expect (macroexpand-1
+             '(it-concurrent "parallel case" (:retry 1)
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :concurrent)
+                   (tree-contains-p form :retry)))))
 
   (it "expands it-fails into expected-failure registration"
     (expect (macroexpand-1
@@ -520,6 +531,82 @@
       (let ((event (cl-weave::run-test-case suite test)))
         (expect (cl-weave::test-event-status event) :to-be :fail)
         (expect events :to-equal '(:after-each))))))
+
+(describe "concurrent tests"
+  (it "runs adjacent concurrent tests before either one completes"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "concurrent" :parent root)))
+           (mutex (sb-thread:make-mutex :name "cl-weave concurrent test log"))
+           (events-log nil))
+      (labels ((record (event)
+                 (sb-thread:with-mutex (mutex)
+                   (push event events-log)))
+               (recorded-p (event)
+                 (sb-thread:with-mutex (mutex)
+                   (member event events-log)))
+               (wait-until-recorded (event timeout-seconds)
+                 (let ((deadline (+ (get-internal-real-time)
+                                    (* timeout-seconds internal-time-units-per-second))))
+                   (loop until (or (recorded-p event)
+                                   (> (get-internal-real-time) deadline))
+                         do (sleep 0.01))
+                   (recorded-p event))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "first"
+          :concurrent t
+          :function (lambda ()
+                      (record :first-start)
+                      (unless (wait-until-recorded :second-start 1)
+                        (error "second concurrent test did not start before first completed"))
+                      (record :first-end))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "second"
+          :concurrent t
+          :function (lambda ()
+                      (record :second-start)
+                      (sleep 0.02)
+                      (record :second-end))))
+        (let* ((events (cl-weave::collect-events root))
+               (ordered-log (reverse events-log)))
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass :pass))
+          (expect (member :second-start ordered-log) :not :to-be nil)
+          (expect (member :first-end ordered-log) :not :to-be nil)
+          (expect (mapcar #'cl-weave::test-event-path events)
+                  :to-equal '(("concurrent" "first")
+                              ("concurrent" "second")))))))
+
+  (it "keeps bail semantics sequential for concurrent tests"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "concurrent bail" :parent root)))
+           (events-log nil))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "fails"
+        :concurrent t
+        :function (lambda ()
+                    (push :first events-log)
+                    (expect :actual :to-be :expected))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "must not run"
+        :concurrent t
+        :function (lambda ()
+                    (push :second events-log))))
+      (let ((events (cl-weave::collect-events root :bail t)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:fail))
+        (expect events-log :to-equal '(:first))))))
 
 (describe "expected failures"
   (it-fails "passes when the body fails"
@@ -862,7 +949,8 @@
         :name "runs later"
         :function (lambda () (push :body events-log))
         :retry 2
-        :timeout-ms 250))
+        :timeout-ms 250
+        :concurrent t))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -874,7 +962,8 @@
         (expect (mapcar #'cl-weave:test-plan-entry-path plan)
                 :to-equal '(("plan" "runs later")))
         (expect (cl-weave:test-plan-entry-retry (first plan)) :to-be 2)
-        (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250))))
+        (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250)
+        (expect (cl-weave:test-plan-entry-concurrent (first plan)) :to-be t))))
 
   (it "lists suppressed suites without running their descendants"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -1144,7 +1233,8 @@
                             :path '("plan" "runs")
                             :focused t
                             :retry 2
-                            :timeout-ms 250)
+                            :timeout-ms 250
+                            :concurrent t)
                            (cl-weave::make-test-plan-entry
                             :status :skip
                             :path '("plan" "skips")
@@ -1158,7 +1248,8 @@
       (expect output :to-contain ":SKIPPED 1")
       (expect output :to-contain ":PATH-STRING \"plan > runs\"")
       (expect output :to-contain ":FOCUSED T")
-      (expect output :to-contain ":TIMEOUT-MS 250")))
+      (expect output :to-contain ":TIMEOUT-MS 250")
+      (expect output :to-contain ":CONCURRENT T")))
 
   (it "prints AI-readable JSON test plans"
     (let ((output (with-output-to-string (stream)
@@ -1168,7 +1259,8 @@
                             :path '("plan" "runs")
                             :focused t
                             :retry 2
-                            :timeout-ms 250)
+                            :timeout-ms 250
+                            :concurrent t)
                            (cl-weave::make-test-plan-entry
                             :status :skip
                             :path '("plan" "skips")
@@ -1185,6 +1277,7 @@
       (expect output :to-contain "\"focused\":true")
       (expect output :to-contain "\"retry\":2")
       (expect output :to-contain "\"timeoutMs\":250")
+      (expect output :to-contain "\"concurrent\":true")
       (expect output :to-contain "\"reason\":\"blocked\"")))
 
   (it "prints CI-readable JUnit XML results"

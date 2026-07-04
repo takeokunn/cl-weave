@@ -302,7 +302,8 @@ The JSON test plan reporter prints one object:
       "reason": null,
       "focused": false,
       "retry": 0,
-      "timeoutMs": null
+      "timeoutMs": null,
+      "concurrent": false
     }
   ]
 }
@@ -324,7 +325,8 @@ The S-expression test plan reporter uses the same data:
    :reason nil
    :focused nil
    :retry 0
-   :timeout-ms nil)))
+   :timeout-ms nil
+   :concurrent nil)))
 ```
 
 Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
@@ -362,6 +364,9 @@ Case options are passed as a keyword plist immediately after the case name:
 ```lisp
 (it "eventually stable" (:retry 2 :timeout-ms 500)
   (expect (probe) :to-be :ready))
+
+(it-concurrent "parallel-safe case" (:timeout-ms 500)
+  (expect (probe-independent-service) :to-be :ready))
 ```
 
 `:retry` is the number of extra attempts after the first attempt. Retries apply
@@ -372,6 +377,11 @@ event, so reporter schemas do not expose intermediate attempts.
 final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `:assertion` is `nil`. Fixture hooks are still executed through the same
 `before-each` / `after-each` contract as ordinary test attempts.
+
+`:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
+parallel execution with adjacent concurrent cases. Event arrays and test-plan
+arrays remain in selected definition order. `:bail` disables concurrent
+batching to keep fast-fail semantics exact.
 
 ## Expected Failure Contract
 

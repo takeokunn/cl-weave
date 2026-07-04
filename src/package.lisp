@@ -45,6 +45,7 @@
    #:isolated-result-stdout
    #:isolated-result-timed-out-p
    #:it
+   #:it-concurrent
    #:it-each
    #:it-fails
    #:it-isolated
@@ -77,7 +78,9 @@
    #:test-plan-entry-retry
    #:test-plan-entry-status
    #:test-plan-entry-timeout-ms
+   #:test-plan-entry-concurrent
    #:test
+   #:test-concurrent
    #:test-each
    #:test-fails
    #:test-only

@@ -404,6 +404,21 @@ failures are reported as `test-timeout` conditions.
 error, or timeout is reported as `:pass`; an unexpectedly passing body is
 reported as `:fail` with `expected-failure-missed`.
 
+### Concurrent Tests
+
+```lisp
+(it-concurrent "fetches account metadata" (:timeout-ms 1000)
+  (expect (fetch-account) :to-satisfy #'account-ready-p))
+
+(test "uses option form when macros generate cases" (:concurrent t :retry 1)
+  (expect (probe-cache) :to-be :warm))
+```
+
+`it-concurrent`, `test-concurrent`, and `(:concurrent t)` mark a case as safe
+to run beside adjacent concurrent cases. Report order stays deterministic:
+events are emitted in the selected definition order. When `:bail` is enabled,
+concurrent batching is disabled so fast-fail behavior remains exact.
+
 ### Filtering
 
 ```lisp
@@ -478,7 +493,7 @@ CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-inte
 List mode discovers selected tests without executing suite hooks or test
 bodies. It composes with focus, filtering, skipped suites, and todo suites, and
 emits `:run`, `:skip`, or `:todo` plan entries with `path`, `pathString`,
-`reason`, `focused`, `retry`, and `timeout-ms` metadata.
+`reason`, `focused`, `retry`, `timeout-ms`, and `concurrent` metadata.
 
 For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
 and exits with status `0`:

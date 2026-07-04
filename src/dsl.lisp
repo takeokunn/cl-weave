@@ -48,7 +48,9 @@
    (when (plist-key-present-p options :retry)
      `(:retry ,(getf options :retry)))
    (when (plist-key-present-p options :timeout-ms)
-     `(:timeout-ms ,(getf options :timeout-ms)))))
+     `(:timeout-ms ,(getf options :timeout-ms)))
+   (when (plist-key-present-p options :concurrent)
+     `(:concurrent ,(getf options :concurrent)))))
 
 (defun split-test-body (body)
   (if (and body (option-plist-form-p (first body)))
@@ -64,6 +66,12 @@
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
                     :focus t
+                    ,@(test-registration-options options))))
+
+(defmacro it-concurrent (name &body body)
+  (multiple-value-bind (options forms) (split-test-body body)
+    `(register-test ,name (lambda () ,@forms)
+                    :concurrent t
                     ,@(test-registration-options options))))
 
 (defmacro it-fails (name &body body)
@@ -137,6 +145,9 @@
 
 (defmacro test (name &body body)
   `(it ,name ,@body))
+
+(defmacro test-concurrent (name &body body)
+  `(it-concurrent ,name ,@body))
 
 (defmacro test-each (cases name bindings &body body)
   `(it-each ,cases ,name ,bindings ,@body))

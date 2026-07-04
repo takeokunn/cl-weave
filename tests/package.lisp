@@ -32,6 +32,7 @@
    #:gen-symbol
    #:gen-tuple
    #:it
+   #:it-concurrent
    #:it-each
    #:it-fails
    #:it-isolated
@@ -48,6 +49,7 @@
    #:make-mock-function
    #:mock-calls
    #:run-isolated
+   #:test-concurrent
    #:test-each
    #:test-fails
    #:test-run-if
