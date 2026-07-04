@@ -954,7 +954,17 @@
       (expect (cl-weave::test-event-status event) :to-be :pass))))
 
 (describe "skips"
-  (it-skip "does not run skipped tests" "documented gap")
+  (it "does not run skipped tests"
+    (let* ((called nil)
+           (test (cl-weave::make-test-case
+                  :name "skipped case"
+                  :function (lambda () (setf called t))
+                  :skip-reason "not implemented"))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect called :to-be nil)
+      (expect (cl-weave::test-event-status event) :to-be :skip)
+      (expect (cl-weave::test-event-reason event) :to-equal "not implemented")
+      (expect (cl-weave::passed-event-p event) :to-be-truthy)))
 
   (it "reports skipped tests without failing the suite"
     (let* ((test (cl-weave::make-test-case
@@ -1034,14 +1044,23 @@
         (expect ran :to-be :enabled-body)))))
 
 (describe "todos"
-  (it-todo "documents pending work" "intentional")
+  (it "registers todo tests with a stable reason"
+    (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))
+          (cl-weave::*current-suite* nil))
+      (it-todo "documents pending work" "intentional")
+      (let ((events (cl-weave::collect-events cl-weave::*root-suite*)))
+        (expect (mapcar #'cl-weave::test-event-status events) :to-equal '(:todo))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("intentional")))))
 
   (it "reports todo tests without running their body"
-    (let* ((test (cl-weave::make-test-case
+    (let* ((called nil)
+           (test (cl-weave::make-test-case
                   :name "todo case"
-                  :function (lambda () (error "should not run"))
+                  :function (lambda () (setf called t))
                   :todo-reason "pending"))
            (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect called :to-be nil)
       (expect (cl-weave::test-event-status event) :to-be :todo)
       (expect (cl-weave::test-event-reason event) :to-equal "pending")
       (expect (cl-weave::passed-event-p event) :to-be-truthy)))
