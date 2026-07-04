@@ -39,6 +39,14 @@
       (1+ (reduce #'max tree :key #'tree-depth :initial-value 0))
       0))
 
+(defmatcher :to-be-even (actual expected)
+  (declare (ignore expected))
+  (values (and (integerp actual) (evenp actual))
+          `(:value ,actual :parity ,(if (and (integerp actual) (evenp actual))
+                                        :even
+                                        :odd))
+          '(:parity :even)))
+
 (describe "expect"
   (matcher-pass-cases
     ("to-be" (expect 2 :to-be 2))
@@ -119,6 +127,20 @@
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(1))
           (expect (cl-weave::assertion-detail-negated detail) :to-be-truthy)
           (expect (cl-weave::assertion-detail-pass detail) :to-be-truthy)))))
+
+  (it "supports public custom matchers with structured failure data"
+    (expect 4 :to-be-even)
+    (handler-case
+        (progn
+          (expect 5 :to-be-even)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-even)
+          (expect (cl-weave::assertion-detail-actual detail)
+                  :to-equal '(:value 5 :parity :odd))
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(:parity :even))))))
 
   (it "signals smart assertion failures with operand values"
     (handler-case

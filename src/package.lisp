@@ -20,6 +20,7 @@
    #:describe-skip
    #:describe-skip-if
    #:describe-todo
+   #:defmatcher
    #:expect
    #:expect-not
    #:expected-failure-missed

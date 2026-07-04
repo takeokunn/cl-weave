@@ -180,6 +180,21 @@ Built-in matchers:
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
 
+Custom matchers use `defmatcher`. The matcher receives the evaluated actual
+value and the remaining expected operands as a list. Return the pass boolean,
+then optional reported actual and expected values for structured reporters:
+
+```lisp
+(cl-weave:defmatcher :to-have-status (response expected)
+  (let ((actual-status (getf response :status))
+        (wanted-status (first expected)))
+    (values (= actual-status wanted-status)
+            actual-status
+            wanted-status)))
+
+(expect '(:status 201 :body "created") :to-have-status 201)
+```
+
 ### Performance And Allocation
 
 Performance assertions accept thunks so the measured form is executed exactly

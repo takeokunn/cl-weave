@@ -16,6 +16,10 @@
 (defvar *update-snapshots* nil)
 
 (defmacro defmatcher (name (actual expected) &body body)
+  (unless (symbolp name)
+    (error "cl-weave: defmatcher name must be a symbol, got ~S." name))
+  (unless (and (symbolp actual) (symbolp expected))
+    (error "cl-weave: defmatcher bindings must be symbols, got ~S." (list actual expected)))
   `(setf (gethash ,name *matchers*)
          (make-matcher
           :name ,name

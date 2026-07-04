@@ -39,6 +39,11 @@ For assertion failures, `:assertion` contains:
  :pass nil)
 ```
 
+Custom matchers registered with `cl-weave:defmatcher` use the same assertion
+payload. The matcher keyword is stored in `:matcher`; the optional second and
+third return values become `:actual` and `:expected`, which lets AI agents read
+domain-specific failure data without parsing human messages.
+
 Smart assertions use the same shape. For predicate forms such as
 `(expect (= (+ 1 1) 3))`, the matcher is the predicate symbol and `:actual`
 contains operand reports:

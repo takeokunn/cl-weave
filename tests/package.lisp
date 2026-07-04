@@ -11,6 +11,7 @@
    #:before-each
    #:clear-mock
    #:clear-tests
+   #:defmatcher
    #:describe-each
    #:describe-run-if
    #:describe-skip
