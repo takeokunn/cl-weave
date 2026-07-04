@@ -191,6 +191,17 @@
                    (tree-contains-p form :timeout-ms)
                    (tree-contains-p form 100)))))
 
+  (it "expands it-fails into expected-failure registration"
+    (expect (macroexpand-1
+             '(it-fails "known bug" (:retry 1 :timeout-ms 100)
+                (expect 1 :to-be 2)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :expected-failure-reason)
+                   (tree-contains-p form :retry)
+                   (tree-contains-p form :timeout-ms)))))
+
   (it "expands describe-skip into skipped suite registration"
     (expect (macroexpand-1
              '(describe-skip "blocked" "upstream gap"
@@ -487,6 +498,40 @@
       (let ((event (cl-weave::run-test-case suite test)))
         (expect (cl-weave::test-event-status event) :to-be :fail)
         (expect events :to-equal '(:after-each))))))
+
+(describe "expected failures"
+  (it-fails "passes when the body fails"
+    (expect 1 :to-be 2))
+
+  (test-fails "alias passes when the body errors"
+    (error "known bug"))
+
+  (it "turns unexpected success into a structured failure"
+    (let* ((test (cl-weave::make-test-case
+                  :name "known bug"
+                  :expected-failure-reason "known bug"
+                  :function (lambda () :ok)))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::test-event-condition event)
+              :to-be-instance-of 'cl-weave:expected-failure-missed)
+      (expect (cl-weave:expected-failure-missed-reason
+               (cl-weave::test-event-condition event))
+              :to-equal "known bug")))
+
+  (it "retries unexpected success until it becomes an expected failure"
+    (let* ((attempts 0)
+           (test (cl-weave::make-test-case
+                  :name "eventually fails"
+                  :retry 2
+                  :expected-failure-reason "known bug"
+                  :function (lambda ()
+                              (incf attempts)
+                              (when (= attempts 3)
+                                (expect :actual :to-be :expected)))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect attempts :to-be 3)
+      (expect (cl-weave::test-event-status event) :to-be :pass))))
 
 (describe "skips"
   (it-skip "does not run skipped tests" "documented gap")

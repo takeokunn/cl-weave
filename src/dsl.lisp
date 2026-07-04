@@ -66,6 +66,12 @@
                     :focus t
                     ,@(test-registration-options options))))
 
+(defmacro it-fails (name &body body)
+  (multiple-value-bind (options forms) (split-test-body body)
+    `(register-test ,name (lambda () ,@forms)
+                    :expected-failure-reason "expected failure"
+                    ,@(test-registration-options options))))
+
 (defmacro it-skip (name &optional (reason "skipped"))
   `(register-test ,name (lambda () nil) :skip-reason ,reason))
 
@@ -137,6 +143,9 @@
 
 (defmacro test-only (name &body body)
   `(it-only ,name ,@body))
+
+(defmacro test-fails (name &body body)
+  `(it-fails ,name ,@body))
 
 (defmacro test-skip (name &optional (reason "skipped"))
   `(it-skip ,name ,reason))

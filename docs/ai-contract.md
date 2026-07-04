@@ -330,6 +330,26 @@ final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `:assertion` is `nil`. Fixture hooks are still executed through the same
 `before-each` / `after-each` contract as ordinary test attempts.
 
+## Expected Failure Contract
+
+`it-fails` and `test-fails` register ordinary runnable cases with the same
+option plist as `it`.
+
+```lisp
+(it-fails "documents a known parser bug" (:retry 1 :timeout-ms 500)
+  (expect (parse-fragment input) :to-be :accepted))
+```
+
+Reporter schemas are unchanged. A raw assertion failure, error, or timeout
+becomes final status `:pass`. A raw normal completion becomes final status
+`:fail` with an `expected-failure-missed` condition. `:reason` remains reserved
+for skip and todo events; expected-failure metadata is not emitted as an event
+reason.
+
+Retry observes transformed attempt events. This means an unexpectedly passing
+expected-failure case is retryable as `:fail`, while the first raw failure or
+error becomes `:pass` and stops retrying.
+
 ## Table-Driven Macro Expansion
 
 `it-each`, `test-each`, and `describe-each` are compile-time expansion helpers,

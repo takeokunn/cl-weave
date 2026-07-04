@@ -18,6 +18,8 @@
    #:describe-skip-if
    #:describe-todo
    #:expect
+   #:expected-failure-missed
+   #:expected-failure-missed-reason
    #:gen-boolean
    #:gen-integer
    #:gen-keyword
@@ -43,6 +45,7 @@
    #:isolated-result-timed-out-p
    #:it
    #:it-each
+   #:it-fails
    #:it-isolated
    #:it-property
    #:it-only
@@ -75,6 +78,7 @@
    #:test-plan-entry-timeout-ms
    #:test
    #:test-each
+   #:test-fails
    #:test-only
    #:test-run-if
    #:test-skip

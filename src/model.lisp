@@ -23,7 +23,8 @@
   skip-reason
   todo-reason
   retry
-  timeout-ms)
+  timeout-ms
+  expected-failure-reason)
 
 (defstruct assertion-detail
   form
@@ -63,6 +64,12 @@
              (format stream "Test exceeded timeout of ~Dms"
                      (test-timeout-ms condition)))))
 
+(define-condition expected-failure-missed (error)
+  ((reason :initarg :reason :reader expected-failure-missed-reason))
+  (:report (lambda (condition stream)
+             (format stream "Expected test to fail, but it passed: ~A"
+                     (expected-failure-missed-reason condition)))))
+
 (defun root-suite ()
   (or *root-suite*
       (setf *root-suite* (make-suite :name "root"))))
@@ -88,7 +95,8 @@
       (funcall thunk))
     suite))
 
-(defun register-test (name function &key focus skip-reason todo-reason retry timeout-ms)
+(defun register-test
+    (name function &key focus skip-reason todo-reason retry timeout-ms expected-failure-reason)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite (make-test-case :name name
                                      :function function
@@ -96,7 +104,8 @@
                                      :skip-reason skip-reason
                                      :todo-reason todo-reason
                                      :retry retry
-                                     :timeout-ms timeout-ms))))
+                                     :timeout-ms timeout-ms
+                                     :expected-failure-reason expected-failure-reason))))
 
 (defun register-before-all (function)
   (let ((suite (or *current-suite* (root-suite))))

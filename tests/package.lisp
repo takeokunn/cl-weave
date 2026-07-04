@@ -32,6 +32,7 @@
    #:gen-tuple
    #:it
    #:it-each
+   #:it-fails
    #:it-isolated
    #:it-property
    #:it-only
@@ -47,6 +48,7 @@
    #:mock-calls
    #:run-isolated
    #:test-each
+   #:test-fails
    #:test-run-if
    #:test-skip-if
    #:with-mocked-functions))

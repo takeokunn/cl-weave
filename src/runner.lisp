@@ -96,24 +96,48 @@
         (call-test-case/k suite test continue))
       (call-test-case/k suite test continue)))
 
+(defun expected-failure-case-p (test)
+  (test-case-expected-failure-reason test))
+
+(defun expected-failure-event (suite test start event)
+  (let ((reason (expected-failure-case-p test)))
+    (cond
+      ((null reason)
+       event)
+      ((eq (test-event-status event) :pass)
+       (make-event :fail
+                   suite
+                   test
+                   start
+                   :condition (make-condition 'expected-failure-missed
+                                              :reason reason)))
+      ((member (test-event-status event) '(:fail :error))
+       (make-event :pass suite test start))
+      (t
+       event))))
+
 (defun run-test-attempt (suite test start)
-  (handler-case
-      (call-test-case-with-timeout/k
-       suite
-       test
-       (timeout-seconds test)
-       (lambda ()
-         (make-event :pass suite test start)))
-    (sb-ext:timeout ()
-      (let ((condition (make-condition 'test-timeout
-                                       :timeout-ms (test-case-timeout-ms test))))
-        (make-event :fail suite test start :condition condition)))
-    (assertion-failure (condition)
-      (make-event :fail suite test start
-                  :condition condition
-                  :assertion (failure-detail condition)))
-    (condition (condition)
-      (make-event :error suite test start :condition condition))))
+  (expected-failure-event
+   suite
+   test
+   start
+   (handler-case
+       (call-test-case-with-timeout/k
+        suite
+        test
+        (timeout-seconds test)
+        (lambda ()
+          (make-event :pass suite test start)))
+     (sb-ext:timeout ()
+       (let ((condition (make-condition 'test-timeout
+                                        :timeout-ms (test-case-timeout-ms test))))
+         (make-event :fail suite test start :condition condition)))
+     (assertion-failure (condition)
+       (make-event :fail suite test start
+                   :condition condition
+                   :assertion (failure-detail condition)))
+     (condition (condition)
+       (make-event :error suite test start :condition condition)))))
 
 (defun retryable-event-p (event)
   (member (test-event-status event) '(:fail :error)))

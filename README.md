@@ -27,6 +27,7 @@ Early MVP. The current focus is a solid core:
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
+- Vitest-style `it-fails` / `test-fails` expected-failure cases
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
 - Vitest-style mock functions with call history assertions
@@ -385,12 +386,19 @@ hooks or test bodies. Todo cases use the same event status and do not fail
 
 (test "alias with the same options" (:retry 1)
   (expect (+ 20 22) :to-be 42))
+
+(it-fails "documents a known parser bug" (:retry 1)
+  (expect (parse-fragment input) :to-be :accepted))
 ```
 
 `:retry` is the number of extra attempts after the first attempt. Fixtures and
 dynamic `*test-context*` are recreated for every attempt. `:timeout-ms` fails the
 case if a single attempt exceeds the configured wall-clock budget. Timeout
 failures are reported as `test-timeout` conditions.
+
+`it-fails` and `test-fails` invert one runnable case: any assertion failure,
+error, or timeout is reported as `:pass`; an unexpectedly passing body is
+reported as `:fail` with `expected-failure-missed`.
 
 ### Filtering
 
