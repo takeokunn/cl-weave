@@ -16,6 +16,8 @@ Early MVP. The current focus is a solid core:
 - `it-each` compile-time table tests
 - `before-all` / `after-all` and `before-each` / `after-each` dynamic fixtures
 - `it-skip` / `test-skip` skipped cases
+- `describe-only` / `it-only` focused runs
+- `it-todo` / `test-todo` todo cases
 - ASDF system definitions
 - spec and S-expression reporters
 - non-zero process exit on failure for CI
@@ -142,6 +144,23 @@ Built-in matchers:
 ```
 
 Skipped cases are reported as `:skip` and do not fail `run-all`.
+
+### Focus And Todo
+
+```lisp
+(describe-only "focused suite"
+  (it "runs inside focused suite"
+    (expect :selected :to-be :selected)))
+
+(it-only "focuses a single case"
+  (expect (+ 40 2) :to-be 42))
+
+(it-todo "documents a missing edge case" "needs property generator")
+(test-todo "alias for it-todo")
+```
+
+When any suite or case is focused, `run-all` executes only the focused path.
+Todo cases are reported as `:todo`, skip their body, and do not fail `run-all`.
 
 ### Mocking
 

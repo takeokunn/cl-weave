@@ -3,11 +3,20 @@
 (defmacro describe (name &body body)
   `(register-suite ,name (lambda () ,@body)))
 
+(defmacro describe-only (name &body body)
+  `(register-suite ,name (lambda () ,@body) :focus t))
+
 (defmacro it (name &body body)
   `(register-test ,name (lambda () ,@body)))
 
+(defmacro it-only (name &body body)
+  `(register-test ,name (lambda () ,@body) :focus t))
+
 (defmacro it-skip (name &optional (reason "skipped"))
   `(register-test ,name (lambda () nil) :skip-reason ,reason))
+
+(defmacro it-todo (name &optional (reason "todo"))
+  `(register-test ,name (lambda () nil) :todo-reason ,reason))
 
 (defmacro it-each (cases name bindings &body body)
   `(progn
@@ -19,8 +28,14 @@
 (defmacro test (name &body body)
   `(it ,name ,@body))
 
+(defmacro test-only (name &body body)
+  `(it-only ,name ,@body))
+
 (defmacro test-skip (name &optional (reason "skipped"))
   `(it-skip ,name ,reason))
+
+(defmacro test-todo (name &optional (reason "todo"))
+  `(it-todo ,name ,reason))
 
 (defmacro before-all (&body body)
   `(register-before-all (lambda () ,@body)))

@@ -70,14 +70,21 @@
     (expect (macroexpand-1 '(expect (+ 1 1) :to-be 2))
             :to-satisfy
             (lambda (form)
-              (tree-contains-p form 'cl-weave::assert-expectation)))))
+              (tree-contains-p form 'cl-weave::assert-expectation))))
+
+  (it "expands it-only into focused test registration"
+    (expect (macroexpand-1 '(it-only "focused" (expect 1 :to-be 1)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::register-test)
+                   (tree-contains-p form :focus)))))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))
             :to-expand-to
             '(if ready
                  nil
-                 (progn (setf *fixture-value* :done)))))
+                 (progn (setf *fixture-value* :done))))))
 
 (describe "fixtures"
   (before-all
@@ -118,6 +125,42 @@
       (expect (cl-weave::test-event-reason event) :to-equal "not implemented")
       (expect (cl-weave::passed-event-p event) :to-be-truthy))))
 
+(describe "todos"
+  (it-todo "documents pending work" "intentional")
+
+  (it "reports todo tests without running their body"
+    (let* ((test (cl-weave::make-test-case
+                  :name "todo case"
+                  :function (lambda () (error "should not run"))
+                  :todo-reason "pending"))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect (cl-weave::test-event-status event) :to-be :todo)
+      (expect (cl-weave::test-event-reason event) :to-equal "pending")
+      (expect (cl-weave::passed-event-p event) :to-be-truthy))))
+
+(describe "focus"
+  (it "runs only focused tests when any focus exists"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "focus" :parent root)))
+           (events-log nil))
+      (cl-weave::add-child
+       root
+       (cl-weave::make-test-case
+        :name "outside"
+        :function (lambda () (push :outside events-log))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "inside"
+        :function (lambda () (push :inside events-log))
+        :focus t))
+      (let ((events (cl-weave::collect-events root)))
+        (expect events-log :to-equal '(:inside))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("focus" "inside")))))))
+
 (describe "mocking"
   (it "restores symbol functions"
     (expect (sample-size '(a b c)) :to-be 3)
@@ -140,8 +183,15 @@
                              :status :skip
                              :path '("reporters" "skips")
                              :reason "example"
+                             :elapsed-internal-time 0)
+                            (cl-weave::make-test-event
+                             :status :todo
+                             :path '("reporters" "todos")
+                             :reason "pending"
                              :elapsed-internal-time 0))
                       stream))))
       (expect output :to-contain ":CL-WEAVE/RESULTS")
+      (expect output :to-contain ":SCHEMA-VERSION 2")
       (expect output :to-contain ":SKIPPED")
-      (expect output :to-contain ":SCHEMA-VERSION"))))
+      (expect output :to-contain ":TODOS")
+      (expect output :to-contain ":TODO"))))

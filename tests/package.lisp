@@ -13,5 +13,7 @@
    #:expect
    #:it
    #:it-each
+   #:it-only
    #:it-skip
+   #:it-todo
    #:with-mocked-functions))

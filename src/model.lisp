@@ -7,6 +7,7 @@
 (defstruct suite
   name
   parent
+  focus
   (children '())
   (before-all '())
   (after-all '())
@@ -16,7 +17,9 @@
 (defstruct test-case
   name
   function
-  skip-reason)
+  focus
+  skip-reason
+  todo-reason)
 
 (defstruct assertion-detail
   form
@@ -56,18 +59,22 @@
         (append (suite-children parent) (list child)))
   child)
 
-(defun register-suite (name thunk)
+(defun register-suite (name thunk &key focus)
   (let* ((parent (or *current-suite* (root-suite)))
-         (suite (add-child parent (make-suite :name name :parent parent))))
+         (suite (add-child parent (make-suite :name name
+                                              :parent parent
+                                              :focus focus))))
     (let ((*current-suite* suite))
       (funcall thunk))
     suite))
 
-(defun register-test (name function &key skip-reason)
+(defun register-test (name function &key focus skip-reason todo-reason)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite (make-test-case :name name
                                      :function function
-                                     :skip-reason skip-reason))))
+                                     :focus focus
+                                     :skip-reason skip-reason
+                                     :todo-reason todo-reason))))
 
 (defun register-before-all (function)
   (let ((suite (or *current-suite* (root-suite))))

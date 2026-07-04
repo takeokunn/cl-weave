@@ -13,9 +13,10 @@ The reporter prints one form:
 
 ```lisp
 (:cl-weave/results
- :schema-version 1
+ :schema-version 2
  :passed 1
  :skipped 0
+ :todos 0
  :failed 0
  :errored 0
  :events
@@ -42,7 +43,8 @@ For assertion failures, `:assertion` contains:
 
 - `:schema-version` changes only when the shape changes.
 - `:path` is a list of suite names followed by the case name.
-- `:status` is one of `:pass`, `:skip`, `:fail`, or `:error`.
+- `:status` is one of `:pass`, `:skip`, `:todo`, `:fail`, or `:error`.
 - `:condition` is a printable string or `nil`.
-- `:reason` is a skip reason string for `:skip` events, otherwise `nil`.
+- `:reason` is a skip or todo reason string for `:skip` and `:todo` events,
+  otherwise `nil`.
 - `:assertion` is `nil` unless the failure came from `expect`.

@@ -8,6 +8,7 @@
   (ecase status
     (:pass "PASS")
     (:skip "SKIP")
+    (:todo "TODO")
     (:fail "FAIL")
     (:error "ERROR")))
 
@@ -26,12 +27,14 @@
 (defun report-spec (events stream)
   (let ((passed 0)
         (skipped 0)
+        (todos 0)
         (failed 0)
         (errored 0))
     (dolist (event events)
       (ecase (test-event-status event)
         (:pass (incf passed))
         (:skip (incf skipped))
+        (:todo (incf todos))
         (:fail (incf failed))
         (:error (incf errored)))
       (format stream "~&[~A] ~A (~,3Fs)"
@@ -40,11 +43,11 @@
               (event-duration-seconds event))
       (when (test-event-reason event)
         (format stream "~&    reason: ~A" (test-event-reason event)))
-      (unless (member (test-event-status event) '(:pass :skip))
+      (unless (member (test-event-status event) '(:pass :skip :todo))
         (format stream "~&    condition: ~A" (test-event-condition event))
         (report-assertion-detail (test-event-assertion event) stream)))
-    (format stream "~&~%~D passed, ~D skipped, ~D failed, ~D errored, ~D total~%"
-            passed skipped failed errored (length events))
+    (format stream "~&~%~D passed, ~D skipped, ~D todo, ~D failed, ~D errored, ~D total~%"
+            passed skipped todos failed errored (length events))
     (values)))
 
 (defun serializable-event (event)
@@ -65,9 +68,10 @@
 
 (defun report-sexp (events stream)
   (prin1 (list :cl-weave/results
-                :schema-version 1
+                :schema-version 2
                 :passed (count :pass events :key #'test-event-status)
                 :skipped (count :skip events :key #'test-event-status)
+                :todos (count :todo events :key #'test-event-status)
                 :failed (count :fail events :key #'test-event-status)
                :errored (count :error events :key #'test-event-status)
                :events (mapcar #'serializable-event events))
