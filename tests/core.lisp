@@ -2174,6 +2174,33 @@
       (expect (cl-weave/cli::cli-options-update-snapshots snapshot-options)
               :to-be t)))
 
+  (it "parses watch intervals as explicit CLI text"
+    (labels ((watch-interval-from-env (value)
+               (with-mocked-functions
+                   (((symbol-function 'uiop:getenv)
+                     (lambda (name)
+                       (when (string= name "CL_WEAVE_WATCH_INTERVAL")
+                         value))))
+                 (cl-weave/cli::cli-options-watch-interval
+                  (cl-weave/cli::options-from-environment)))))
+      (expect (cl-weave/cli::cli-options-watch-interval
+               (cl-weave/cli::parse-cli-arguments
+                '("watch" "--watch-interval" "0.25")
+                (cl-weave/cli::make-cli-options)))
+              :to-be 0.25)
+      (expect (watch-interval-from-env "0.25") :to-be 0.25)
+      (dolist (value '("0" "-1" "1/2" "1 " ".5" "1." "#.(error \"reader\")"))
+        (expect (lambda ()
+                  (cl-weave/cli::parse-cli-arguments
+                   (list "watch" "--watchInterval" value)
+                   (cl-weave/cli::make-cli-options)))
+                :to-throw
+                "--watch-interval must be a positive number")
+        (expect (lambda ()
+                  (watch-interval-from-env value))
+                :to-throw
+                "CL_WEAVE_WATCH_INTERVAL must be a positive number"))))
+
   (it "parses CI snapshot settings from environment variables"
     (with-mocked-functions
         (((symbol-function 'uiop:getenv)

@@ -82,22 +82,33 @@
       (error 'cli-error :message (format nil "~A must be positive: ~A" name value)))
     integer))
 
-(defun trailing-space-p (string start)
-  (loop for index from start below (length string)
-        always (find (char string index) '(#\Space #\Tab #\Newline #\Return))))
-
 (defun parse-positive-number (value name)
-  (handler-case
-      (multiple-value-bind (number position)
-          (read-from-string value)
-        (unless (and (numberp number)
-                     (plusp number)
-                     (trailing-space-p value position))
-          (error 'cli-error))
-        number)
-    (error ()
-      (error 'cli-error
-             :message (format nil "~A must be a positive number: ~A" name value)))))
+  (labels ((invalid ()
+             (error 'cli-error
+                    :message (format nil "~A must be a positive number: ~A" name value)))
+           (digits-p (string)
+             (and (plusp (length string))
+                  (every #'digit-char-p string)))
+           (component (string)
+             (unless (digits-p string)
+               (invalid))
+             (parse-integer string :junk-allowed nil)))
+    (let* ((first-dot (position #\. value))
+           (second-dot (and first-dot
+                            (position #\. value :start (1+ first-dot)))))
+      (when (or (string= value "") second-dot)
+        (invalid))
+      (let ((number
+              (if first-dot
+                  (let* ((whole (component (subseq value 0 first-dot)))
+                         (fraction-text (subseq value (1+ first-dot)))
+                         (fraction (component fraction-text))
+                         (denominator (expt 10 (length fraction-text))))
+                    (float (+ whole (/ fraction denominator)) 1.0))
+                  (component value))))
+        (unless (plusp number)
+          (invalid))
+        number))))
 
 (defun parse-reporter (value)
   (let ((normalized (string-downcase value)))
