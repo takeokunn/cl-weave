@@ -157,5 +157,6 @@
   (let ((events (collect-events (root-suite))))
     (ecase reporter
       (:spec (report-spec events stream))
-      (:sexp (report-sexp events stream)))
+      (:sexp (report-sexp events stream))
+      (:junit (report-junit events stream)))
     (every #'passed-event-p events)))
