@@ -889,6 +889,7 @@
                   bail
                   coverage
                   coverage-output
+                  (pass-with-no-tests t)
                   (coverage-reset t))
   (call-with-coverage
    coverage
@@ -909,7 +910,8 @@
          (:tap (report-tap events stream))
          (:github (report-github events stream))
          (:junit (report-junit events stream)))
-       (every #'passed-event-p events)))))
+       (and (or pass-with-no-tests events)
+            (every #'passed-event-p events))))))
 
 (defun list-tests (&key (reporter :spec)
                      (stream *standard-output*)

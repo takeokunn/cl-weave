@@ -21,6 +21,7 @@
   seed
   coverage
   coverage-output
+  (pass-with-no-tests t)
   snapshot-directory
   snapshot-file
   update-snapshots
@@ -53,6 +54,14 @@
          (not (member (string-downcase value)
                       '("0" "false" "no" "off")
                       :test #'string=)))))
+
+(defun parse-boolean (value name)
+  (let ((normalized (string-downcase value)))
+    (cond
+      ((member normalized '("1" "true" "yes" "on") :test #'string=) t)
+      ((member normalized '("0" "false" "no" "off") :test #'string=) nil)
+      (t (error 'cli-error
+                :message (format nil "~A must be a boolean: ~A" name value))))))
 
 (defun parse-complete-integer (value name)
   (handler-case
@@ -217,6 +226,14 @@
     (setf (cli-options-coverage-output options) path)
     (rest rest)))
 
+(define-cli-option "--pass-with-no-tests" (options rest)
+  (setf (cli-options-pass-with-no-tests options) t)
+  rest)
+
+(define-cli-option "--fail-with-no-tests" (options rest)
+  (setf (cli-options-pass-with-no-tests options) nil)
+  rest)
+
 (define-cli-option "--snapshot-dir" (options rest)
   (let ((directory (require-option-argument "--snapshot-dir" rest)))
     (setf (cli-options-snapshot-directory options) (pathname directory))
@@ -263,6 +280,10 @@
     (when (environment-value "CL_WEAVE_COVERAGE_FILE")
       (setf (cli-options-coverage-output options)
             (environment-value "CL_WEAVE_COVERAGE_FILE")))
+    (when (environment-value "CL_WEAVE_PASS_WITH_NO_TESTS")
+      (setf (cli-options-pass-with-no-tests options)
+            (parse-boolean (environment-value "CL_WEAVE_PASS_WITH_NO_TESTS")
+                           "CL_WEAVE_PASS_WITH_NO_TESTS")))
     (when (environment-value "CL_WEAVE_SNAPSHOT_DIR")
       (setf (cli-options-snapshot-directory options)
             (pathname (environment-value "CL_WEAVE_SNAPSHOT_DIR"))))
@@ -364,6 +385,8 @@
             "  --seed INTEGER            deterministic random sequence seed"
             "  --coverage                wrap execution with SBCL sb-cover"
             "  --coverage-output FILE    save SBCL coverage state to FILE"
+            "  --pass-with-no-tests      pass when filters select no tests"
+            "  --fail-with-no-tests      fail when filters select no tests"
             "  --snapshot-dir DIR        external snapshot directory"
             "  --snapshot-file FILE      external snapshot file name"
             "  --update-snapshots        update external snapshots during this run"
@@ -440,6 +463,7 @@
            :bail (cli-options-bail options)
            :coverage (cli-options-coverage options)
            :coverage-output (cli-options-coverage-output options)
+           :pass-with-no-tests (cli-options-pass-with-no-tests options)
            :stream stream)))))))
 
 #+sbcl

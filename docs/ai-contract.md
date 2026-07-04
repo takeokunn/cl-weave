@@ -109,7 +109,9 @@ CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinfor
 
 `CL_WEAVE_OUTPUT_FILE` affects only reporter output. The process still exits
 with `0` when all selected events pass, skip, or todo, and exits with `1` when
-any selected event fails or errors.
+any selected event fails or errors. Empty selections exit with `0` by default;
+set `CL_WEAVE_PASS_WITH_NO_TESTS=false`, pass `--fail-with-no-tests`, or call
+`run-all` with `:pass-with-no-tests nil` when CI must reject a zero-test run.
 
 External snapshots are sidecar artifacts controlled by dynamic bindings or
 CLI/environment settings:
@@ -361,7 +363,9 @@ contract through `CL_WEAVE_TEST_FILTER`.
 
 Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
-the run is considered successful because no selected test failed.
+the run is considered successful by default because no selected test failed.
+Set `:pass-with-no-tests nil` or use the CLI/environment equivalent to make an
+empty selection fail while keeping reporter payloads empty.
 
 Suite-level `describe-skip` and `describe-todo` compose with the same selection
 rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`

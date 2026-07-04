@@ -39,6 +39,26 @@
   #-sbcl
   nil)
 
+(defun requested-pass-with-no-tests ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_PASS_WITH_NO_TESTS")))
+    (cond
+      ((or (null value) (string= value "")) t)
+      ((or (string-equal value "1")
+           (string-equal value "true")
+           (string-equal value "yes")
+           (string-equal value "on"))
+       t)
+      ((or (string-equal value "0")
+           (string-equal value "false")
+           (string-equal value "no")
+           (string-equal value "off"))
+       nil)
+      (t
+       (error "CL_WEAVE_PASS_WITH_NO_TESTS must be a boolean: ~A" value))))
+  #-sbcl
+  t)
+
 (defun requested-bail ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_BAIL")))
@@ -237,6 +257,7 @@
                        :bail (requested-bail)
                        :coverage coverage
                        :coverage-output coverage-output
+                       :pass-with-no-tests (requested-pass-with-no-tests)
                        :stream stream)))
                   0
                   1))))))

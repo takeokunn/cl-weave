@@ -1132,7 +1132,25 @@
         :function (lambda () (push :test hook-events))))
       (expect (cl-weave::collect-events root :name-filter "missing")
               :to-equal nil)
-      (expect hook-events :to-equal nil))))
+      (expect hook-events :to-equal nil)))
+
+  (it "can fail a run when no tests are selected"
+    (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))
+          (cl-weave::*current-suite* nil))
+      (describe "selected"
+        (it "visible"
+          (expect t :to-be-truthy)))
+      (expect (cl-weave:run-all
+               :reporter :sexp
+               :stream (make-string-output-stream)
+               :name-filter "missing")
+              :to-be t)
+      (expect (cl-weave:run-all
+               :reporter :sexp
+               :stream (make-string-output-stream)
+               :name-filter "missing"
+               :pass-with-no-tests nil)
+              :to-be nil))))
 
 (describe "sharding"
   (it "runs a deterministic one-based shard after filtering"
@@ -1480,6 +1498,7 @@
                       "--coverage"
                       "--coverage-output"
                       "coverage.out"
+                      "--fail-with-no-tests"
                       "--snapshot-dir"
                       "tests/__snapshots__/"
                       "--snapshot-file"
@@ -1501,6 +1520,7 @@
       (expect (cl-weave/cli::cli-options-coverage options) :to-be t)
       (expect (cl-weave/cli::cli-options-coverage-output options)
               :to-equal "coverage.out")
+      (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be nil)
       (expect (cl-weave/cli::cli-options-snapshot-directory options)
               :to-equal #P"tests/__snapshots__/")
       (expect (cl-weave/cli::cli-options-snapshot-file options)
@@ -1523,6 +1543,21 @@
                 :to-equal "ci.snapshots")
         (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t))))
 
+  (it "parses no-test policy from flags and environment"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("run" "--fail-with-no-tests" "--pass-with-no-tests")
+                    (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be t))
+    (with-mocked-functions
+        (((symbol-function 'uiop:getenv)
+          (lambda (name)
+            (cdr (assoc name
+                        '(("CL_WEAVE_PASS_WITH_NO_TESTS" . "false"))
+                        :test #'string=)))))
+      (let ((options (cl-weave/cli::options-from-environment)))
+        (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
+                :to-be nil))))
+
   (it "binds snapshot settings during CLI execution"
     (let ((observed nil)
           (options (cl-weave/cli::make-cli-options
@@ -1532,9 +1567,9 @@
       (with-mocked-functions
           (((symbol-function 'cl-weave:run-all)
             (lambda (&key reporter name-filter shard order seed bail coverage
-                     coverage-output stream)
+                     coverage-output pass-with-no-tests stream)
               (declare (ignore reporter name-filter shard order seed bail coverage
-                               coverage-output stream))
+                               coverage-output pass-with-no-tests stream))
               (setf observed
                     (list cl-weave:*snapshot-directory*
                           cl-weave:*snapshot-file-name*
@@ -1582,6 +1617,7 @@
       (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
       (expect usage :to-contain "--reporter REPORTER")
       (expect usage :to-contain "--shard INDEX/COUNT")
+      (expect usage :to-contain "--fail-with-no-tests")
       (expect usage :to-contain "--snapshot-dir DIR")
       (expect usage :to-contain "--snapshot-file FILE"))))
 

@@ -535,6 +535,10 @@ CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scri
 
 Suites with no selected descendants do not run `before-all` or `after-all`, so
 filtered runs do not leak fixture side effects from unrelated suites.
+By default, a filter that selects zero tests exits successfully. CI jobs that
+must reject empty selections can pass `--fail-with-no-tests`, set
+`CL_WEAVE_PASS_WITH_NO_TESTS=false`, or call
+`(cl-weave:run-all :pass-with-no-tests nil)`.
 
 ### Sharding
 
@@ -716,7 +720,8 @@ path summaries for focused reruns. See `docs/ai-contract.md`.
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
-`CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_COVERAGE=1` to wrap
+`CL_WEAVE_BAIL` for fast-fail runs. Set `CL_WEAVE_PASS_WITH_NO_TESTS=false`
+to fail CI when filters select no tests. Set `CL_WEAVE_COVERAGE=1` to wrap
 execution with SBCL `sb-cover`, and set `CL_WEAVE_COVERAGE_FILE=path` to save
 the coverage state as a CI artifact.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
