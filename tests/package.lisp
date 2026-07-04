@@ -6,22 +6,29 @@
    #:*test-context*
    #:around-each
    #:after-all
+   #:afterall
    #:after-each
+   #:aftereach
    #:assertion-failure
    #:before-all
+   #:beforeall
    #:before-each
+   #:beforeeach
    #:clear-mock
    #:clear-tests
    #:collect-mutations
    #:continue-test
    #:defmatcher
    #:defmutation-operator
+   #:describe.each
+   #:describe.only
    #:describe-each
    #:describe-run-if
    #:describe-skip
    #:describe-skip-if
    #:describe-todo
    #:expect
+   #:expect.not
    #:expect-not
    #:gen-boolean
    #:gen-form
@@ -37,6 +44,7 @@
    #:gen-symbol
    #:gen-tuple
    #:it
+   #:it.each
    #:it-concurrent
    #:it-each
    #:it-fails
@@ -70,6 +78,8 @@
    #:run-mutations
    #:retry-test
    #:skip-test
+   #:test.concurrent
+   #:test.each
    #:test-concurrent
    #:test-each
    #:test-fails

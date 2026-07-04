@@ -3,6 +3,24 @@
 `cl-weave` exposes structured test output as S-expressions and JSON so agents
 can parse results without scraping human text.
 
+## DSL Alias Contract
+
+Vitest-shaped aliases are source-level macros only. Agents may normalize them
+to the canonical hyphenated forms when reasoning about test plans:
+
+- `describe.each` -> `describe-each`
+- `describe.only` -> `describe-only`
+- `it.each` -> `it-each`
+- `it.concurrent` -> `it-concurrent`
+- `test.each` -> `test-each`
+- `test.concurrent` -> `test-concurrent`
+- `expect.not` -> `expect-not`
+- `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
+
+Common Lisp uppercases unescaped symbols while reading source, so `beforeAll`
+and `beforeall` are the same exported symbol. The aliases do not change reporter
+schemas, runtime event shapes, or source location capture.
+
 ## S-Expression Reporter
 
 ```lisp

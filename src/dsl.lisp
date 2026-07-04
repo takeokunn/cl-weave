@@ -33,6 +33,24 @@
                         (destructuring-bind ,bindings ',case
                           ,@body)))))
 
+(defmacro describe.each (cases name bindings &body body)
+  `(describe-each ,cases ,name ,bindings ,@body))
+
+(defmacro describe.only (name &body body)
+  `(describe-only ,name ,@body))
+
+(defmacro describe.skip (name &body body)
+  `(describe-skip ,name ,@body))
+
+(defmacro describe.todo (name &body body)
+  `(describe-todo ,name ,@body))
+
+(defmacro describe.skip-if (condition name &body body)
+  `(describe-skip-if ,condition ,name ,@body))
+
+(defmacro describe.run-if (condition name &body body)
+  `(describe-run-if ,condition ,name ,@body))
+
 (defun option-plist-form-p (form)
   (and (consp form)
        (evenp (length form))
@@ -159,6 +177,36 @@
         ',names
         '(it-property ,name ,bindings ,@body)))))
 
+(defmacro it.concurrent (name &body body)
+  `(it-concurrent ,name ,@body))
+
+(defmacro it.each (cases name bindings &body body)
+  `(it-each ,cases ,name ,bindings ,@body))
+
+(defmacro it.fails (name &body body)
+  `(it-fails ,name ,@body))
+
+(defmacro it.isolated (name &body body)
+  `(it-isolated ,name ,@body))
+
+(defmacro it.property (name bindings &body body)
+  `(it-property ,name ,bindings ,@body))
+
+(defmacro it.only (name &body body)
+  `(it-only ,name ,@body))
+
+(defmacro it.run-if (condition name &body body)
+  `(it-run-if ,condition ,name ,@body))
+
+(defmacro it.skip (name &optional (reason "skipped"))
+  `(it-skip ,name ,reason))
+
+(defmacro it.skip-if (condition name &body body)
+  `(it-skip-if ,condition ,name ,@body))
+
+(defmacro it.todo (name &optional (reason "todo"))
+  `(it-todo ,name ,reason))
+
 (defmacro test (name &body body)
   `(it ,name ,@body))
 
@@ -186,6 +234,30 @@
 (defmacro test-run-if (condition name &body body)
   `(it-run-if ,condition ,name ,@body))
 
+(defmacro test.concurrent (name &body body)
+  `(test-concurrent ,name ,@body))
+
+(defmacro test.each (cases name bindings &body body)
+  `(test-each ,cases ,name ,bindings ,@body))
+
+(defmacro test.fails (name &body body)
+  `(test-fails ,name ,@body))
+
+(defmacro test.only (name &body body)
+  `(test-only ,name ,@body))
+
+(defmacro test.run-if (condition name &body body)
+  `(test-run-if ,condition ,name ,@body))
+
+(defmacro test.skip (name &optional (reason "skipped"))
+  `(test-skip ,name ,reason))
+
+(defmacro test.skip-if (condition name &body body)
+  `(test-skip-if ,condition ,name ,@body))
+
+(defmacro test.todo (name &optional (reason "todo"))
+  `(test-todo ,name ,reason))
+
 (defmacro before-all (&body body)
   `(register-before-all (lambda () ,@body)))
 
@@ -200,6 +272,18 @@
 
 (defmacro after-each (&body body)
   `(register-after-each (lambda () ,@body)))
+
+(defmacro beforeall (&body body)
+  `(before-all ,@body))
+
+(defmacro afterall (&body body)
+  `(after-all ,@body))
+
+(defmacro beforeeach (&body body)
+  `(before-each ,@body))
+
+(defmacro aftereach (&body body)
+  `(after-each ,@body))
 
 (defparameter *smart-assertion-operators*
   '(= /= < <= > >= eql equal equalp string= string-equal))
@@ -281,6 +365,9 @@
 
 (defmacro expect-not (actual &body expectation)
   (expand-matcher-expectation 'expect-not actual expectation :negated t))
+
+(defmacro expect.not (actual &body expectation)
+  `(expect-not ,actual ,@expectation))
 
 (defmacro with-snapshot-updates (&body body)
   `(let ((*update-snapshots* t))

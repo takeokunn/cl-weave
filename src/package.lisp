@@ -5,10 +5,14 @@
    #:*test-context*
    #:around-each
    #:after-all
+   #:afterall
    #:after-each
+   #:aftereach
    #:assertion-failure
    #:before-all
+   #:beforeall
    #:before-each
+   #:beforeeach
    #:clear-tests
    #:collect-test-plan
    #:collect-mutations
@@ -18,14 +22,21 @@
    #:coverage-unavailable-reason
    #:defmutation-operator
    #:describe
+   #:describe.each
    #:describe-each
+   #:describe.only
    #:describe-only
+   #:describe.run-if
    #:describe-run-if
+   #:describe.skip
    #:describe-skip
+   #:describe.skip-if
    #:describe-skip-if
+   #:describe.todo
    #:describe-todo
    #:defmatcher
    #:expect
+   #:expect.not
    #:expect-not
    #:expected-failure-missed
    #:expected-failure-missed-reason
@@ -53,15 +64,25 @@
    #:isolated-result-stdout
    #:isolated-result-timed-out-p
    #:it
+   #:it.concurrent
    #:it-concurrent
+   #:it.each
    #:it-each
+   #:it.fails
    #:it-fails
+   #:it.isolated
    #:it-isolated
+   #:it.property
    #:it-property
+   #:it.only
    #:it-only
+   #:it.run-if
    #:it-run-if
+   #:it.skip
    #:it-skip
+   #:it.skip-if
    #:it-skip-if
+   #:it.todo
    #:it-todo
    #:list-tests
    #:logic-query
@@ -113,13 +134,21 @@
    #:test-plan-entry-concurrent
    #:test-plan-facts
    #:test
+   #:test.concurrent
    #:test-concurrent
+   #:test.each
    #:test-each
+   #:test.fails
    #:test-fails
+   #:test.only
    #:test-only
+   #:test.run-if
    #:test-run-if
+   #:test.skip
    #:test-skip
+   #:test.skip-if
    #:test-skip-if
+   #:test.todo
    #:test-todo
    #:test-failure
    #:test-timeout

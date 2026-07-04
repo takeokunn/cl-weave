@@ -273,6 +273,19 @@
       (expect (+ left right) :to-be total)
       (expect (gethash :table-total *test-context*) :to-be total)))
 
+  (describe.each ((4 5 9))
+      "dot table suite ~A plus ~A"
+      (left right total)
+    (beforeEach
+      (setf (gethash :dot-table-total *test-context*) total))
+    (it.each ((:alpha :alpha)
+              (:beta :beta))
+        "runs dot generated case ~A"
+        (actual expected)
+      (expect actual :to-be expected)
+      (expect (+ left right) :to-be total)
+      (expect (gethash :dot-table-total *test-context*) :to-be total)))
+
   (it "expands expect into the assertion engine"
     (expect (macroexpand-1 '(expect (+ 1 1) :to-be 2))
             :to-satisfy
@@ -402,6 +415,36 @@
             :to-satisfy
             (lambda (form)
               (tree-contains-p form 'cl-weave:it-each))))
+
+  (it "expands Vitest dot aliases through canonical macros"
+    (expect (macroexpand-1
+             '(it.each ((1 2 3))
+                  "adds ~A and ~A"
+                  (left right total)
+                (expect (+ left right) :to-be total)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:it-each)))
+    (expect (macroexpand-1
+             '(test.concurrent "parallel alias"
+                (expect :ok :to-be :ok)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:test-concurrent)))
+    (expect (macroexpand-1
+             '(describe.only "focused alias"
+                (it "case" (expect :ok :to-be :ok))))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:describe-only)))
+    (expect (macroexpand-1 '(beforeAll (setf *fixture-value* :ready)))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:before-all)))
+    (expect (macroexpand-1 '(expect.not 1 :to-be 2))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'cl-weave:expect-not))))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))

@@ -15,6 +15,7 @@ Early MVP. The current focus is a solid core:
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
+- Vitest-shaped `it.each` / `test.concurrent` / `describe.only` / `beforeAll` aliases
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -299,11 +300,23 @@ survived, errored, and score fields.
     (reporter content-type)
   (it "declares its content type"
     (expect content-type :to-satisfy #'stringp)))
+
+(describe.each ((:json "application/json"))
+    "Vitest-shaped ~A reporter"
+    (reporter content-type)
+  (beforeEach
+    (setf (gethash :content-type *test-context*) content-type))
+  (it.each ((:ok :ok))
+      "runs generated case ~A"
+      (actual expected)
+    (expect actual :to-be expected)))
 ```
 
 `it-each` and `test-each` expand into independent `it` forms at macro expansion
 time. `describe-each` expands into independent `describe` forms, so nested
-fixtures and cases keep the same semantics as hand-written suites.
+fixtures and cases keep the same semantics as hand-written suites. Dot aliases
+such as `it.each`, `test.each`, and `describe.each` macro-expand through the
+canonical hyphenated forms.
 
 ### Conditional Runs
 
@@ -398,6 +411,10 @@ Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
   (before-all
     (setf *state* (make-hash-table)))
 
+  ;; Common Lisp reads beforeAll as the same exported symbol as beforeall.
+  (beforeAll
+    (setf (gethash :created *state*) t))
+
   (before-each
     (setf (gethash :trace *state*) nil))
 
@@ -423,6 +440,8 @@ Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
 `around-each` receives a continuation for the remaining around hooks and test
 body, so special variables can be dynamically rebound around only the case.
 Use `unwind-protect` inside `around-each` when the fixture owns cleanup.
+Camel-style aliases `beforeAll`, `afterAll`, `beforeEach`, and `afterEach`
+macro-expand through the canonical fixture forms.
 
 ### Skipping
 
