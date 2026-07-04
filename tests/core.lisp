@@ -204,4 +204,36 @@
       (expect output :to-contain ":SCHEMA-VERSION 2")
       (expect output :to-contain ":SKIPPED")
       (expect output :to-contain ":TODOS")
-      (expect output :to-contain ":TODO"))))
+      (expect output :to-contain ":TODO")))
+
+  (it "prints CI-readable JUnit XML results"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-junit
+                     (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("reporters" "passes")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :skip
+                            :path '("reporters" "skips")
+                            :reason "needs <thing>"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :todo
+                            :path '("reporters" "todos")
+                            :reason "pending"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "fails")
+                            :reason "bad <value> & reason"
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect output :to-contain "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+      (expect output :to-contain "<testsuite name=\"cl-weave\" tests=\"4\"")
+      (expect output :to-contain "failures=\"1\"")
+      (expect output :to-contain "errors=\"0\"")
+      (expect output :to-contain "skipped=\"2\"")
+      (expect output :to-contain "<skipped message=\"needs &lt;thing&gt;\"/>")
+      (expect output :to-contain "<skipped message=\"TODO: pending\"/>")
+      (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">"))))

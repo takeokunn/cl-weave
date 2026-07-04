@@ -20,7 +20,7 @@ Early MVP. The current focus is a solid core:
 - `it-todo` / `test-todo` todo cases
 - Vitest-style length, instance, and inline snapshot matchers
 - ASDF system definitions
-- spec and S-expression reporters
+- spec, S-expression, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -183,6 +183,7 @@ The original function cells are restored with `unwind-protect`.
 ```lisp
 (cl-weave:run-all :reporter :spec)
 (cl-weave:run-all :reporter :sexp)
+(cl-weave:run-all :reporter :junit)
 ```
 
 `run-all` returns true when the suite passed and false otherwise.
@@ -190,11 +191,14 @@ The original function cells are restored with `unwind-protect`.
 The `:sexp` reporter is the stable AI-friendly interface. See
 `docs/ai-contract.md`.
 
+`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, or `junit`.
+Use `junit` when a CI service should ingest test results as XML.
+
 ## Roadmap
 
 MVP quality comes first. The intended direction is:
 
-- structured JSON/JUnit reporters
+- structured JSON reporter
 - snapshot testing
 - property-based testing and shrinking
 - watch mode based on ASDF dependency information
