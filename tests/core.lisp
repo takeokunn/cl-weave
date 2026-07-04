@@ -1217,4 +1217,50 @@
       (expect output :to-contain "skipped=\"2\"")
       (expect output :to-contain "<skipped message=\"needs &lt;thing&gt;\"/>")
       (expect output :to-contain "<skipped message=\"TODO: pending\"/>")
-      (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">"))))
+      (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">")))
+
+  (it "prints CI-readable TAP results"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-tap
+                     (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("reporters" "passes")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :skip
+                            :path '("reporters" "skips")
+                            :reason "needs terminal"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :todo
+                            :path '("reporters" "todos")
+                            :reason "pending"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "fails")
+                            :condition "bad value"
+                            :assertion (cl-weave::make-assertion-detail
+                                        :form '(expect 1 :to-be 2)
+                                        :matcher :to-be
+                                        :actual 1
+                                        :expected 2
+                                        :negated nil
+                                        :pass nil)
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :error
+                            :path '("reporters" "errors")
+                            :condition "boom"
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect output :to-contain "TAP version 13")
+      (expect output :to-contain "1..5")
+      (expect output :to-contain "ok 1 - reporters > passes")
+      (expect output :to-contain "ok 2 - reporters > skips # SKIP needs terminal")
+      (expect output :to-contain "ok 3 - reporters > todos # TODO pending")
+      (expect output :to-contain "not ok 4 - reporters > fails")
+      (expect output :to-contain "not ok 5 - reporters > errors")
+      (expect output :to-contain "status: \"fail\"")
+      (expect output :to-contain "condition: \"bad value\"")
+      (expect output :to-contain "matcher: \":TO-BE\""))))

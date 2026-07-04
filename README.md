@@ -33,7 +33,7 @@ Early MVP. The current focus is a solid core:
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - ASDF-aware system runner and watch mode
-- spec, S-expression, JSON, and JUnit XML reporters
+- spec, S-expression, JSON, TAP, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -78,6 +78,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 ```sh
 nix flake check --print-build-logs
 nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
@@ -559,6 +560,7 @@ must stay alive.
 (cl-weave:run-all :reporter :spec)
 (cl-weave:run-all :reporter :sexp)
 (cl-weave:run-all :reporter :json)
+(cl-weave:run-all :reporter :tap)
 (cl-weave:run-all :reporter :junit)
 (cl-weave:run-all :reporter :json :name-filter "properties")
 ```
@@ -569,16 +571,16 @@ The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. Both include failed and errored
 path summaries for focused reruns. See `docs/ai-contract.md`.
 
-`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
-`junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
+`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`,
+`tap`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
 `CL_WEAVE_BAIL` for fast-fail runs.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
-artifact file while preserving the process exit code contract. Use `junit` when
-a CI service should ingest test results as XML. List mode supports `spec`,
-`sexp`, and `json`.
+artifact file while preserving the process exit code contract. Use `tap` for
+line-oriented CI logs and `junit` when a CI service should ingest test results
+as XML. List mode supports `spec`, `sexp`, and `json`.
 
 ### ASDF System Runner and Watch Mode
 
@@ -608,8 +610,8 @@ CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
 CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
 ```
 
-CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit` or
-`CL_WEAVE_REPORTER=json`.
+CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
+`CL_WEAVE_REPORTER=tap`, or `CL_WEAVE_REPORTER=json`.
 
 ## Roadmap
 

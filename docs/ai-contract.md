@@ -97,6 +97,36 @@ CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinfor
 with `0` when all selected events pass, skip, or todo, and exits with `1` when
 any selected event fails or errors.
 
+## TAP Reporter
+
+```lisp
+(cl-weave:run-all :reporter :tap)
+```
+
+The TAP reporter emits TAP version 13 for line-oriented CI logs:
+
+```tap
+TAP version 13
+1..2
+ok 1 - math > adds
+not ok 2 - math > subtracts
+  ---
+  status: "fail"
+  condition: "Expected 1 to be 2"
+  ...
+```
+
+Skipped and todo events use TAP directives:
+
+```tap
+ok 1 - parser > waits for fixture # SKIP fixture unavailable
+ok 2 - parser > handles unicode # TODO pending implementation
+```
+
+TAP is intentionally a stream format. Agents that need stable field names,
+path arrays, assertion payloads, and focused rerun metadata should use the
+S-expression or JSON reporters.
+
 For assertion failures, `assertion` contains:
 
 ```json
