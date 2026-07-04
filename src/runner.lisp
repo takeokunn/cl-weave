@@ -929,12 +929,12 @@
 
 (defun ensure-run-reporter (reporter)
   (unless (member reporter *run-reporters*)
-    (error "Run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))
+    (error "cl-weave: run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))
   reporter)
 
 (defun ensure-list-reporter (reporter)
   (unless (member reporter *list-reporters*)
-    (error "List mode supports spec, sexp, json, and jsonl reporters."))
+    (error "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
   reporter)
 
 (defun run-all (&key (reporter :spec)

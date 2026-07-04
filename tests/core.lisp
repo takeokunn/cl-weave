@@ -1794,7 +1794,7 @@
                 (with-output-to-string (stream)
                   (cl-weave:list-tests :reporter reporter :stream stream)))
               :to-throw
-              "List mode supports")))
+              "cl-weave: list mode supports")))
 
   (it "collects selected tests without running hooks or bodies"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -2121,6 +2121,10 @@
       (expect (cl-weave/cli::parse-reporter "jsonl") :to-be :jsonl)
       (expect (cl-weave/cli::parse-reporter "ndjson") :to-be :jsonl)
       (expect (cl-weave/cli::parse-reporter "github") :to-be :github)
+      (expect (lambda ()
+                (cl-weave/cli::parse-reporter "unknown"))
+              :to-throw
+              "cl-weave: unknown reporter")
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "parser")
       (expect (cl-weave/cli::cli-options-output-file options)
               :to-equal "results.json")
@@ -2491,7 +2495,7 @@
               (with-output-to-string (stream)
                 (cl-weave:run-all :reporter :unknown :stream stream)))
             :to-throw
-            "Run mode supports"))
+            "cl-weave: run mode supports"))
 
   (it "prints AI-readable S-expression results"
     (let ((output (with-output-to-string (stream)

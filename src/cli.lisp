@@ -105,7 +105,7 @@
               when (member normalized aliases :test #'string=)
                 return reporter)
         (error 'cli-error
-               :message (format nil "Unknown reporter: ~A" value)))))
+               :message (format nil "cl-weave: unknown reporter: ~A" value)))))
 
 (defun parse-sequence-order (value)
   (let ((normalized (string-downcase value)))
@@ -417,7 +417,7 @@
              (not (member (cli-options-reporter options)
                           cl-weave::*list-reporters*)))
     (error 'cli-error
-           :message "List mode supports spec, sexp, json, and jsonl reporters.")))
+           :message "cl-weave: list mode supports spec, sexp, json, and jsonl reporters.")))
 
 (defun load-requested-inputs (options)
   (dolist (system (cli-options-systems options))
