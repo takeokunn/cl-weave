@@ -677,16 +677,29 @@
                              :reason "example"
                              :elapsed-internal-time 0)
                             (cl-weave::make-test-event
-                             :status :todo
-                             :path '("reporters" "todos")
-                             :reason "pending"
+                            :status :todo
+                            :path '("reporters" "todos")
+                            :reason "pending"
+                             :elapsed-internal-time 0)
+                            (cl-weave::make-test-event
+                             :status :fail
+                             :path '("reporters" "fails")
+                             :reason "bad"
+                             :elapsed-internal-time 0)
+                            (cl-weave::make-test-event
+                             :status :error
+                             :path '("reporters" "errors")
                              :elapsed-internal-time 0))
                       stream))))
       (expect output :to-contain ":CL-WEAVE/RESULTS")
       (expect output :to-contain ":SCHEMA-VERSION 2")
       (expect output :to-contain ":SKIPPED")
       (expect output :to-contain ":TODOS")
-      (expect output :to-contain ":TODO")))
+      (expect output :to-contain ":TODO")
+      (expect output :to-contain ":FAILED-PATHS")
+      (expect output :to-contain "\"reporters > fails\"")
+      (expect output :to-contain ":ERRORED-PATHS")
+      (expect output :to-contain "\"reporters > errors\"")))
 
   (it "prints AI-readable JSON results"
     (let ((output (with-output-to-string (stream)
@@ -699,11 +712,24 @@
                             :status :skip
                             :path '("reporters" "quotes")
                             :reason "needs \"escaping\""
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "fails")
+                            :reason "bad"
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :error
+                            :path '("reporters" "errors")
                             :elapsed-internal-time 0))
                      stream))))
       (expect output :to-contain "\"schemaVersion\":2")
       (expect output :to-contain "\"passed\":1")
       (expect output :to-contain "\"skipped\":1")
+      (expect output :to-contain "\"failed\":1")
+      (expect output :to-contain "\"errored\":1")
+      (expect output :to-contain "\"failedPaths\":[\"reporters > fails\"]")
+      (expect output :to-contain "\"erroredPaths\":[\"reporters > errors\"]")
       (expect output :to-contain "\"status\":\"pass\"")
       (expect output :to-contain "\"path\":[\"reporters\",\"json\"]")
       (expect output :to-contain "\"pathString\":\"reporters > json\"")

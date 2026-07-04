@@ -61,11 +61,26 @@
   (write-char #\[ stream)
   (loop for part in path
         for first = t then nil
+         do (progn
+              (unless first
+                (write-string "," stream))
+              (write-json-string part stream)))
+  (write-char #\] stream))
+
+(defun json-write-string-list (values stream)
+  (write-char #\[ stream)
+  (loop for value in values
+        for first = t then nil
         do (progn
              (unless first
                (write-string "," stream))
-             (write-json-string part stream)))
+             (write-json-string value stream)))
   (write-char #\] stream))
+
+(defun event-path-strings-with-status (events status)
+  (loop for event in events
+        when (eq (test-event-status event) status)
+          collect (path-string (test-event-path event))))
 
 (defun json-write-nullable-string (value stream)
   (if value
@@ -173,8 +188,10 @@
                 :skipped (count :skip events :key #'test-event-status)
                 :todos (count :todo events :key #'test-event-status)
                 :failed (count :fail events :key #'test-event-status)
-               :errored (count :error events :key #'test-event-status)
-               :events (mapcar #'serializable-event events))
+                :errored (count :error events :key #'test-event-status)
+                :failed-paths (event-path-strings-with-status events :fail)
+                :errored-paths (event-path-strings-with-status events :error)
+                :events (mapcar #'serializable-event events))
          stream)
   (terpri stream)
   (values))
@@ -187,6 +204,10 @@
   (format stream ",\"todos\":~D" (count :todo events :key #'test-event-status))
   (format stream ",\"failed\":~D" (count :fail events :key #'test-event-status))
   (format stream ",\"errored\":~D" (count :error events :key #'test-event-status))
+  (write-string ",\"failedPaths\":" stream)
+  (json-write-string-list (event-path-strings-with-status events :fail) stream)
+  (write-string ",\"erroredPaths\":" stream)
+  (json-write-string-list (event-path-strings-with-status events :error) stream)
   (write-string ",\"events\":[" stream)
   (loop for event in events
         for first = t then nil

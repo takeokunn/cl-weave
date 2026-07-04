@@ -69,6 +69,8 @@ The reporter prints one JSON object:
   "todos": 0,
   "failed": 0,
   "errored": 0,
+  "failedPaths": [],
+  "erroredPaths": [],
   "events": [
     {
       "status": "pass",
@@ -116,6 +118,8 @@ without scraping the human spec reporter.
 `path` is the canonical machine path. `pathString` is the same path rendered in
 the Vitest-style human format used by filtering. `seconds` is retained for
 JUnit parity; `durationMs` is the preferred field for dashboards and agents.
+`failedPaths` and `erroredPaths` contain `pathString` values that can be passed
+back through `CL_WEAVE_TEST_FILTER` for focused CI or agent reruns.
 
 Performance and allocation matchers report measured values instead of the input
 thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:

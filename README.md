@@ -436,7 +436,8 @@ must stay alive.
 `run-all` returns true when the suite passed and false otherwise.
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
-reporter is the stable external-tool interface. See `docs/ai-contract.md`.
+reporter is the stable external-tool interface. Both include failed and errored
+path summaries for focused reruns. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
 `junit`, and accepts `CL_WEAVE_TEST_FILTER` for path substring filtering.
