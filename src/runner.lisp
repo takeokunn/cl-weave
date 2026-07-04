@@ -140,13 +140,60 @@
               (string-downcase (filter-path-string path))
               :test #'char=)))
 
-(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter)
+(defun normalize-shard (shard)
+  (when shard
+    (unless (and (consp shard)
+                 (integerp (first shard))
+                 (integerp (second shard))
+                 (null (cddr shard))
+                 (<= 1 (first shard) (second shard)))
+      (error "Shard must be NIL or (INDEX COUNT) with 1 <= INDEX <= COUNT: ~S" shard))
+    shard))
+
+(defun shard-includes-ordinal-p (ordinal shard)
+  (or (null shard)
+      (= (first shard)
+         (1+ (mod (1- ordinal) (second shard))))))
+
+(defun base-selected-test-case-p (suite test focus-enabled ancestor-focused name-filter)
   (and (or (not focus-enabled)
            ancestor-focused
            (test-case-focus test))
        (test-path-matches-filter-p (test-path suite test) name-filter)))
 
-(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter)
+(defun collect-shard-paths (suite focus-enabled name-filter shard)
+  (when shard
+    (let ((paths (make-hash-table :test #'equal))
+          (ordinal 0))
+      (labels ((visit (current-suite ancestor-focused)
+                 (dolist (child (suite-children current-suite))
+                   (typecase child
+                     (suite
+                      (visit child (or ancestor-focused (suite-focus child))))
+                     (test-case
+                      (when (base-selected-test-case-p
+                             current-suite
+                             child
+                             focus-enabled
+                             ancestor-focused
+                             name-filter)
+                        (incf ordinal)
+                        (when (shard-includes-ordinal-p ordinal shard)
+                          (setf (gethash (test-path current-suite child) paths)
+                                t))))))))
+        (visit suite nil))
+      paths)))
+
+(defun selected-path-p (path shard-paths)
+  (or (null shard-paths)
+      (gethash path shard-paths)))
+
+(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter shard-paths)
+  (let ((path (test-path suite test)))
+    (and (base-selected-test-case-p suite test focus-enabled ancestor-focused name-filter)
+         (selected-path-p path shard-paths))))
+
+(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter shard-paths)
   (some (lambda (child)
           (typecase child
             (suite
@@ -154,9 +201,20 @@
                (and (or (not focus-enabled)
                         child-focused
                         (focused-child-p child))
-                    (selected-suite-p child focus-enabled child-focused name-filter))))
+                    (selected-suite-p
+                     child
+                     focus-enabled
+                     child-focused
+                     name-filter
+                     shard-paths))))
             (test-case
-             (selected-test-case-p suite child focus-enabled ancestor-focused name-filter))
+             (selected-test-case-p
+              suite
+              child
+              focus-enabled
+              ancestor-focused
+              name-filter
+              shard-paths))
             (t nil)))
         (suite-children suite)))
 
@@ -207,12 +265,12 @@
    :retry (retry-count test)
    :timeout-ms (test-case-timeout-ms test)))
 
-(declaim (ftype (function (suite list execution-control function &optional t t t t t) *) collect-children/k))
+(declaim (ftype (function (suite list execution-control function &optional t t t t t t) *) collect-children/k))
 
 (defun collect-suite-events/k
-    (suite control continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
+    (suite control continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason)
   (if (or (execution-control-stopped control)
-          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter)))
+          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter shard-paths)))
       (funcall continue '())
       (multiple-value-bind (active-status active-reason)
           (suite-suppression suite suppressed-status suppressed-reason)
@@ -225,6 +283,7 @@
              focus-enabled
              ancestor-focused
              name-filter
+             shard-paths
              active-status
              active-reason)
             (unwind-protect
@@ -239,11 +298,12 @@
                        (funcall continue events))
                      focus-enabled
                      ancestor-focused
-                     name-filter)))
+                     name-filter
+                     shard-paths)))
               (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil)))))))
 
 (defun collect-children/k
-    (suite children control continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
+    (suite children control continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason)
   (if (or (null children) (execution-control-stopped control))
       (funcall continue '())
       (let ((child (first children)))
@@ -257,7 +317,8 @@
                                   child
                                   focus-enabled
                                   child-focused
-                                  name-filter))))
+                                  name-filter
+                                  shard-paths))))
              (if selected
                  (collect-suite-events/k
                   child
@@ -274,11 +335,13 @@
                          focus-enabled
                          ancestor-focused
                          name-filter
+                         shard-paths
                          suppressed-status
                          suppressed-reason)))
                   focus-enabled
                   child-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason)
                  (collect-children/k
@@ -289,6 +352,7 @@
                   focus-enabled
                   ancestor-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason))))
           (test-case
@@ -297,7 +361,8 @@
                             child
                             focus-enabled
                             ancestor-focused
-                            name-filter)))
+                            name-filter
+                            shard-paths)))
              (if selected
                  (let ((event (record-event/control
                                control
@@ -315,6 +380,7 @@
                         focus-enabled
                         ancestor-focused
                         name-filter
+                        shard-paths
                         suppressed-status
                         suppressed-reason)))
                  (collect-children/k
@@ -325,6 +391,7 @@
                   focus-enabled
                   ancestor-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason))))
           (t
@@ -336,23 +403,33 @@
             focus-enabled
             ancestor-focused
             name-filter
+            shard-paths
             suppressed-status
             suppressed-reason))))))
 
-(defun collect-events (suite &key name-filter bail)
-  (collect-suite-events/k
-   suite
-   (make-execution-control :bail-limit (normalize-bail bail))
-   #'identity
-   (focused-suite-p suite)
-   nil
-   (normalized-test-filter name-filter)))
+(defun collect-events (suite &key name-filter bail shard)
+  (let* ((focus-enabled (focused-suite-p suite))
+         (normalized-filter (normalized-test-filter name-filter))
+         (normalized-shard (normalize-shard shard))
+         (shard-paths (collect-shard-paths
+                       suite
+                       focus-enabled
+                       normalized-filter
+                       normalized-shard)))
+    (collect-suite-events/k
+     suite
+     (make-execution-control :bail-limit (normalize-bail bail))
+     #'identity
+     focus-enabled
+     nil
+     normalized-filter
+     shard-paths)))
 
-(declaim (ftype (function (suite list function &optional t t t t t) *) collect-children-plan/k))
+(declaim (ftype (function (suite list function &optional t t t t t t) *) collect-children-plan/k))
 
 (defun collect-suite-plan/k
-    (suite continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
-  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter))
+    (suite continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason)
+  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter shard-paths))
       (funcall continue '())
       (multiple-value-bind (active-status active-reason)
           (suite-suppression suite suppressed-status suppressed-reason)
@@ -363,11 +440,12 @@
          focus-enabled
          ancestor-focused
          name-filter
+         shard-paths
          active-status
          active-reason))))
 
 (defun collect-children-plan/k
-    (suite children continue &optional focus-enabled ancestor-focused name-filter suppressed-status suppressed-reason)
+    (suite children continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason)
   (if (null children)
       (funcall continue '())
       (let ((child (first children)))
@@ -381,7 +459,8 @@
                                   child
                                   focus-enabled
                                   child-focused
-                                  name-filter))))
+                                  name-filter
+                                  shard-paths))))
              (if selected
                  (collect-suite-plan/k
                   child
@@ -394,11 +473,13 @@
                      focus-enabled
                      ancestor-focused
                      name-filter
+                     shard-paths
                      suppressed-status
                      suppressed-reason))
                   focus-enabled
                   child-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason)
                  (collect-children-plan/k
@@ -408,10 +489,11 @@
                   focus-enabled
                   ancestor-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason))))
           (test-case
-           (if (selected-test-case-p suite child focus-enabled ancestor-focused name-filter)
+           (if (selected-test-case-p suite child focus-enabled ancestor-focused name-filter shard-paths)
                (let* ((status (planned-test-status child suppressed-status))
                   (reason (planned-test-reason child suppressed-status suppressed-reason status))
                       (entry (make-plan-entry
@@ -429,6 +511,7 @@
                   focus-enabled
                   ancestor-focused
                   name-filter
+                  shard-paths
                   suppressed-status
                   suppressed-reason))
                (collect-children-plan/k
@@ -438,6 +521,7 @@
                 focus-enabled
                 ancestor-focused
                 name-filter
+                shard-paths
                 suppressed-status
                 suppressed-reason)))
           (t
@@ -448,16 +532,26 @@
             focus-enabled
             ancestor-focused
             name-filter
+            shard-paths
             suppressed-status
             suppressed-reason))))))
 
-(defun collect-test-plan (suite &key name-filter)
-  (collect-suite-plan/k
-   suite
-   #'identity
-   (focused-suite-p suite)
-   nil
-   (normalized-test-filter name-filter)))
+(defun collect-test-plan (suite &key name-filter shard)
+  (let* ((focus-enabled (focused-suite-p suite))
+         (normalized-filter (normalized-test-filter name-filter))
+         (normalized-shard (normalize-shard shard))
+         (shard-paths (collect-shard-paths
+                       suite
+                       focus-enabled
+                       normalized-filter
+                       normalized-shard)))
+    (collect-suite-plan/k
+     suite
+     #'identity
+     focus-enabled
+     nil
+     normalized-filter
+     shard-paths)))
 
 (defun passed-event-p (event)
   (member (test-event-status event) '(:pass :skip :todo)))
@@ -465,8 +559,13 @@
 (defun run-all (&key (reporter :spec)
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
+                  shard
                   bail)
-  (let ((events (collect-events (root-suite) :name-filter name-filter :bail bail)))
+  (let ((events (collect-events
+                 (root-suite)
+                 :name-filter name-filter
+                 :shard shard
+                 :bail bail)))
     (ecase reporter
       (:spec (report-spec events stream))
       (:sexp (report-sexp events stream))
@@ -476,8 +575,12 @@
 
 (defun list-tests (&key (reporter :spec)
                      (stream *standard-output*)
-                     (name-filter *test-name-filter*))
-  (let ((plan (collect-test-plan (root-suite) :name-filter name-filter)))
+                     (name-filter *test-name-filter*)
+                     shard)
+  (let ((plan (collect-test-plan
+               (root-suite)
+               :name-filter name-filter
+               :shard shard)))
     (ecase reporter
       (:spec (report-plan-spec plan stream))
       (:sexp (report-plan-sexp plan stream))

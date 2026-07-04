@@ -385,6 +385,27 @@ CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scri
 Suites with no selected descendants do not run `before-all` or `after-all`, so
 filtered runs do not leak fixture side effects from unrelated suites.
 
+### Sharding
+
+```lisp
+(cl-weave:run-all :shard '(1 3))
+(cl-weave:list-tests :reporter :json :shard '(2 3))
+```
+
+Shard indexes are one-based and use `(INDEX COUNT)`. cl-weave first applies
+focus and `name-filter`, then assigns a stable discovery ordinal to the selected
+tests. A test belongs to shard `INDEX` when its ordinal maps to that slot.
+
+For command-line and CI usage, `CL_WEAVE_SHARD` uses `INDEX/COUNT`:
+
+```sh
+CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
+Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
+mode. Suites with no descendants in the requested shard do not run
+`before-all` or `after-all`.
+
 ### Test Listing
 
 ```lisp
@@ -489,11 +510,12 @@ path summaries for focused reruns. See `docs/ai-contract.md`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
 `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
-`CL_WEAVE_LIST=1` for discovery without execution, and accepts `CL_WEAVE_BAIL`
-for fast-fail runs. Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output
-directly to an artifact file while preserving the process exit code contract.
-Use `junit` when a CI service should ingest test results as XML. List mode
-supports `spec`, `sexp`, and `json`.
+`CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
+discovery without execution, and accepts `CL_WEAVE_BAIL` for fast-fail runs.
+Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
+artifact file while preserving the process exit code contract. Use `junit` when
+a CI service should ingest test results as XML. List mode supports `spec`,
+`sexp`, and `json`.
 
 ### ASDF System Runner and Watch Mode
 
@@ -503,6 +525,7 @@ supports `spec`, `sexp`, and `json`.
 (cl-weave:watch-system "my-project-tests"
                        :reporter :json
                        :name-filter "parser"
+                       :shard '(1 2)
                        :bail 1
                        :include-dependencies t
                        :interval 0.5)

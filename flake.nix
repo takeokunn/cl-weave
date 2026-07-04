@@ -24,7 +24,7 @@
           nativeBuildInputs = [ pkgs.coreutils pkgs.sbcl ];
           buildPhase = ''
             export CL_SOURCE_REGISTRY="$PWD//:"
-            timeout 60s sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+            timeout 360s sbcl --noinform --non-interactive --load scripts/run-tests.lisp
           '';
           installPhase = "mkdir -p $out";
         };

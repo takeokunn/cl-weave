@@ -178,6 +178,26 @@ rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
 events with the suite reason in `:reason`; suite hooks and test bodies are not
 executed while the suite is suppressed.
 
+## Sharding Contract
+
+Agents can partition selected tests for CI without changing source files:
+
+```lisp
+(cl-weave:run-all :reporter :json :name-filter "suite" :shard '(1 3))
+(cl-weave:list-tests :reporter :json :shard '(2 3))
+```
+
+The command runner exposes the same contract through `CL_WEAVE_SHARD=INDEX/COUNT`.
+Indexes are one-based and must satisfy `1 <= INDEX <= COUNT`.
+
+Sharding is applied after focus and `name-filter`. The runner assigns a stable
+discovery ordinal to each selected test and keeps only the ordinals that belong
+to the requested shard. Reporter schemas are unchanged. If a shard selects no
+tests, reporters emit zero events and the run is considered successful.
+
+Suites with no descendants in the requested shard do not run `before-all` or
+`after-all`, which keeps unrelated fixture side effects out of parallel CI jobs.
+
 ## Test Plan Contract
 
 Agents can discover selected tests without executing hooks or test bodies:
@@ -190,7 +210,7 @@ Agents can discover selected tests without executing hooks or test bodies:
 The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
 
 ```sh
-CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The JSON test plan reporter prints one object:
@@ -315,8 +335,8 @@ Agents can discover declared source files before choosing a focused run:
 `run-all` after ASDF loading:
 
 ```lisp
-(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :bail 1)
-(cl-weave:watch-system "my-project-tests" :reporter :json :bail 1 :once t)
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :bail 1)
+(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :bail 1 :once t)
 ```
 
 `watch-system` writes status lines to `:status-stream`, which defaults to

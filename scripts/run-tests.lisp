@@ -62,6 +62,34 @@
   #-sbcl
   nil)
 
+(defun parse-positive-integer (value name)
+  (multiple-value-bind (parsed position)
+      (parse-integer value :junk-allowed t)
+    (unless (and parsed
+                 (plusp parsed)
+                 (= position (length value)))
+      (error "~A must contain a positive integer: ~A" name value))
+    parsed))
+
+(defun requested-shard ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_SHARD")))
+    (when (and value (not (string= value "")))
+      (let ((slash (position #\/ value)))
+        (unless slash
+          (error "CL_WEAVE_SHARD must use INDEX/COUNT, for example 1/3: ~A" value))
+        (let ((index (parse-positive-integer
+                      (subseq value 0 slash)
+                      "CL_WEAVE_SHARD index"))
+              (count (parse-positive-integer
+                      (subseq value (1+ slash))
+                      "CL_WEAVE_SHARD count")))
+          (unless (<= index count)
+            (error "CL_WEAVE_SHARD requires INDEX <= COUNT: ~A" value))
+          (list index count)))))
+  #-sbcl
+  nil)
+
 (defun requested-output-file ()
   #+sbcl
   (let ((path (sb-ext:posix-getenv "CL_WEAVE_OUTPUT_FILE")))
@@ -110,7 +138,8 @@
 
 #+sbcl
 (let ((reporter (requested-reporter))
-      (output-file (requested-output-file)))
+      (output-file (requested-output-file))
+      (shard (requested-shard)))
   (flet ((with-requested-stream (callback)
            (if output-file
                (with-open-file (stream output-file
@@ -126,12 +155,14 @@
           (cl-weave:list-tests
            :reporter reporter
            :name-filter (requested-test-filter)
+           :shard shard
            :stream stream)))
        (sb-ext:exit :code 0))
       ((requested-watch-p)
        (cl-weave:watch-system "cl-weave-tests"
                               :reporter reporter
                               :name-filter (requested-test-filter)
+                              :shard shard
                               :bail (requested-bail)
                               :include-dependencies t
                               :interval (requested-watch-interval)))
@@ -142,6 +173,7 @@
                       (cl-weave:run-all
                        :reporter reporter
                        :name-filter (requested-test-filter)
+                       :shard shard
                        :bail (requested-bail)
                        :stream stream)))
                   0

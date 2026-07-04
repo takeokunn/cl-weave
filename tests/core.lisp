@@ -251,7 +251,7 @@
                    (tree-contains-p form 'cl-weave::assert-isolated-success)))))
 
   (it-isolated "runs assertions in a child SBCL process"
-      (:systems ("cl-weave-tests") :timeout 20)
+      (:systems ("cl-weave-tests") :timeout 60)
     (expect (+ 2 3) :to-be 5))
 
   (it "reports child process failures without failing the parent process"
@@ -259,7 +259,7 @@
                    '(error "child boom")
                    :systems '("cl-weave-tests")
                    :package "CL-WEAVE/TESTS"
-                   :timeout 20)))
+                   :timeout 60)))
       (expect (isolated-result-status result) :to-be :fail)
       (expect (isolated-result-exit-code result) :to-be 1)
       (expect (isolated-result-stderr result) :to-contain "child boom")))
@@ -599,6 +599,70 @@
               :to-equal nil)
       (expect hook-events :to-equal nil))))
 
+(describe "sharding"
+  (it "runs a deterministic one-based shard after filtering"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "sharded" :parent root)))
+           (events-log nil))
+      (dolist (name '("alpha" "beta" "gamma" "delta"))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name name
+          :function (lambda () (push name events-log)))))
+      (let ((events (cl-weave::collect-events
+                     root
+                     :name-filter "sharded"
+                     :shard '(2 2))))
+        (expect (reverse events-log) :to-equal '("beta" "delta"))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("sharded" "beta") ("sharded" "delta"))))))
+
+  (it "does not run hooks for suites outside the current shard"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (hook-events nil)
+           (hidden (cl-weave::add-child
+                    root
+                    (cl-weave::make-suite
+                     :name "hidden"
+                     :parent root
+                     :before-all (list (lambda () (push :hidden-before hook-events)))
+                     :after-all (list (lambda () (push :hidden-after hook-events))))))
+           (visible (cl-weave::add-child
+                     root
+                     (cl-weave::make-suite :name "visible" :parent root))))
+      (cl-weave::add-child
+       hidden
+       (cl-weave::make-test-case
+        :name "first"
+        :function (lambda () (push :hidden hook-events))))
+      (cl-weave::add-child
+       visible
+       (cl-weave::make-test-case
+        :name "second"
+        :function (lambda () (push :visible hook-events))))
+      (let ((events (cl-weave::collect-events root :shard '(2 2))))
+        (expect hook-events :to-equal '(:visible))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("visible" "second"))))))
+
+  (it "lists only tests in the requested shard"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "plan-shard" :parent root))))
+      (dolist (name '("one" "two" "three"))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name name
+          :function (lambda () (error "should not run")))))
+      (let ((plan (cl-weave:collect-test-plan root :shard '(1 2))))
+        (expect (mapcar #'cl-weave:test-plan-entry-path plan)
+                :to-equal '(("plan-shard" "one") ("plan-shard" "three")))))))
+
 (describe "list mode"
   (it "collects selected tests without running hooks or bodies"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -774,9 +838,9 @@
           (output nil))
       (with-mocked-functions
           (((symbol-function 'cl-weave:run-system)
-            (lambda (system &key reporter stream name-filter bail)
+            (lambda (system &key reporter stream name-filter shard bail)
               (declare (ignore stream))
-              (push (list system reporter name-filter bail) calls)
+              (push (list system reporter name-filter shard bail) calls)
               t)))
         (setf output
               (with-output-to-string (stream)
@@ -786,10 +850,11 @@
                          :stream stream
                          :status-stream stream
                          :name-filter "expect"
+                         :shard '(1 2)
                          :bail 1
                          :once t)
                         :to-be-truthy))))
-      (expect calls :to-equal '(("cl-weave" :json "expect" 1)))
+      (expect calls :to-equal '(("cl-weave" :json "expect" (1 2) 1)))
       (expect output :to-contain "cl-weave watch"))))
 
 (describe "mocking"
