@@ -77,6 +77,7 @@
    :condition condition
    :assertion assertion
    :reason reason
+   :location (test-case-location test)
    :elapsed-internal-time (- (get-internal-real-time) start)))
 
 (defun retry-count (test)
@@ -341,7 +342,8 @@
    :focused (and focus-enabled (or ancestor-focused (test-case-focus test)))
    :retry (retry-count test)
    :timeout-ms (test-case-timeout-ms test)
-   :concurrent (test-case-concurrent test)))
+   :concurrent (test-case-concurrent test)
+   :location (test-case-location test)))
 
 (defun concurrent-test-case-p (test)
   (and (typep test 'test-case)

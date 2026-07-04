@@ -1061,6 +1061,14 @@
         (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250)
         (expect (cl-weave:test-plan-entry-concurrent (first plan)) :to-be t))))
 
+  (it "records source locations for macro-registered tests"
+    (let* ((plan (cl-weave:collect-test-plan
+                  (cl-weave::root-suite)
+                  :name-filter "supports public custom matchers with structured failure data"))
+           (location (cl-weave:test-plan-entry-location (first plan))))
+      (expect (length plan) :to-be 1)
+      (expect (getf location :file) :to-contain "tests/core.lisp")))
+
   (it "lists suppressed suites without running their descendants"
     (let* ((root (cl-weave::make-suite :name "root"))
            (skipped (cl-weave::add-child
@@ -1254,6 +1262,7 @@
                       (list (cl-weave::make-test-event
                              :status :pass
                              :path '("reporters" "prints")
+                             :location '(:file "tests/reporters.lisp")
                              :elapsed-internal-time 0)
                             (cl-weave::make-test-event
                              :status :skip
@@ -1276,7 +1285,10 @@
                              :elapsed-internal-time 0))
                       stream))))
       (expect output :to-contain ":CL-WEAVE/RESULTS")
-      (expect output :to-contain ":SCHEMA-VERSION 2")
+      (expect output :to-contain ":SCHEMA-VERSION 3")
+      (expect output :to-contain ":PATH-STRING \"reporters > prints\"")
+      (expect output :to-contain ":LOCATION (:FILE \"tests/reporters.lisp\")")
+      (expect output :to-contain ":DURATION-MS 0")
       (expect output :to-contain ":SKIPPED")
       (expect output :to-contain ":TODOS")
       (expect output :to-contain ":TODO")
@@ -1291,6 +1303,7 @@
                      (list (cl-weave::make-test-event
                             :status :pass
                             :path '("reporters" "json")
+                            :location '(:file "tests/reporters.lisp")
                             :elapsed-internal-time 0)
                            (cl-weave::make-test-event
                             :status :skip
@@ -1307,7 +1320,7 @@
                             :path '("reporters" "errors")
                             :elapsed-internal-time 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":2")
+      (expect output :to-contain "\"schemaVersion\":3")
       (expect output :to-contain "\"passed\":1")
       (expect output :to-contain "\"skipped\":1")
       (expect output :to-contain "\"failed\":1")
@@ -1317,6 +1330,7 @@
       (expect output :to-contain "\"status\":\"pass\"")
       (expect output :to-contain "\"path\":[\"reporters\",\"json\"]")
       (expect output :to-contain "\"pathString\":\"reporters > json\"")
+      (expect output :to-contain "\"location\":{\"file\":\"tests\\/reporters.lisp\"}")
       (expect output :to-contain "\"durationMs\":0.000")
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
@@ -1326,7 +1340,8 @@
                     (cl-weave::report-plan-sexp
                      (list (cl-weave::make-test-plan-entry
                             :status :run
-                            :path '("plan" "runs")
+                           :path '("plan" "runs")
+                            :location '(:file "tests/plan.lisp")
                             :focused t
                             :retry 2
                             :timeout-ms 250
@@ -1339,10 +1354,12 @@
                             :retry 0))
                      stream))))
       (expect output :to-contain ":CL-WEAVE/TEST-PLAN")
-      (expect output :to-contain ":SCHEMA-VERSION 1")
+      (expect output :to-contain ":SCHEMA-VERSION 2")
       (expect output :to-contain ":RUNNABLE 1")
       (expect output :to-contain ":SKIPPED 1")
       (expect output :to-contain ":PATH-STRING \"plan > runs\"")
+      (expect output :to-contain ":LOCATION")
+      (expect output :to-contain ":FILE \"tests/plan.lisp\"")
       (expect output :to-contain ":FOCUSED T")
       (expect output :to-contain ":TIMEOUT-MS 250")
       (expect output :to-contain ":CONCURRENT T")))
@@ -1353,6 +1370,7 @@
                      (list (cl-weave::make-test-plan-entry
                             :status :run
                             :path '("plan" "runs")
+                            :location '(:file "tests/plan.lisp")
                             :focused t
                             :retry 2
                             :timeout-ms 250
@@ -1364,12 +1382,13 @@
                             :focused nil
                             :retry 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":1")
+      (expect output :to-contain "\"schemaVersion\":2")
       (expect output :to-contain "\"kind\":\"test-plan\"")
       (expect output :to-contain "\"runnable\":1")
       (expect output :to-contain "\"skipped\":1")
       (expect output :to-contain "\"status\":\"run\"")
       (expect output :to-contain "\"pathString\":\"plan > runs\"")
+      (expect output :to-contain "\"location\":{\"file\":\"tests\\/plan.lisp\"}")
       (expect output :to-contain "\"focused\":true")
       (expect output :to-contain "\"retry\":2")
       (expect output :to-contain "\"timeoutMs\":250")

@@ -13,7 +13,7 @@ The reporter prints one form:
 
 ```lisp
 (:cl-weave/results
- :schema-version 2
+ :schema-version 3
  :passed 1
  :skipped 0
  :todos 0
@@ -22,7 +22,10 @@ The reporter prints one form:
  :events
  ((:status :pass
    :path ("suite" "case")
+   :path-string "suite > case"
+   :location (:file "tests/example.lisp")
    :seconds 0
+   :duration-ms 0
    :condition nil
    :reason nil
    :assertion nil)))
@@ -68,7 +71,7 @@ The reporter prints one JSON object:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "passed": 1,
   "skipped": 0,
   "todos": 0,
@@ -81,6 +84,7 @@ The reporter prints one JSON object:
       "status": "pass",
       "path": ["suite", "case"],
       "pathString": "suite > case",
+      "location": {"file": "tests/example.lisp"},
       "seconds": 0.0,
       "durationMs": 0.0,
       "condition": null,
@@ -90,6 +94,11 @@ The reporter prints one JSON object:
   ]
 }
 ```
+
+`location` is source metadata captured by the `it` family of macros. Portable
+Common Lisp does not expose reliable source line numbers across implementations,
+so the stable contract is the source file path only. JSON reporters emit
+`null` when a test was constructed manually without location metadata.
 
 For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
 same reporter payload directly to an artifact file:
@@ -303,7 +312,7 @@ The JSON test plan reporter prints one object:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "kind": "test-plan",
   "total": 1,
   "runnable": 1,
@@ -314,6 +323,7 @@ The JSON test plan reporter prints one object:
       "status": "run",
       "path": ["suite", "case"],
       "pathString": "suite > case",
+      "location": {"file": "tests/example.lisp"},
       "reason": null,
       "focused": false,
       "retry": 0,
@@ -328,7 +338,7 @@ The S-expression test plan reporter uses the same data:
 
 ```lisp
 (:cl-weave/test-plan
- :schema-version 1
+ :schema-version 2
  :total 1
  :runnable 1
  :skipped 0
@@ -337,6 +347,7 @@ The S-expression test plan reporter uses the same data:
  ((:status :run
    :path ("suite" "case")
    :path-string "suite > case"
+   :location (:file "tests/example.lisp")
    :reason nil
    :focused nil
    :retry 0
@@ -369,8 +380,8 @@ values are `true`, `false`, `0`, or a positive integer.
 Bail counts only emitted `:fail` and `:error` events. `:pass`, `:skip`, and
 `:todo` events do not advance the counter. When the limit is reached, reporters
 emit only the selected events that were executed before the runner stopped.
-The event shape, summary fields, `schemaVersion`, `path`, and `pathString`
-contracts are unchanged.
+The event shape, summary fields, `schemaVersion`, `path`, `pathString`, and
+`location` contracts are unchanged.
 
 ## Retry And Timeout Contract
 

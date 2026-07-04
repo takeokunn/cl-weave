@@ -52,6 +52,14 @@
    (when (plist-key-present-p options :concurrent)
      `(:concurrent ,(getf options :concurrent)))))
 
+(defun source-location-form ()
+  `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))
+       (when pathname
+         (list :file (namestring pathname)))))
+
+(defun source-location-option ()
+  `(:location ,(source-location-form)))
+
 (defun split-test-body (body)
   (if (and body (option-plist-form-p (first body)))
       (values (first body) (rest body))
@@ -60,31 +68,39 @@
 (defmacro it (name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
+                    ,@(source-location-option)
                     ,@(test-registration-options options))))
 
 (defmacro it-only (name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
                     :focus t
+                    ,@(source-location-option)
                     ,@(test-registration-options options))))
 
 (defmacro it-concurrent (name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
                     :concurrent t
+                    ,@(source-location-option)
                     ,@(test-registration-options options))))
 
 (defmacro it-fails (name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
     `(register-test ,name (lambda () ,@forms)
                     :expected-failure-reason "expected failure"
+                    ,@(source-location-option)
                     ,@(test-registration-options options))))
 
 (defmacro it-skip (name &optional (reason "skipped"))
-  `(register-test ,name (lambda () nil) :skip-reason ,reason))
+  `(register-test ,name (lambda () nil)
+                  :skip-reason ,reason
+                  ,@(source-location-option)))
 
 (defmacro it-todo (name &optional (reason "todo"))
-  `(register-test ,name (lambda () nil) :todo-reason ,reason))
+  `(register-test ,name (lambda () nil)
+                  :todo-reason ,reason
+                  ,@(source-location-option)))
 
 (defmacro it-skip-if (condition name &body body)
   `(if ,condition

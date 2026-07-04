@@ -109,6 +109,15 @@
         (write-string "}" stream))
       (write-string "null" stream)))
 
+(defun json-write-location (location stream)
+  (let ((file (and location (getf location :file))))
+    (if file
+        (progn
+          (write-string "{\"file\":" stream)
+          (write-json-string file stream)
+          (write-string "}" stream))
+        (write-string "null" stream))))
+
 (defun json-write-event (event stream)
   (write-string "{" stream)
   (write-string "\"status\":" stream)
@@ -117,6 +126,8 @@
   (json-write-path (test-event-path event) stream)
   (write-string ",\"pathString\":" stream)
   (write-json-string (path-string (test-event-path event)) stream)
+  (write-string ",\"location\":" stream)
+  (json-write-location (test-event-location event) stream)
   (format stream ",\"seconds\":~,6F" (event-duration-seconds event))
   (format stream ",\"durationMs\":~,3F" (event-duration-ms event))
   (write-string ",\"condition\":" stream)
@@ -168,7 +179,10 @@
 (defun serializable-event (event)
   (list :status (test-event-status event)
         :path (test-event-path event)
+        :path-string (path-string (test-event-path event))
+        :location (test-event-location event)
         :seconds (event-duration-seconds event)
+        :duration-ms (event-duration-ms event)
         :condition (when (test-event-condition event)
                       (princ-to-string (test-event-condition event)))
         :reason (test-event-reason event)
@@ -183,7 +197,7 @@
 
 (defun report-sexp (events stream)
   (prin1 (list :cl-weave/results
-                :schema-version 2
+                :schema-version 3
                 :passed (count :pass events :key #'test-event-status)
                 :skipped (count :skip events :key #'test-event-status)
                 :todos (count :todo events :key #'test-event-status)
@@ -198,7 +212,7 @@
 
 (defun report-json (events stream)
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":2" stream)
+  (write-string "\"schemaVersion\":3" stream)
   (format stream ",\"passed\":~D" (count :pass events :key #'test-event-status))
   (format stream ",\"skipped\":~D" (count :skip events :key #'test-event-status))
   (format stream ",\"todos\":~D" (count :todo events :key #'test-event-status))
@@ -295,6 +309,7 @@
   (list :status (test-plan-entry-status entry)
         :path (test-plan-entry-path entry)
         :path-string (path-string (test-plan-entry-path entry))
+        :location (test-plan-entry-location entry)
         :reason (test-plan-entry-reason entry)
         :focused (test-plan-entry-focused entry)
         :retry (test-plan-entry-retry entry)
@@ -319,7 +334,7 @@
 
 (defun report-plan-sexp (plan stream)
   (prin1 (list :cl-weave/test-plan
-               :schema-version 1
+               :schema-version 2
                :total (length plan)
                :runnable (count-if #'runnable-plan-entry-p plan)
                :skipped (count-if #'skipped-plan-entry-p plan)
@@ -337,6 +352,8 @@
   (json-write-path (test-plan-entry-path entry) stream)
   (write-string ",\"pathString\":" stream)
   (write-json-string (path-string (test-plan-entry-path entry)) stream)
+  (write-string ",\"location\":" stream)
+  (json-write-location (test-plan-entry-location entry) stream)
   (write-string ",\"reason\":" stream)
   (json-write-nullable-string (test-plan-entry-reason entry) stream)
   (write-string ",\"focused\":" stream)
@@ -353,7 +370,7 @@
 
 (defun report-plan-json (plan stream)
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":1" stream)
+  (write-string "\"schemaVersion\":2" stream)
   (write-string ",\"kind\":\"test-plan\"" stream)
   (format stream ",\"total\":~D" (length plan))
   (format stream ",\"runnable\":~D" (count-if #'runnable-plan-entry-p plan))

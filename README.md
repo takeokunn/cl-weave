@@ -24,6 +24,7 @@ Early MVP. The current focus is a solid core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
+- source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
@@ -511,7 +512,9 @@ CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-inte
 List mode discovers selected tests without executing suite hooks or test
 bodies. It composes with focus, filtering, skipped suites, and todo suites, and
 emits `:run`, `:skip`, or `:todo` plan entries with `path`, `pathString`,
-`reason`, `focused`, `retry`, `timeout-ms`, and `concurrent` metadata.
+`location`, `reason`, `focused`, `retry`, `timeout-ms`, and `concurrent`
+metadata. `location` records the macro source file when available; JSON emits
+`null` for manually constructed tests without source metadata.
 
 For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
 and exits with status `0`:
