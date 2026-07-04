@@ -90,6 +90,33 @@
   #-sbcl
   nil)
 
+(defun parse-complete-integer (value name)
+  (multiple-value-bind (parsed position)
+      (parse-integer value :junk-allowed t)
+    (unless (and parsed
+                 (= position (length value)))
+      (error "~A must contain an integer: ~A" name value))
+    parsed))
+
+(defun requested-sequence-order ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_SEQUENCE")))
+    (cond
+      ((or (null value) (string= value "") (string-equal value "defined")) :defined)
+      ((or (string-equal value "random") (string-equal value "shuffle")) :random)
+      (t (error "CL_WEAVE_SEQUENCE must be defined, random, or shuffle: ~A" value))))
+  #-sbcl
+  :defined)
+
+(defun requested-sequence-seed ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_SEQUENCE_SEED")))
+    (if (and value (not (string= value "")))
+        (parse-complete-integer value "CL_WEAVE_SEQUENCE_SEED")
+        0))
+  #-sbcl
+  0)
+
 (defun requested-output-file ()
   #+sbcl
   (let ((path (sb-ext:posix-getenv "CL_WEAVE_OUTPUT_FILE")))
@@ -139,7 +166,9 @@
 #+sbcl
 (let ((reporter (requested-reporter))
       (output-file (requested-output-file))
-      (shard (requested-shard)))
+      (shard (requested-shard))
+      (sequence-order (requested-sequence-order))
+      (sequence-seed (requested-sequence-seed)))
   (flet ((with-requested-stream (callback)
            (if output-file
                (with-open-file (stream output-file
@@ -156,6 +185,8 @@
            :reporter reporter
            :name-filter (requested-test-filter)
            :shard shard
+           :order sequence-order
+           :seed sequence-seed
            :stream stream)))
        (sb-ext:exit :code 0))
       ((requested-watch-p)
@@ -163,6 +194,8 @@
                               :reporter reporter
                               :name-filter (requested-test-filter)
                               :shard shard
+                              :order sequence-order
+                              :seed sequence-seed
                               :bail (requested-bail)
                               :include-dependencies t
                               :interval (requested-watch-interval)))
@@ -174,6 +207,8 @@
                        :reporter reporter
                        :name-filter (requested-test-filter)
                        :shard shard
+                       :order sequence-order
+                       :seed sequence-seed
                        :bail (requested-bail)
                        :stream stream)))
                   0

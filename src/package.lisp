@@ -55,6 +55,8 @@
    #:clear-mock
    #:make-mock-function
    #:mock-calls
+   #:*test-sequence-order*
+   #:*test-sequence-seed*
    #:*test-name-filter*
    #:asdf-system-files
    #:run-all

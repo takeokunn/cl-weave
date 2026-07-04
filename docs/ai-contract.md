@@ -198,6 +198,26 @@ tests, reporters emit zero events and the run is considered successful.
 Suites with no descendants in the requested shard do not run `before-all` or
 `after-all`, which keeps unrelated fixture side effects out of parallel CI jobs.
 
+## Sequence Order Contract
+
+Agents can reproduce order-dependent failures without changing source files:
+
+```lisp
+(cl-weave:run-all :reporter :json :order :random :seed 12345)
+(cl-weave:list-tests :reporter :json :order :random :seed 12345)
+```
+
+The command runner exposes the same contract through
+`CL_WEAVE_SEQUENCE=random` and `CL_WEAVE_SEQUENCE_SEED=N`. Accepted order values
+are `defined`, `random`, and `shuffle`; `shuffle` is an alias for `random`.
+`:defined` is the default.
+
+Ordering is applied after focus, `name-filter`, and shard selection. Shard
+membership remains stable across seeds. Ordering is local to each suite so
+`before-all`, `after-all`, `before-each`, and `after-each` boundaries are
+preserved. Reporter schemas are unchanged. The same seed and same test tree
+produce the same execution and list-mode order across SBCL processes.
+
 ## Test Plan Contract
 
 Agents can discover selected tests without executing hooks or test bodies:
@@ -210,7 +230,7 @@ Agents can discover selected tests without executing hooks or test bodies:
 The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
 
 ```sh
-CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The JSON test plan reporter prints one object:
@@ -335,8 +355,8 @@ Agents can discover declared source files before choosing a focused run:
 `run-all` after ASDF loading:
 
 ```lisp
-(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :bail 1)
-(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :bail 1 :once t)
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :order :random :seed 12345 :bail 1)
+(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :order :random :seed 12345 :bail 1 :once t)
 ```
 
 `watch-system` writes status lines to `:status-stream`, which defaults to

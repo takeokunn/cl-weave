@@ -1,6 +1,12 @@
 (in-package #:cl-weave)
 
 (defvar *test-name-filter* nil)
+(defvar *test-sequence-order* :defined)
+(defvar *test-sequence-seed* 0)
+
+(defconstant +stable-hash-modulus+ 4294967296)
+(defconstant +stable-hash-offset+ 2166136261)
+(defconstant +stable-hash-prime+ 16777619)
 
 (defstruct execution-control
   bail-limit
@@ -184,6 +190,53 @@
         (visit suite nil))
       paths)))
 
+(defun normalize-sequence-order (order)
+  (cond
+    ((or (null order) (eq order :defined)) :defined)
+    ((member order '(:random :shuffle)) :random)
+    (t (error "Sequence order must be NIL, :DEFINED, :RANDOM, or :SHUFFLE: ~S" order))))
+
+(defun normalize-sequence-seed (seed)
+  (cond
+    ((null seed) 0)
+    ((integerp seed) seed)
+    (t (error "Sequence seed must be an integer: ~S" seed))))
+
+(defun stable-string-hash (string seed)
+  (let ((hash (mod (+ +stable-hash-offset+ seed) +stable-hash-modulus+)))
+    (loop for char across string
+          do (setf hash
+                   (mod (* (logxor hash (char-code char))
+                           +stable-hash-prime+)
+                        +stable-hash-modulus+))
+          finally (return hash))))
+
+(defun sequence-suite-prefix (suite)
+  (format nil "~{~A~^ > ~}" (mapcar #'suite-name (rest (suite-lineage suite)))))
+
+(defun sequence-child-label (suite child)
+  (format nil "~A :: ~A:~A"
+          (sequence-suite-prefix suite)
+          (typecase child
+            (suite "suite")
+            (test-case "test")
+            (t "unknown"))
+          (typecase child
+            (suite (suite-name child))
+            (test-case (test-case-name child))
+            (t child))))
+
+(defun ordered-children (suite children)
+  (if (eq *test-sequence-order* :random)
+      (stable-sort
+       (copy-list children)
+       #'<
+       :key (lambda (child)
+              (stable-string-hash
+               (sequence-child-label suite child)
+               *test-sequence-seed*)))
+      children))
+
 (defun selected-path-p (path shard-paths)
   (or (null shard-paths)
       (gethash path shard-paths)))
@@ -277,7 +330,7 @@
         (if active-status
             (collect-children/k
              suite
-             (suite-children suite)
+             (ordered-children suite (suite-children suite))
              control
              continue
              focus-enabled
@@ -292,7 +345,7 @@
                   (lambda ()
                     (collect-children/k
                      suite
-                     (suite-children suite)
+                     (ordered-children suite (suite-children suite))
                      control
                      (lambda (events)
                        (funcall continue events))
@@ -407,23 +460,27 @@
             suppressed-status
             suppressed-reason))))))
 
-(defun collect-events (suite &key name-filter bail shard)
+(defun collect-events (suite &key name-filter bail shard order seed)
   (let* ((focus-enabled (focused-suite-p suite))
          (normalized-filter (normalized-test-filter name-filter))
          (normalized-shard (normalize-shard shard))
+         (normalized-order (normalize-sequence-order order))
+         (normalized-seed (normalize-sequence-seed seed))
          (shard-paths (collect-shard-paths
                        suite
                        focus-enabled
                        normalized-filter
                        normalized-shard)))
-    (collect-suite-events/k
-     suite
-     (make-execution-control :bail-limit (normalize-bail bail))
-     #'identity
-     focus-enabled
-     nil
-     normalized-filter
-     shard-paths)))
+    (let ((*test-sequence-order* normalized-order)
+          (*test-sequence-seed* normalized-seed))
+      (collect-suite-events/k
+       suite
+       (make-execution-control :bail-limit (normalize-bail bail))
+       #'identity
+       focus-enabled
+       nil
+       normalized-filter
+       shard-paths))))
 
 (declaim (ftype (function (suite list function &optional t t t t t t) *) collect-children-plan/k))
 
@@ -435,7 +492,7 @@
           (suite-suppression suite suppressed-status suppressed-reason)
         (collect-children-plan/k
          suite
-         (suite-children suite)
+         (ordered-children suite (suite-children suite))
          continue
          focus-enabled
          ancestor-focused
@@ -536,22 +593,26 @@
             suppressed-status
             suppressed-reason))))))
 
-(defun collect-test-plan (suite &key name-filter shard)
+(defun collect-test-plan (suite &key name-filter shard order seed)
   (let* ((focus-enabled (focused-suite-p suite))
          (normalized-filter (normalized-test-filter name-filter))
          (normalized-shard (normalize-shard shard))
+         (normalized-order (normalize-sequence-order order))
+         (normalized-seed (normalize-sequence-seed seed))
          (shard-paths (collect-shard-paths
                        suite
                        focus-enabled
                        normalized-filter
                        normalized-shard)))
-    (collect-suite-plan/k
-     suite
-     #'identity
-     focus-enabled
-     nil
-     normalized-filter
-     shard-paths)))
+    (let ((*test-sequence-order* normalized-order)
+          (*test-sequence-seed* normalized-seed))
+      (collect-suite-plan/k
+       suite
+       #'identity
+       focus-enabled
+       nil
+       normalized-filter
+       shard-paths))))
 
 (defun passed-event-p (event)
   (member (test-event-status event) '(:pass :skip :todo)))
@@ -560,11 +621,15 @@
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
                   shard
+                  order
+                  seed
                   bail)
   (let ((events (collect-events
                  (root-suite)
                  :name-filter name-filter
                  :shard shard
+                 :order order
+                 :seed seed
                  :bail bail)))
     (ecase reporter
       (:spec (report-spec events stream))
@@ -576,11 +641,15 @@
 (defun list-tests (&key (reporter :spec)
                      (stream *standard-output*)
                      (name-filter *test-name-filter*)
-                     shard)
+                     shard
+                     order
+                     seed)
   (let ((plan (collect-test-plan
                (root-suite)
                :name-filter name-filter
-               :shard shard)))
+               :shard shard
+               :order order
+               :seed seed)))
     (ecase reporter
       (:spec (report-plan-spec plan stream))
       (:sexp (report-plan-sexp plan stream))

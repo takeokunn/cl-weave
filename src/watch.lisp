@@ -82,6 +82,8 @@
                          (stream *standard-output*)
                          (name-filter *test-name-filter*)
                          shard
+                         order
+                         seed
                          bail)
   "Load SYSTEM through ASDF, then run the currently registered cl-weave tests."
   (asdf:load-system system :force t)
@@ -90,6 +92,8 @@
    :stream stream
    :name-filter name-filter
    :shard shard
+   :order order
+   :seed seed
    :bail bail))
 
 (defun watch-system (system &key (reporter :spec)
@@ -97,6 +101,8 @@
                             (status-stream *error-output*)
                             (name-filter *test-name-filter*)
                             shard
+                            order
+                            seed
                             bail
                             include-dependencies
                             (interval 0.5)
@@ -119,6 +125,8 @@
                                :stream stream
                                :name-filter name-filter
                                :shard shard
+                               :order order
+                               :seed seed
                                :bail bail)
              (when once
                (return nil)))

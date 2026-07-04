@@ -23,6 +23,7 @@ Early MVP. The current focus is a solid core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
+- Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
@@ -78,6 +79,7 @@ nix develop --command env CL_WEAVE_REPORTER=json sbcl --noinform --non-interacti
 nix develop --command env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
@@ -406,6 +408,29 @@ Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
 mode. Suites with no descendants in the requested shard do not run
 `before-all` or `after-all`.
 
+### Sequence Ordering
+
+```lisp
+(cl-weave:run-all :order :random :seed 12345)
+(cl-weave:list-tests :reporter :json :order :random :seed 12345)
+```
+
+The default order is `:defined`. `:order :random` applies a deterministic,
+seeded order inside each suite while preserving suite hook boundaries. The same
+seed produces the same execution order and list-mode order across SBCL
+processes.
+
+Selection is resolved before ordering: focus, `name-filter`, and shard choose
+the test set first, then sequence ordering decides the order of the remaining
+children. This keeps CI shard membership stable when teams rotate seeds to
+reproduce order-dependent failures.
+
+For command-line and CI usage:
+
+```sh
+CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+```
+
 ### Test Listing
 
 ```lisp
@@ -511,7 +536,9 @@ path summaries for focused reruns. See `docs/ai-contract.md`.
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, or
 `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
-discovery without execution, and accepts `CL_WEAVE_BAIL` for fast-fail runs.
+discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus
+`CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
+`CL_WEAVE_BAIL` for fast-fail runs.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
 artifact file while preserving the process exit code contract. Use `junit` when
 a CI service should ingest test results as XML. List mode supports `spec`,
