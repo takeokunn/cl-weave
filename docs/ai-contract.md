@@ -477,6 +477,24 @@ NaN matchers report both type information and predicate results. A failing
 `:to-be-nan` accepts no expected operands and passes only when the actual value
 is a floating-point NaN.
 
+Strict membership matchers report the candidate collection and match position.
+A failing `:to-be-one-of` assertion uses:
+
+```lisp
+(:actual (:value :blocked
+          :candidates (:pending :ready :done)
+          :test eql
+          :candidate-count 3
+          :matched-index nil)
+ :expected (:candidates (:pending :ready :done)
+            :test eql
+            :candidate-count 3))
+```
+
+`:to-be-one-of` accepts one list, vector, or hash table of candidates and uses
+`eql`, matching the strict identity semantics of `:to-be`. Hash tables are
+searched by value, not by key.
+
 Deep containment matchers report the searched container and equality predicate.
 A failing `:to-contain-equal` assertion uses:
 

@@ -180,6 +180,7 @@ Built-in matchers:
 - `:to-be`
 - `:to-equal`
 - `:to-equalp`
+- `:to-be-one-of`
 - `:to-be-truthy`
 - `:to-be-falsy`
 - `:to-be-null`
@@ -218,6 +219,19 @@ Built-in matchers:
 - `:to-have-last-returned-with`
 - `:to-have-nth-returned-with`
 - `:to-have-thrown`
+
+`:to-be-one-of` accepts one candidate collection and passes when the actual
+value is `eql` to one of its members. Lists and vectors are treated as candidate
+sequences; hash tables use their values:
+
+```lisp
+(expect :ready :to-be-one-of '(:pending :ready :done))
+(expect 2 :to-be-one-of #(1 2 3))
+```
+
+Failures report `:value`, `:candidates`, `:test`, `:candidate-count`, and
+`:matched-index`, so CI and AI agents can distinguish "candidate missing" from
+wrong matcher usage.
 
 `:to-throw` accepts an optional expected condition class designator, message
 substring, or predicate function. Failures report `:threw`, `:condition-type`,

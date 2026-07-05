@@ -117,6 +117,31 @@
     ("to-be-defined" (expect :value :to-be-defined))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
+    ("to-be-one-of list" (expect :ready :to-be-one-of '(:pending :ready :done)))
+    ("to-be-one-of vector" (expect 2 :to-be-one-of #(1 2 3)))
+    ("to-be-one-of hash-table values"
+     (let ((table (make-hash-table :test #'equal)))
+       (setf (gethash "first" table) :pending
+             (gethash "second" table) :ready)
+       (expect :ready :to-be-one-of table)))
+    ("to-be-one-of failure payload"
+     (handler-case
+         (progn
+           (expect :blocked :to-be-one-of '(:pending :ready :done))
+           (error "Expected :to-be-one-of to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-one-of)
+           (expect (getf actual :value) :to-be :blocked)
+           (expect (getf actual :candidates) :to-equal '(:pending :ready :done))
+           (expect (getf actual :test) :to-be 'eql)
+           (expect (getf actual :candidate-count) :to-be 3)
+           (expect (getf actual :matched-index) :to-be-null)
+           (expect (getf expected :candidates) :to-equal '(:pending :ready :done))
+           (expect (getf expected :test) :to-be 'eql)
+           (expect (getf expected :candidate-count) :to-be 3)))))
     ("to-be-nan failure payload"
      (handler-case
          (progn

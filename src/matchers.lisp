@@ -86,6 +86,33 @@
   (unless (null expected)
     (error "Matcher ~S expects no expected values, got ~D." matcher (length expected))))
 
+(defun one-of-candidates (expected matcher)
+  (let ((candidates (expected-one expected matcher)))
+    (typecase candidates
+      (list
+       (values candidates candidates (length candidates)))
+      ((and vector (not string))
+       (values candidates (coerce candidates 'list) (length candidates)))
+      (hash-table
+       (let ((values (loop for value being the hash-values of candidates
+                           collect value)))
+         (values candidates values (hash-table-count candidates))))
+      (t
+       (error "Matcher ~S expects a list, vector, or hash-table of candidates, got ~S."
+              matcher candidates)))))
+
+(defun one-of-report (actual raw-candidates candidate-count matched-index)
+  (list :value actual
+        :candidates raw-candidates
+        :test 'eql
+        :candidate-count candidate-count
+        :matched-index matched-index))
+
+(defun one-of-expected-report (raw-candidates candidate-count)
+  (list :candidates raw-candidates
+        :test 'eql
+        :candidate-count candidate-count))
+
 (defun nan-value-p (value)
   (and (floatp value)
        #+sbcl
@@ -800,6 +827,14 @@
 
 (defmatcher :to-equalp (actual expected)
   (equalp actual (expected-one expected :to-equalp)))
+
+(defmatcher :to-be-one-of (actual expected)
+  (multiple-value-bind (raw-candidates candidates candidate-count)
+      (one-of-candidates expected :to-be-one-of)
+    (let ((matched-index (position actual candidates :test #'eql)))
+      (values (not (null matched-index))
+              (one-of-report actual raw-candidates candidate-count matched-index)
+              (one-of-expected-report raw-candidates candidate-count)))))
 
 (defmatcher :to-be-truthy (actual expected)
   (declare (ignore expected))
