@@ -140,8 +140,14 @@ Mock function matchers report call and result histories in `:actual`:
 Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
 `vi.fn` is a Vitest-shaped alias for `make-mock-function`; both constructors
 produce the same mock function contract and result history shape.
+`mock-implementation` and `vi.mockImplementation` mutate the implementation of
+an existing mock and return that mock. `mock-return-value` /
+`vi.mockReturnValue` and `mock-return-values` / `vi.mockReturnValues` are
+constant return setters for single and Common Lisp multiple values.
 `clear-all-mocks` and `vi.clearAllMocks` clear every registered mock history
 while preserving mock implementations.
+`reset-mock`, `reset-all-mocks`, and `vi.resetAllMocks` clear histories and
+replace mock implementations with the default no-op function.
 Return-value matchers compare their operands with the recorded Common Lisp
 multiple values list. Ordered mock matchers use one-based indices:
 `:to-have-been-nth-called-with` reports `(:index n :arguments (...))`, and

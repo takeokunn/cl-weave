@@ -111,8 +111,17 @@
    #:logic-variable-p
    #:logic-where
    #:make-mock-function
+   #:mock-implementation
+   #:mock-return-value
+   #:mock-return-values
+   #:reset-all-mocks
+   #:reset-mock
    #:vi.clearAllMocks
    #:vi.fn
+   #:vi.mockImplementation
+   #:vi.mockReturnValue
+   #:vi.mockReturnValues
+   #:vi.resetAllMocks
    #:mock-calls
    #:mock-results
    #:mutation-form

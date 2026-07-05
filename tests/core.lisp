@@ -2820,6 +2820,38 @@
       (expect mock :to-have-returned-with 41 42)
       (expect (mock-calls mock) :to-equal '((41)))))
 
+  (it "updates mock implementations with Lisp and Vitest-shaped aliases"
+    (let ((mock (vi.fn)))
+      (expect (funcall mock 1) :to-be nil)
+      (expect (mock-implementation mock (lambda (value) (* value 2))) :to-be mock)
+      (expect (funcall mock 21) :to-be 42)
+      (expect mock :to-have-been-called-with 21)
+      (expect (vi.mockImplementation mock (lambda (value) (+ value 1))) :to-be mock)
+      (expect (funcall mock 41) :to-be 42)
+      (expect mock :to-have-returned-with 42)))
+
+  (it "sets mock return values including Common Lisp multiple values"
+    (let ((mock (vi.fn (lambda () :old))))
+      (expect (vi.mockReturnValue mock :next) :to-be mock)
+      (expect (funcall mock :ignored) :to-be :next)
+      (expect mock :to-have-returned-with :next)
+      (expect (mock-return-values mock :ok 42) :to-be mock)
+      (multiple-value-bind (status count) (funcall mock)
+        (expect status :to-be :ok)
+        (expect count :to-be 42))
+      (expect mock :to-have-returned-with :ok 42)
+      (expect (vi.mockReturnValues mock :done 7) :to-be mock)
+      (multiple-value-bind (status count) (funcall mock :ignored)
+        (expect status :to-be :done)
+        (expect count :to-be 7))
+      (expect (mock-return-value mock :final) :to-be mock)
+      (expect (funcall mock) :to-be :final)))
+
+  (it "rejects non-function mock implementations early"
+    (expect (lambda () (make-mock-function :not-a-function)) :to-throw)
+    (let ((mock (vi.fn)))
+      (expect (lambda () (mock-implementation mock :not-a-function)) :to-throw)))
+
   (it "clears all registered mock histories with vi.clearAllMocks"
     (let ((left (vi.fn (lambda () :left)))
           (right (make-mock-function (lambda (value) value))))
@@ -2832,6 +2864,28 @@
       (expect right :not :to-have-been-called)
       (expect (funcall left) :to-be :left)
       (expect left :to-have-been-called-times 1)))
+
+  (it "resets one mock history and implementation"
+    (let ((mock (vi.fn (lambda () :custom))))
+      (expect (funcall mock) :to-be :custom)
+      (expect mock :to-have-been-called-times 1)
+      (expect (reset-mock mock) :to-be mock)
+      (expect mock :not :to-have-been-called)
+      (expect (funcall mock) :to-be nil)
+      (expect mock :to-have-returned-with nil)))
+
+  (it "resets all registered mock histories and implementations with vi.resetAllMocks"
+    (let ((left (vi.fn (lambda () :left)))
+          (right (make-mock-function (lambda () :right))))
+      (expect (funcall left) :to-be :left)
+      (expect (funcall right) :to-be :right)
+      (expect left :to-have-been-called-times 1)
+      (expect right :to-have-been-called-times 1)
+      (expect (vi.resetAllMocks) :to-be t)
+      (expect left :not :to-have-been-called)
+      (expect right :not :to-have-been-called)
+      (expect (funcall left) :to-be nil)
+      (expect (funcall right) :to-be nil)))
 
   (it "matches ordered zero-argument mock calls"
     (let ((mock (make-mock-function (lambda () :pong))))

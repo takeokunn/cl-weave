@@ -16,6 +16,16 @@
 (defvar *snapshot-file-name* "snapshots.sexp")
 (defvar *update-snapshots* nil)
 
+(defun default-mock-implementation (&rest arguments)
+  (declare (ignore arguments))
+  nil)
+
+(defun ensure-mock-implementation (implementation)
+  (unless (functionp implementation)
+    (error "cl-weave: mock implementation must be a function, got ~S."
+           implementation))
+  implementation)
+
 (defun register-matcher (name function)
   (unless (symbolp name)
     (error "cl-weave: matcher name must be a symbol, got ~S." name))
@@ -736,10 +746,8 @@
         :condition-type (class-name (class-of condition))
         :message (princ-to-string condition)))
 
-(defun make-mock-function (&optional (implementation (lambda (&rest arguments)
-                                                       (declare (ignore arguments))
-                                                       nil)))
-  (let* ((state (make-mock-state :implementation implementation
+(defun make-mock-function (&optional (implementation #'default-mock-implementation))
+  (let* ((state (make-mock-state :implementation (ensure-mock-implementation implementation)
                                  :calls nil
                                  :results nil))
          (mock (lambda (&rest arguments)
@@ -758,9 +766,7 @@
     (setf (gethash mock *mock-states*) state)
     mock))
 
-(defun vi.fn (&optional (implementation (lambda (&rest arguments)
-                                          (declare (ignore arguments))
-                                          nil)))
+(defun vi.fn (&optional (implementation #'default-mock-implementation))
   (make-mock-function implementation))
 
 (defun mock-calls (mock)
@@ -769,10 +775,37 @@
 (defun mock-results (mock)
   (copy-tree (mock-state-results (mock-state-for mock))))
 
+(defun mock-implementation (mock implementation)
+  (setf (mock-state-implementation (mock-state-for mock))
+        (ensure-mock-implementation implementation))
+  mock)
+
+(defun vi.mockImplementation (mock implementation)
+  (mock-implementation mock implementation))
+
+(defun mock-return-values (mock &rest values)
+  (mock-implementation mock (lambda (&rest arguments)
+                              (declare (ignore arguments))
+                              (values-list values))))
+
+(defun vi.mockReturnValues (mock &rest values)
+  (apply #'mock-return-values mock values))
+
+(defun mock-return-value (mock value)
+  (mock-return-values mock value))
+
+(defun vi.mockReturnValue (mock value)
+  (mock-return-value mock value))
+
 (defun clear-mock (mock)
   (let ((state (mock-state-for mock)))
     (setf (mock-state-calls state) nil
           (mock-state-results state) nil))
+  mock)
+
+(defun reset-mock (mock)
+  (mock-implementation mock #'default-mock-implementation)
+  (clear-mock mock)
   mock)
 
 (defun clear-all-mocks ()
@@ -784,6 +817,16 @@
 
 (defun vi.clearAllMocks ()
   (clear-all-mocks))
+
+(defun reset-all-mocks ()
+  (maphash (lambda (mock state)
+             (declare (ignore state))
+             (reset-mock mock))
+           *mock-states*)
+  t)
+
+(defun vi.resetAllMocks ()
+  (reset-all-mocks))
 
 (defun mock-called-with-p (mock expected-arguments)
   (some (lambda (actual-arguments)
