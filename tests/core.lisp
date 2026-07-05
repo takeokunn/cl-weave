@@ -3012,6 +3012,42 @@
         (expect output :to-contain ":KIND \"cl-weave-metadata\"")
         (expect output :to-contain ":PACKAGE-EXPORTS"))))
 
+  (it "serializes framework metadata from the supplied plist"
+    (let* ((metadata (list
+                      :kind "custom-metadata"
+                      :schema-version 7
+                      :version "test-version"
+                      :commands '("custom-command")
+                      :reporters '("custom-reporter")
+                      :list-reporters '("custom-list-reporter")
+                      :capabilities '("custom-capability")
+                      :environment '("CUSTOM_ENV")
+                      :vitest-aliases
+                      (list (list :alias "custom.alias"
+                                  :canonical "custom-canonical"))
+                      :package-exports
+                      (list (list :name "custom-package"
+                                  :exports '("custom-export")))
+                      :matchers
+                      (list (list :name :custom-matcher
+                                  :description "custom matcher"))
+                      :mutation-operators
+                      (list (list :name :custom-mutator
+                                  :description "custom mutation operator"))))
+           (output (with-output-to-string (stream)
+                     (cl-weave/cli::write-framework-metadata-json
+                      metadata stream))))
+      (expect output :to-contain "\"kind\":\"custom-metadata\"")
+      (expect output :to-contain "\"schemaVersion\":7")
+      (expect output :to-contain "\"custom-command\"")
+      (expect output :to-contain "\"custom-list-reporter\"")
+      (expect output :to-contain "\"custom.alias\"")
+      (expect output :to-contain "\"custom-package\"")
+      (expect output :to-contain "\"custom-matcher\"")
+      (expect output :not :to-contain "\"cl-weave-metadata\"")
+      (expect output :not :to-contain "\"cl-weave\"")
+      (expect output :not :to-contain "\"describe-it-dsl\"")))
+
   (it "keeps Vitest aliases aligned with public package exports"
     (let* ((metadata (cl-weave/cli::framework-metadata))
            (exports (getf (find "cl-weave"
