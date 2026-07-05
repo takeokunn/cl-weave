@@ -167,7 +167,8 @@
          (apply #'cl-weave:watch-system
                 system
                 (append arguments
-                        (list :stream stream))))))
+                        (list :stream stream
+                              :status-stream *error-output*))))))
     (:run
      (lambda (stream)
        (call-run-command options stream)))))

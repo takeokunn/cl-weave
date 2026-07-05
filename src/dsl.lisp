@@ -89,7 +89,9 @@
 (define-suite-alias describe.todo describe-todo)
 
 (define-conditional-suite-alias describe.skip-if describe-skip-if)
+(define-conditional-suite-alias describe.skipIf describe-skip-if)
 (define-conditional-suite-alias describe.run-if describe-run-if)
+(define-conditional-suite-alias describe.runIf describe-run-if)
 
 (defun option-plist-form-p (form)
   (and (consp form)
@@ -264,7 +266,9 @@
 
 (define-test-property-alias it.property it-property)
 (define-conditional-test-alias it.run-if it-run-if)
+(define-conditional-test-alias it.runIf it-run-if)
 (define-conditional-test-alias it.skip-if it-skip-if)
+(define-conditional-test-alias it.skipIf it-skip-if)
 (define-test-control-alias it.skip it-skip "skipped")
 (define-test-control-alias it.todo it-todo "todo")
 
@@ -338,7 +342,9 @@
 
 (define-test-property-alias test.property test-property)
 (define-conditional-test-alias test.run-if test-run-if)
+(define-conditional-test-alias test.runIf test-run-if)
 (define-conditional-test-alias test.skip-if test-skip-if)
+(define-conditional-test-alias test.skipIf test-skip-if)
 (define-test-control-alias test.skip test-skip "skipped")
 (define-test-control-alias test.todo test-todo "todo")
 
@@ -556,6 +562,9 @@
   `(set-has-assertions-required '(expect-has-assertions)))
 
 (defmacro expect.hasassertions ()
+  `(expect-has-assertions))
+
+(defmacro |expect.hasAssertions| ()
   `(expect-has-assertions))
 
 (defmacro expect.not (actual &body expectation)

@@ -38,6 +38,22 @@
    name
    (test-temporary-root)))
 
+(defun make-test-temporary-directory (prefix)
+  (loop repeat 100
+        for directory = (merge-pathnames
+                         (make-pathname
+                          :directory
+                          (list :relative
+                                (format nil "~A-~36R-~36R"
+                                        prefix
+                                        (get-universal-time)
+                                        (random (expt 36 6)))))
+                         (test-temporary-root))
+        unless (probe-file directory)
+          do (ensure-directories-exist (merge-pathnames #P".keep" directory))
+             (return directory)
+        finally (error "Failed to allocate test temporary directory for ~A." prefix)))
+
 (defun read-text-file (pathname)
   (with-open-file (stream pathname :direction :input)
     (let ((contents (make-string (file-length stream))))
@@ -120,4 +136,3 @@
                     `(:range (,low ,high)))))
         :description
         "Passes when ACTUAL is within the inclusive numeric range.")))
-

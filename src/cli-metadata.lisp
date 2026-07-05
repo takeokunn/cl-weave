@@ -83,7 +83,7 @@
     (list :name (string-downcase (package-name package))
           :exports
           (sort (loop for symbol being the external-symbols of package
-                      collect (string-downcase (symbol-name symbol)))
+                      collect (symbol-name symbol))
                 #'string<))))
 
 (defun framework-metadata ()

@@ -9,7 +9,10 @@
   stderr
   timed-out-p
   elapsed-ms
-  script-path)
+  script-path
+  stdout-path
+  stderr-path
+  home-path)
 
 (defun normalize-isolated-systems (systems)
   (cond
@@ -68,6 +71,9 @@
           (read-sequence content stream)
           content))
       ""))
+
+(defun maybe-path-namestring (pathname keep-files)
+  (and keep-files pathname (namestring pathname)))
 
 #+sbcl
 (defun isolated-environment-entry-name-p (name entry)
@@ -186,7 +192,10 @@
               :stderr (read-file-string-or-empty stderr)
               :timed-out-p (eq wait-status :timeout)
               :elapsed-ms elapsed-ms
-              :script-path (namestring script))))
+              :script-path (maybe-path-namestring script keep-files)
+              :stdout-path (maybe-path-namestring stdout keep-files)
+              :stderr-path (maybe-path-namestring stderr keep-files)
+              :home-path (maybe-path-namestring home keep-files))))
       (unless keep-files
         (ignore-errors (delete-file script))
         (ignore-errors (delete-file stdout))
@@ -210,7 +219,10 @@
                   :elapsed-ms (isolated-result-elapsed-ms result)
                   :stdout (isolated-result-stdout result)
                   :stderr (isolated-result-stderr result)
-                  :script-path (isolated-result-script-path result))
+                  :script-path (isolated-result-script-path result)
+                  :stdout-path (isolated-result-stdout-path result)
+                  :stderr-path (isolated-result-stderr-path result)
+                  :home-path (isolated-result-home-path result))
     :expected '(:status :pass :exit-code 0)
     :negated nil
     :pass nil)))

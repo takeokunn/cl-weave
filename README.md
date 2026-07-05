@@ -18,7 +18,8 @@ contracts, distribution ergonomics, and CI/AI integration around a stable core:
 - `it-each` / `test-each` and `describe-each` compile-time table tests
 - Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
   `expect.resolves`, `expect.rejects`, `expect.assertions`,
-  `expect.hasassertions`, and mock aliases using Common Lisp reader spelling
+  `expect.hasassertions`, exact `|expect.hasAssertions|`, and mock aliases
+  using Common Lisp reader spelling
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -166,13 +167,15 @@ The workflow runs on Linux and macOS, then uploads `cl-weave-results.json`,
 `cl-weave-metadata.json`, `cl-weave-plan.json`, `cl-weave-watch-once.json`,
 `cl-weave-tap.txt`, and `cl-weave-junit.xml` as
 `cl-weave-test-reports-${system}` artifacts. JSON result
-schema v4 is intended for AI agents and external automation: the root object
+schema v5 is intended for AI agents and external automation: the root object
 identifies itself with `kind: "test-results"`, and every event includes both a
-machine `path` and a stable Vitest-style `pathString`. JSONL is intended for
-streaming automation, coverage is intended for SBCL-side inspection, metadata is
-intended for agent discovery, one-shot watch output is intended for automation
-that needs watch resolution without entering a polling loop, TAP is intended for
-portable smoke output, and JUnit is intended for CI test result ingestion.
+machine `path` and a stable Vitest-style `pathString`, while assertion payloads
+stay structurally typed for agent consumption. JSONL event schema v2 is intended
+for streaming automation, coverage is intended for SBCL-side inspection,
+metadata is intended for agent discovery, one-shot watch output is intended for
+automation that needs watch resolution without entering a polling loop, TAP is
+intended for portable smoke output, and JUnit is intended for CI test result
+ingestion.
 
 ## API
 
@@ -211,6 +214,7 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
 (expect.assertions 2)
 (expect.hasassertions)
+(|expect.hasAssertions|)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -229,14 +233,18 @@ normally returned value fails with `:matcher :rejects`.
 The canonical Common Lisp forms are `expect-resolves` and `expect-rejects`;
 the dotted Vitest aliases macro-expand into those exported forms.
 
-`expect.assertions` and `expect.hasassertions` are checked at the end of each
-test attempt and reset for retries and concurrent tests. Declaration forms do
-not count as assertions; executed `expect`, `expect-not`, smart assertions, and
-thunk aliases count once.
+`expect.assertions`, `expect.hasassertions`, and the exact escaped
+`|expect.hasAssertions|` alias are checked at the end of each test attempt and
+reset for retries and concurrent tests. Declaration forms do not count as
+assertions; executed `expect`, `expect-not`, smart assertions, and thunk
+aliases count once.
 
 Dotted Vitest-shaped aliases use Common Lisp's actual unescaped reader spelling.
 JavaScript camelCase names are therefore lower-case in source, package exports,
-and metadata; prefer canonical hyphenated forms for generated Lisp.
+and metadata unless the symbol is explicitly escaped. `|expect.hasAssertions|`
+is exported as an exact camelCase compatibility alias for generators that carry
+Vitest spellings through verbatim. Prefer canonical hyphenated forms for
+generated Lisp.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -612,11 +620,11 @@ suite-level `describe.only.each`, `describe.concurrent.each`,
 `describe.sequential.each`, `describe.skip.each`, and `describe.todo.each`. The
 full Vitest-shaped surface also includes
 `it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
-`it.skip`, `it.skip-if`, `it.todo`, `it.isolated`, `it.property`, matching
-`test.*` aliases, suite-level `describe.concurrent`, `describe.sequential`,
-`describe.only`, `describe.run-if`, `describe.skip`, `describe.skip-if`,
-`describe.todo`, plus `expect.not`. Fixture hooks intentionally keep canonical
-Lisp names only.
+`it.runIf`, `it.skip`, `it.skip-if`, `it.skipIf`, `it.todo`, `it.isolated`,
+`it.property`, matching `test.*` aliases, suite-level `describe.concurrent`,
+`describe.sequential`, `describe.only`, `describe.run-if`, `describe.runIf`,
+`describe.skip`, `describe.skip-if`, `describe.skipIf`, `describe.todo`, plus
+`expect.not`. Fixture hooks intentionally keep canonical Lisp names only.
 `docs/ai-contract.md` is the machine-readable normalization contract for
 agents.
 
@@ -631,6 +639,10 @@ agents.
     "uses SBCL allocation counters"
   (expect (lambda () (list :ok)) :to-cons-less-than 4096))
 
+(it.runIf (member :sbcl *features*)
+    "uses the exact Vitest-shaped alias"
+  (expect :ok :to-be :ok))
+
 (describe-run-if (member :linux *features*)
     "linux-only integration"
   (it "checks a platform boundary"
@@ -642,7 +654,9 @@ suites when the condition is true. `it-run-if`, `test-run-if`, and
 `describe-run-if` register skipped tests or suites when the condition is false.
 Conditions are evaluated while the test file registers tests; skipped branches
 emit ordinary `:skip` events with deterministic reasons, and their hooks and
-bodies are not executed.
+bodies are not executed. The same behavior is also exported through
+`it.skipIf`, `it.runIf`, `test.skipIf`, `test.runIf`, `describe.skipIf`, and
+`describe.runIf`.
 
 ### Property Tests
 
@@ -1139,7 +1153,13 @@ original function cells are restored with `unwind-protect`.
 `it-isolated` runs the body in a fresh SBCL subprocess and reports non-zero
 exits or timeouts as normal structured assertion failures. Use it around FFI,
 native parser, and crash-boundary tests where the parent REPL or CI process
-must stay alive.
+must stay alive. `run-isolated` returns captured stdout/stderr strings in all
+cases. When `:keep-files t` is enabled, it also retains the generated script,
+stdout, stderr, and temporary HOME directory paths via
+`isolated-result-script-path`, `isolated-result-stdout-path`,
+`isolated-result-stderr-path`, and `isolated-result-home-path`. With the
+default `:keep-files nil`, those path accessors return `nil` and the temporary
+artifacts are deleted before control returns to the parent process.
 
 ### Reporters
 

@@ -18,6 +18,10 @@
      (progn
        (expect.hasassertions)
        (expect t)))
+    ("|expect.hasAssertions|"
+     (progn
+       (|expect.hasAssertions|)
+       (expect t)))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
     ("to-be-one-of list" (expect :ready :to-be-one-of '(:pending :ready :done)))
@@ -405,30 +409,36 @@
             (expect (getf expected :reason) :to-be :missing-snapshot))))))
 
   (it "reports external snapshot mismatches with first-difference data"
-    (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
-          (cl-weave::*snapshot-file-name* "mismatch-structured.snapshots")
-          (key (symbol-name (gensym "MISMATCH-STRUCTURED-SNAPSHOT-"))))
-      (cl-weave:with-snapshot-updates
-        (expect '(:ok 42) :to-match-snapshot key))
-      (handler-case
-          (progn
-            (expect '(:ok 43) :to-match-snapshot key)
-            (expect nil :to-be-truthy))
-        (cl-weave:assertion-failure (condition)
-          (let* ((detail (cl-weave::failure-detail condition))
-                 (actual (cl-weave::assertion-detail-actual detail))
-                 (expected (cl-weave::assertion-detail-expected detail))
-                 (difference (getf actual :difference)))
-            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
-            (expect (getf actual :snapshot-key) :to-equal key)
-            (expect (getf actual :reason) :to-be :snapshot-mismatch)
-            (expect (getf actual :value) :to-equal "(:ok 43)")
-            (expect (getf expected :present) :to-be-truthy)
-            (expect (getf expected :value) :to-equal "(:ok 42)")
-            (expect difference :to-equal (getf expected :difference))
-            (expect (getf difference :line) :to-be 1)
-            (expect (getf difference :expected) :to-equal "(:ok 42)")
-            (expect (getf difference :actual) :to-equal "(:ok 43)"))))))
+    (let* ((snapshot-root (make-test-temporary-directory "mismatch-structured"))
+           (cl-weave::*snapshot-directory* snapshot-root)
+           (cl-weave::*snapshot-file-name* "mismatch-structured.snapshots")
+           (key "mismatch-structured-snapshot"))
+      (unwind-protect
+           (progn
+             (cl-weave:with-snapshot-updates
+               (expect '(:ok 42) :to-match-snapshot key))
+             (handler-case
+                 (progn
+                   (expect '(:ok 43) :to-match-snapshot key)
+                   (expect nil :to-be-truthy))
+               (cl-weave:assertion-failure (condition)
+                 (let* ((detail (cl-weave::failure-detail condition))
+                        (actual (cl-weave::assertion-detail-actual detail))
+                        (expected (cl-weave::assertion-detail-expected detail))
+                        (difference (getf actual :difference)))
+                   (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
+                   (expect (getf actual :snapshot-key) :to-equal key)
+                   (expect (getf actual :reason) :to-be :snapshot-mismatch)
+                   (expect (getf actual :value) :to-equal "(:ok 43)")
+                   (expect (getf expected :present) :to-be-truthy)
+                   (expect (getf expected :value) :to-equal "(:ok 42)")
+                   (expect difference :to-equal (getf expected :difference))
+                   (expect (getf difference :line) :to-be 1)
+                   (expect (getf difference :expected) :to-equal "(:ok 42)")
+                   (expect (getf difference :actual) :to-equal "(:ok 43)")))))
+        (uiop:delete-directory-tree snapshot-root
+                                    :validate t
+                                    :if-does-not-exist :ignore))))
 
   (it "supports public custom matchers with structured failure data"
     (expect 4 :to-be-even)
@@ -520,4 +530,3 @@
           (expect actual :to-contain :values)
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal '(:max-ms 0)))))))
-

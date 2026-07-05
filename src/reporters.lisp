@@ -76,7 +76,7 @@
   '((:kind "test-results"
      :commands ("run" "watch")
      :reporters ("json" "sexp")
-     :schema-version 4
+     :schema-version 5
      :streaming nil
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
@@ -100,7 +100,7 @@
     (:kind "test-event"
      :commands ("run" "watch")
      :reporters ("jsonl")
-     :schema-version 1
+     :schema-version 2
      :streaming t
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
@@ -271,6 +271,113 @@
 (defun json-write-printed-value (value stream)
   (write-json-string (prin1-to-string value) stream))
 
+(defun proper-list-p (value)
+  (loop for tail = value then (cdr tail)
+        do (cond
+             ((null tail) (return t))
+             ((consp tail))
+             (t (return nil)))))
+
+(defun keyword-json-key (symbol)
+  (let* ((source (string-downcase (symbol-name symbol)))
+         (parts '())
+         (start 0))
+    (loop for position = (position #\- source :start start)
+          do (if position
+                 (progn
+                   (push (subseq source start position) parts)
+                   (setf start (1+ position)))
+                 (progn
+                   (push (subseq source start) parts)
+                   (return))))
+    (let ((ordered (nreverse parts)))
+      (with-output-to-string (stream)
+        (when ordered
+          (write-string (first ordered) stream)
+          (dolist (part (rest ordered))
+            (when (plusp (length part))
+              (write-char (char-upcase (char part 0)) stream)
+              (write-string (subseq part 1) stream))))))))
+
+(defun json-object-key-string (key)
+  (typecase key
+    (keyword (keyword-json-key key))
+    (string key)
+    (symbol (string-downcase (symbol-name key)))
+    (t (princ-to-string key))))
+
+(defun json-plist-p (value)
+  (and (proper-list-p value)
+       (evenp (length value))
+       (loop for tail on value by #'cddr
+             always (keywordp (car tail)))))
+
+(defun json-alist-p (value)
+  (and (proper-list-p value)
+       (every (lambda (entry)
+                (and (consp entry)
+                     (let ((key (car entry)))
+                       (or (keywordp key)
+                           (stringp key)
+                           (symbolp key)))))
+              value)))
+
+(defun json-write-array (values stream)
+  (write-char #\[ stream)
+  (loop for value in values
+        for first = t then nil
+        do (progn
+             (unless first
+               (write-string "," stream))
+             (json-write-value value stream)))
+  (write-char #\] stream))
+
+(defun json-write-object (pairs stream)
+  (write-char #\{ stream)
+  (loop for (key . value) in pairs
+        for first = t then nil
+        do (progn
+             (unless first
+               (write-string "," stream))
+             (write-json-string (json-object-key-string key) stream)
+             (write-char #\: stream)
+             (json-write-value value stream)))
+  (write-char #\} stream))
+
+(defun json-write-value (value stream)
+  (typecase value
+    (null (write-string "null" stream))
+    ((eql t) (write-string "true" stream))
+    (string (write-json-string value stream))
+    (character (write-json-string (string value) stream))
+    (number (princ value stream))
+    (pathname (write-json-string (namestring value) stream))
+    (keyword (write-json-string (string-downcase (symbol-name value)) stream))
+    (vector
+     (write-char #\[ stream)
+     (loop for index from 0 below (length value)
+           for first = t then nil
+           do (progn
+                (unless first
+                  (write-string "," stream))
+                (json-write-value (aref value index) stream)))
+     (write-char #\] stream))
+    (cons
+     (cond
+       ((json-plist-p value)
+        (json-write-object
+         (loop for (key val) on value by #'cddr
+               collect (cons key val))
+         stream))
+       ((json-alist-p value)
+        (json-write-object value stream))
+       ((proper-list-p value)
+        (json-write-array value stream))
+       (t
+        (json-write-printed-value value stream))))
+    (symbol (write-json-string (princ-to-string value) stream))
+    (t (json-write-printed-value value stream))))
+
 (defun json-write-assertion (detail stream)
   (if detail
       (progn
@@ -280,9 +387,9 @@
         (write-string ",\"matcher\":" stream)
         (json-write-printed-value (assertion-detail-matcher detail) stream)
         (write-string ",\"actual\":" stream)
-        (json-write-printed-value (assertion-detail-actual detail) stream)
+        (json-write-value (assertion-detail-actual detail) stream)
         (write-string ",\"expected\":" stream)
-        (json-write-printed-value (assertion-detail-expected detail) stream)
+        (json-write-value (assertion-detail-expected detail) stream)
         (write-string ",\"negated\":" stream)
         (write-string (if (assertion-detail-negated detail) "true" "false") stream)
         (write-string ",\"pass\":" stream)
@@ -391,7 +498,7 @@
 (defun report-json (events stream)
   (let ((summary (result-summary events)))
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":4" stream)
+  (write-string "\"schemaVersion\":5" stream)
   (write-string ",\"kind\":\"test-results\"" stream)
   (json-write-results-summary-fields summary stream)
   (write-string ",\"events\":[" stream)
@@ -412,7 +519,7 @@
   (write-string "}" stream)
   (terpri stream)
   (dolist (event events)
-    (write-string "{\"schemaVersion\":1,\"kind\":\"test-event\",\"event\":" stream)
+    (write-string "{\"schemaVersion\":2,\"kind\":\"test-event\",\"event\":" stream)
     (json-write-event event stream)
     (write-string "}" stream)
     (terpri stream))

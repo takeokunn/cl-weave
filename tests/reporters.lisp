@@ -72,7 +72,7 @@
                             :path '("reporters" "errors")
                             :elapsed-internal-time 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":4")
+      (expect output :to-contain "\"schemaVersion\":5")
       (expect output :to-contain "\"kind\":\"test-results\"")
       (expect output :to-contain "\"passed\":1")
       (expect output :to-contain "\"skipped\":1")
@@ -87,6 +87,42 @@
       (expect output :to-contain "\"durationMs\":0.000")
       (expect output :to-contain "\"reason\":\"needs \\\"escaping\\\"\"")
       (expect output :to-contain "\"assertion\":null")))
+
+  (it "serializes assertion payloads as structured JSON data"
+    (let ((output (with-output-to-string (stream)
+                    (cl-weave::report-json
+                     (list (cl-weave::make-test-event
+                            :status :fail
+                            :path '("reporters" "isolated")
+                            :condition "isolated process failed"
+                            :assertion (cl-weave::make-assertion-detail
+                                        :form '(expect (run-isolated body) :to-satisfy #'identity)
+                                        :matcher :isolated
+                                        :actual '(:status :timeout
+                                                  :exit-code nil
+                                                  :timed-out-p t
+                                                  :elapsed-ms 100
+                                                  :stdout ""
+                                                  :stderr ""
+                                                  :script-path "/tmp/cl-weave-isolated.lisp"
+                                                  :stdout-path "/tmp/cl-weave-isolated.stdout"
+                                                  :stderr-path "/tmp/cl-weave-isolated.stderr"
+                                                  :home-path "/tmp/cl-weave-home/")
+                                        :expected '(:status :pass :exit-code 0)
+                                        :negated nil
+                                        :pass nil)
+                            :elapsed-internal-time 0))
+                     stream))))
+      (expect output :to-contain "\"schemaVersion\":5")
+      (expect output :to-contain "\"matcher\":\":ISOLATED\"")
+      (expect output :to-contain "\"actual\":{\"status\":\"timeout\"")
+      (expect output :to-contain "\"timedOutP\":true")
+      (expect output :to-contain "\"elapsedMs\":100")
+      (expect output :to-contain "\"scriptPath\":\"\\/tmp\\/cl-weave-isolated.lisp\"")
+      (expect output :to-contain "\"stdoutPath\":\"\\/tmp\\/cl-weave-isolated.stdout\"")
+      (expect output :to-contain "\"stderrPath\":\"\\/tmp\\/cl-weave-isolated.stderr\"")
+      (expect output :to-contain "\"homePath\":\"\\/tmp\\/cl-weave-home\\/\"")
+      (expect output :to-contain "\"expected\":{\"status\":\"pass\",\"exitCode\":0}")))
 
   (it "prints AI-readable JSONL result streams"
     (let ((output (with-output-to-string (stream)
@@ -111,7 +147,7 @@
       (expect output :to-contain "\"schemaVersion\":1,\"kind\":\"test-results-start\"")
       (expect output :to-contain "\"total\":2")
       (expect output :to-contain "\"kind\":\"test-event\"")
-      (expect output :to-contain "\"schemaVersion\":1,\"kind\":\"test-event\"")
+      (expect output :to-contain "\"schemaVersion\":2,\"kind\":\"test-event\"")
       (expect output :to-contain "\"event\":{\"status\":\"pass\"")
       (expect output :to-contain "\"pathString\":\"reporters > jsonl\"")
       (expect output :to-contain "\"kind\":\"test-results-summary\"")

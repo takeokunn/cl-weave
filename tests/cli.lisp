@@ -255,6 +255,21 @@
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
+  (it "rejects inline values for flag-only options"
+    (dolist (token '("--help=1"
+                     "--version=1"
+                     "--coverage=false"
+                     "--pass-with-no-tests=false"
+                     "--passWithNoTests=false"
+                     "--fail-with-no-tests=true"
+                     "--updateSnapshots=false"))
+      (expect (lambda ()
+                (cl-weave/cli::parse-cli-arguments
+                 (list "run" token)
+                 (cl-weave/cli::make-cli-options)))
+              :to-throw
+              "does not accept an inline value")))
+
   (it "treats Lisp nil environment tokens as false"
     (with-mocked-functions
         (((symbol-function 'uiop:getenv)
@@ -423,7 +438,7 @@
                          (cl-weave/cli::run-command options))
                        :to-equal ""))
              (let ((output (read-text-file output-file)))
-               (expect output :to-contain "\"schemaVersion\":4")
+               (expect output :to-contain "\"schemaVersion\":5")
                (expect output :to-contain "\"kind\":\"test-results\"")
                (expect output :to-contain "\"events\":[]")))
         (when (probe-file output-file)
@@ -497,7 +512,7 @@
         (expect output :to-contain "\"metadata\"")
         (expect output :to-contain "\"artifactSchemas\"")
         (expect output :to-contain "\"kind\":\"test-results\"")
-        (expect output :to-contain "\"schemaVersion\":4")
+        (expect output :to-contain "\"schemaVersion\":5")
         (expect output :to-contain "\"fields\"")
         (expect output :to-contain "\"name\":\"events\"")
         (expect output :to-contain "\"kind\":\"array\"")
@@ -531,12 +546,13 @@
         (expect output :to-contain "\"arithmetic-operator\"")
         (expect output :to-contain "\"packageExports\"")
         (expect output :to-contain "\"cl-weave\"")
-        (expect output :to-contain "\"describe\"")
-        (expect output :to-contain "\"expect\"")
+        (expect output :to-contain "\"DESCRIBE\"")
+        (expect output :to-contain "\"EXPECT\"")
         (expect output :to-contain "\"vitestAliases\"")
         (expect output :to-contain "\"describe.only.each\"")
         (expect output :to-contain "\"it.property\"")
         (expect output :to-contain "\"test.isolated\"")
+        (expect output :to-contain "\"expect.hasAssertions\"")
         (expect output :to-contain "\"expect.hasassertions\"")
         (expect output :to-contain "\"vi.mocked\"")
         (expect output :to-contain "\"vi.mockreturnvalues\"")
@@ -862,13 +878,14 @@
       (expect results-schema :not :to-be nil)
       (expect (getf results-schema :commands) :to-equal '("run" "watch"))
       (expect (getf results-schema :reporters) :to-equal '("json" "sexp"))
-      (expect (getf results-schema :schema-version) :to-be 4)
+      (expect (getf results-schema :schema-version) :to-be 5)
       (expect (getf results-schema :streaming) :to-be nil)
       (expect (find "events" (getf results-schema :fields)
                     :key field-name :test #'string=)
               :not :to-be nil)
       (expect event-schema :not :to-be nil)
       (expect (getf event-schema :reporters) :to-equal '("jsonl"))
+      (expect (getf event-schema :schema-version) :to-be 2)
       (expect (getf event-schema :streaming) :to-be t)
       (expect (find "event" (getf event-schema :fields)
                     :key field-name :test #'string=)
@@ -959,16 +976,16 @@
                                 :test #'string=)
                           :exports)))
       (flet ((exportedp (name)
-               (member name exports :test #'string=)))
+               (or (member name exports :test #'string=)
+                   (member (string-upcase name) exports :test #'string=))))
         (dolist (entry (getf metadata :vitest-aliases))
-          (expect (getf entry :alias) :to-satisfy #'exportedp)
           (expect (getf entry :canonical) :to-satisfy #'exportedp)))))
 
   (it "keeps package export metadata synchronized with actual packages"
     (flet ((actual-exports (package-name)
              (let ((exports '()))
                (do-external-symbols (symbol (find-package (string-upcase package-name)))
-                 (push (string-downcase (symbol-name symbol)) exports))
+                 (push (symbol-name symbol) exports))
                (sort exports #'string<)))
            (metadata-exports (package-name metadata)
              (getf (find package-name
@@ -1084,13 +1101,28 @@
           (expect (member reporter (getf metadata :reporters) :test #'string=)
                   :not :to-be nil)))))
 
-  (it "keeps metadata aliases in Common Lisp reader spelling"
+  (it "keeps metadata canonical names in Common Lisp reader spelling"
     (dolist (entry (getf (cl-weave/cli::framework-metadata) :vitest-aliases))
-      (dolist (name (list (getf entry :alias) (getf entry :canonical)))
+      (let ((canonical (getf entry :canonical)))
         (expect (every (lambda (char)
                          (not (upper-case-p char)))
-                       name)
+                       canonical)
                 :to-be t))))
+
+  (it "advertises camelCase conditional aliases for AI and CLI consumers"
+    (let ((aliases (getf (cl-weave/cli::framework-metadata) :vitest-aliases)))
+      (dolist (pair '(("describe.runIf" . "describe-run-if")
+                      ("describe.skipIf" . "describe-skip-if")
+                      ("it.runIf" . "it-run-if")
+                      ("it.skipIf" . "it-skip-if")
+                      ("test.runIf" . "test-run-if")
+                      ("test.skipIf" . "test-skip-if")))
+        (expect (find pair aliases
+                      :key (lambda (entry)
+                             (cons (getf entry :alias)
+                                   (getf entry :canonical)))
+                      :test #'equal)
+                :not :to-be nil))))
 
   (it "keeps CLI alias handlers aligned with metadata"
     (cl-weave/cli::ensure-cli-option-aliases-registered)
@@ -1262,7 +1294,63 @@
         (expect (getf observed-arguments :include-dependencies) :to-be t)
         (expect (getf observed-arguments :once) :to-be t)
         (expect (getf observed-arguments :interval) :to-equal 1.5)
-        (expect (getf observed-arguments :stream) :to-be-truthy))))
+        (expect (getf observed-arguments :stream) :to-be-truthy)
+        (expect (getf observed-arguments :status-stream) :to-be-truthy))))
+
+  (it "writes watch artifacts to --output while keeping watch status on stderr"
+    (let* ((output-file (test-temporary-pathname "cl-weave-watch-once.json"))
+           (stdout "")
+           (stderr "")
+           (exit-code nil))
+      (when (probe-file output-file)
+        (delete-file output-file))
+      (unwind-protect
+           (progn
+             (with-mocked-functions
+                 (((symbol-function 'cl-weave/cli::exit-process)
+                   (lambda (code)
+                     (setf exit-code code)))
+                  ((symbol-function 'cl-weave/cli::load-requested-inputs)
+                   (lambda (options)
+                     (declare (ignore options))
+                     nil))
+                  ((symbol-function 'cl-weave:watch-system)
+                   (lambda (system &key reporter stream status-stream name-filter
+                                         shard order seed bail coverage
+                                         coverage-output pass-with-no-tests retry
+                                         timeout-ms max-workers include-dependencies
+                                         once interval)
+                     (declare (ignore system shard order seed bail coverage
+                                      coverage-output pass-with-no-tests retry
+                                      timeout-ms max-workers include-dependencies
+                                      interval))
+                     (expect reporter :to-be :json)
+                     (expect name-filter :to-equal "watch")
+                     (expect once :to-be t)
+                     (write-string "; cl-weave watch: FULL-SUITE" status-stream)
+                     (cl-weave::report-json nil stream)
+                     t)))
+               (setf stdout
+                     (with-output-to-string (*standard-output*)
+                       (setf stderr
+                             (with-output-to-string (*error-output*)
+                               (cl-weave/cli:main
+                                (list "watch"
+                                      "cl-weave-tests"
+                                      "--once"
+                                      "--reporter" "json"
+                                      "--filter" "watch"
+                                      "--output" (namestring output-file))))))))
+             (expect exit-code :to-be 0)
+             (expect stdout :to-equal "")
+             (expect stderr :to-contain "cl-weave watch: FULL-SUITE")
+             (expect stderr :not :to-contain "\"schemaVersion\":5")
+             (let ((output (read-text-file output-file)))
+               (expect output :to-contain "\"schemaVersion\":5")
+               (expect output :to-contain "\"kind\":\"test-results\"")
+               (expect output :not :to-contain "cl-weave watch"))))
+        (when (probe-file output-file)
+          (delete-file output-file)))))
 
   (it "returns CLI error status for watch mode without a target system"
     (let ((exit-code nil)
@@ -1364,7 +1452,7 @@
         (expect searched-directories
                 :to-equal
                 (list (pathname-directory helper-directory)
-                      (pathname-directory cwd)))))))
+                      (pathname-directory cwd))))))
 
   (it "normalizes metadata reporter spec to JSON output"
     (let* ((options (cl-weave/cli::parse-cli-arguments

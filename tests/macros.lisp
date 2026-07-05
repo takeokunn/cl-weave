@@ -327,6 +327,9 @@
      (it.run-if t "conditional alias" (expect :ok :to-be :ok))
      cl-weave:it-run-if)
     (expect-macroexpands-through
+     (it.runIf t "conditional camel alias" (expect :ok :to-be :ok))
+     cl-weave:it-run-if)
+    (expect-macroexpands-through
      (it.sequential "serial alias" (expect :ok :to-be :ok))
      cl-weave:it-sequential)
     (expect-macroexpands-through
@@ -341,6 +344,9 @@
      cl-weave:it-skip-each)
     (expect-macroexpands-through
      (it.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
+     cl-weave:it-skip-if)
+    (expect-macroexpands-through
+     (it.skipIf t "conditional skip camel alias" (expect :ok :to-be :ok))
      cl-weave:it-skip-if)
     (expect-macroexpands-through
      (it.todo "todo alias" "later")
@@ -367,6 +373,9 @@
      cl-weave:expect-assertions)
     (expect-macroexpands-through
      (expect.hasassertions)
+     cl-weave:expect-has-assertions)
+    (expect-macroexpands-through
+     (|expect.hasAssertions|)
      cl-weave:expect-has-assertions)
     (expect-macroexpands-through
      (test.concurrent "parallel alias" (expect :ok :to-be :ok))
@@ -399,6 +408,9 @@
      (test.run-if t "conditional alias" (expect :ok :to-be :ok))
      cl-weave:test-run-if)
     (expect-macroexpands-through
+     (test.runIf t "conditional camel alias" (expect :ok :to-be :ok))
+     cl-weave:test-run-if)
+    (expect-macroexpands-through
      (test.sequential "serial alias" (expect :ok :to-be :ok))
      cl-weave:test-sequential)
     (expect-macroexpands-through
@@ -419,6 +431,9 @@
      cl-weave:test-skip-each)
     (expect-macroexpands-through
      (test.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
+     cl-weave:test-skip-if)
+    (expect-macroexpands-through
+     (test.skipIf t "conditional skip camel alias" (expect :ok :to-be :ok))
      cl-weave:test-skip-if)
     (expect-macroexpands-through
      (test.todo "todo alias" "later")
@@ -475,6 +490,10 @@
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-run-if)
     (expect-macroexpands-through
+     (describe.runIf t "conditional suite camel alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-run-if)
+    (expect-macroexpands-through
      (describe.skip "skipped suite alias" "because"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-skip)
@@ -487,6 +506,10 @@
      cl-weave:describe-skip-each)
     (expect-macroexpands-through
      (describe.skip-if t "conditional skipped suite alias"
+       (it "case" (expect :ok :to-be :ok)))
+     cl-weave:describe-skip-if)
+    (expect-macroexpands-through
+     (describe.skipIf t "conditional skipped suite camel alias"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-skip-if)
     (expect-macroexpands-through
@@ -515,4 +538,3 @@
             '(if ready
                  nil
                  (progn (setf *fixture-value* :done))))))
-

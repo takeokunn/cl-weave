@@ -23,11 +23,13 @@
    #:describe.only
    #:describe.only.each
    #:describe.run-if
+   #:describe.runIf
    #:describe.sequential
    #:describe.sequential.each
    #:describe.skip
    #:describe.skip.each
    #:describe.skip-if
+   #:describe.skipIf
    #:describe.todo
    #:describe.todo.each
    #:describe-concurrent
@@ -49,6 +51,7 @@
    #:expect-assertions
    #:expect.extend
    #:expect-extend
+   #:|expect.hasAssertions|
    #:expect.hasassertions
    #:expect-has-assertions
    #:expect.not
@@ -90,6 +93,7 @@
    #:it-only
    #:it-only-each
    #:it.run-if
+   #:it.runIf
    #:it-run-if
    #:it.sequential
    #:it.sequential.each
@@ -100,14 +104,19 @@
    #:it-skip
    #:it-skip-each
    #:it.skip-if
+   #:it.skipIf
    #:it-skip-if
    #:it.todo
    #:it.todo.each
    #:it-todo
    #:it-todo-each
    #:isolated-result-exit-code
+   #:isolated-result-home-path
+   #:isolated-result-script-path
    #:isolated-result-status
    #:isolated-result-stderr
+   #:isolated-result-stderr-path
+   #:isolated-result-stdout-path
    #:isolated-result-timed-out-p
    #:list-mutation-operators
    #:logic-program
@@ -180,6 +189,7 @@
    #:test-plan-facts
    #:test-plan-where
    #:test.run-if
+   #:test.runIf
    #:test-run-if
    #:test.sequential
    #:test.sequential.each
@@ -190,6 +200,7 @@
    #:test-skip
    #:test-skip-each
    #:test.skip-if
+   #:test.skipIf
    #:test-skip-if
    #:test.todo
    #:test.todo.each

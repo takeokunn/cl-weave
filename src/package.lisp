@@ -29,6 +29,7 @@
    #:describe.only.each
    #:describe-only-each
    #:describe.run-if
+   #:describe.runIf
    #:describe-run-if
    #:describe.sequential
    #:describe-sequential
@@ -39,6 +40,7 @@
    #:describe.skip.each
    #:describe-skip-each
    #:describe.skip-if
+   #:describe.skipIf
    #:describe-skip-if
    #:describe.todo
    #:describe-todo
@@ -51,6 +53,7 @@
    #:expect-assertions
    #:expect.extend
    #:expect-extend
+   #:|expect.hasAssertions|
    #:expect.hasassertions
    #:expect-has-assertions
    #:expect.not
@@ -79,10 +82,13 @@
    #:isolated-result
    #:isolated-result-elapsed-ms
    #:isolated-result-exit-code
+   #:isolated-result-home-path
    #:isolated-result-script-path
    #:isolated-result-status
    #:isolated-result-stderr
+   #:isolated-result-stderr-path
    #:isolated-result-stdout
+   #:isolated-result-stdout-path
    #:isolated-result-timed-out-p
    #:it
    #:it.concurrent
@@ -104,6 +110,7 @@
    #:it.only.each
    #:it-only-each
    #:it.run-if
+   #:it.runIf
    #:it-run-if
    #:it.sequential
    #:it-sequential
@@ -114,6 +121,7 @@
    #:it.skip.each
    #:it-skip-each
    #:it.skip-if
+   #:it.skipIf
    #:it-skip-if
    #:it.todo
    #:it-todo
@@ -230,6 +238,7 @@
    #:test.property
    #:test-property
    #:test.run-if
+   #:test.runIf
    #:test-run-if
    #:test.sequential
    #:test-sequential
@@ -240,6 +249,7 @@
    #:test.skip.each
    #:test-skip-each
    #:test.skip-if
+   #:test.skipIf
    #:test-skip-if
    #:test.todo
    #:test-todo

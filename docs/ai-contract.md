@@ -38,7 +38,7 @@ structured artifact kind currently advertised by the loaded version.
       "kind": "test-results",
       "commands": ["run", "watch"],
       "reporters": ["json", "sexp"],
-      "schemaVersion": 4,
+      "schemaVersion": 5,
       "streaming": false,
       "fields": [
         {
@@ -59,7 +59,7 @@ structured artifact kind currently advertised by the loaded version.
       "kind": "test-event",
       "commands": ["run", "watch"],
       "reporters": ["jsonl"],
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "streaming": true,
       "fields": [
         {
@@ -147,7 +147,9 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `describe.sequential` -> `describe-sequential`
 - `describe.sequential.each` -> `describe-sequential-each`
 - `describe.run-if` -> `describe-run-if`
+- `describe.runIf` -> `describe-run-if`
 - `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
+- `describe.skipIf` -> `describe-skip-if`
 - `describe.skip.each` -> `describe-skip-each`
 - `describe.todo.each` -> `describe-todo-each`
 - `it.each` -> `it-each`
@@ -162,7 +164,9 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `it.only` -> `it-only`
 - `it.only.each` -> `it-only-each`
 - `it.run-if` -> `it-run-if`
+- `it.runIf` -> `it-run-if`
 - `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
+- `it.skipIf` -> `it-skip-if`
 - `it.skip.each` -> `it-skip-each`
 - `it.todo.each` -> `it-todo-each`
 - `test` -> `it`
@@ -178,10 +182,13 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `test.only` -> `test-only`
 - `test.only.each` -> `test-only-each`
 - `test.run-if` -> `test-run-if`
+- `test.runIf` -> `test-run-if`
 - `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
+- `test.skipIf` -> `test-skip-if`
 - `test.skip.each` -> `test-skip-each`
 - `test.todo.each` -> `test-todo-each`
 - `expect.assertions` -> `expect-assertions`
+- `|expect.hasAssertions|` -> `expect-has-assertions`
 - `expect.hasassertions` -> `expect-has-assertions`
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
@@ -189,8 +196,11 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `expect.rejects` -> `expect-rejects`
 Fixture hooks are exported as canonical Lisp forms: `before-all`, `after-all`,
 `before-each`, `around-each`, and `after-each`. Dotted Vitest-shaped aliases use
-Common Lisp's actual unescaped reader spelling: JavaScript camelCase names are
-lower-case in source, package exports, and metadata.
+Common Lisp's actual unescaped reader spelling. cl-weave exports both the
+canonical hyphenated conditional forms and the tighter Vitest-shaped camelCase
+spellings `skipIf` and `runIf`. For AI or code generators that preserve
+JavaScript spellings verbatim, `|expect.hasAssertions|` is also exported as an
+exact escaped symbol alias.
 
 ## S-Expression Reporter
 
@@ -342,7 +352,7 @@ The reporter prints one JSON object:
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "kind": "test-results",
   "passed": 1,
   "skipped": 0,
@@ -382,7 +392,7 @@ It prints one JSON object per line:
 
 ```jsonl
 {"schemaVersion":1,"kind":"test-results-start","total":1}
-{"schemaVersion":1,"kind":"test-event","event":{"status":"pass","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"seconds":0.0,"durationMs":0.0,"condition":null,"reason":null,"assertion":null}}
+{"schemaVersion":2,"kind":"test-event","event":{"status":"pass","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"seconds":0.0,"durationMs":0.0,"condition":null,"reason":null,"assertion":null}}
 {"schemaVersion":1,"kind":"test-results-summary","passed":1,"skipped":0,"todos":0,"failed":0,"errored":0,"failedPaths":[],"erroredPaths":[]}
 ```
 
@@ -390,6 +400,13 @@ It prints one JSON object per line:
 `test-results-summary` uses the same counts and rerun path summaries as the JSON
 result root object. The alias `CL_WEAVE_REPORTER=ndjson` selects the same
 reporter as `jsonl`.
+
+Assertion payloads are now structured JSON values when the underlying Common
+Lisp data can be represented directly. Property lists become camelCase JSON
+objects, vectors and proper lists become arrays, keywords become lowercase JSON
+strings, and unstructured objects still fall back to printed strings. This
+keeps isolated-process diagnostics and snapshot metadata machine-readable for
+CI and agent consumers without changing the surrounding event envelope.
 
 For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
 same reporter payload directly to an artifact file:
@@ -878,6 +895,9 @@ Conditional registration macros keep the same reporter contract.
 events when their condition is true. `it-run-if`, `test-run-if`, and
 `describe-run-if` emit ordinary `:skip` events when their condition is false.
 The deterministic reasons are `"conditional skip"` and `"conditional run-if"`.
+`it.skipIf`, `it.runIf`, `test.skipIf`, `test.runIf`, `describe.skipIf`, and
+`describe.runIf` normalize to the same canonical hyphenated macros before
+registration.
 Conditions are evaluated while the test file registers tests; reporters do not
 add a new event field or schema version for conditional registration.
 
@@ -1277,8 +1297,15 @@ declared ASDF systems before evaluating the body.
  :stderr "..."
  :timed-out-p nil
  :elapsed-ms 12
- :script-path "/tmp/cl-weave-isolated-....lisp")
+ :script-path "/tmp/cl-weave-isolated-....lisp"
+ :stdout-path "/tmp/cl-weave-isolated-....stdout"
+ :stderr-path "/tmp/cl-weave-isolated-....stderr"
+ :home-path "/tmp/cl-weave-isolated-....home/")
 ```
+
+The path accessors are populated only when `:keep-files t` is enabled. With the
+default `:keep-files nil`, the subprocess artifacts are removed before the
+parent process regains control and the path slots are `nil`.
 
 When `it-isolated` fails, the assertion matcher is `:isolated` and the payload
 keeps the child process diagnostics:
@@ -1290,7 +1317,10 @@ keeps the child process diagnostics:
           :elapsed-ms 100
           :stdout ""
           :stderr ""
-          :script-path "/tmp/cl-weave-isolated-....lisp")
+          :script-path "/tmp/cl-weave-isolated-....lisp"
+          :stdout-path "/tmp/cl-weave-isolated-....stdout"
+          :stderr-path "/tmp/cl-weave-isolated-....stderr"
+          :home-path "/tmp/cl-weave-isolated-....home/")
  :expected (:status :pass :exit-code 0))
 ```
 

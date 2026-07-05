@@ -37,6 +37,7 @@
 (defvar *cli-option-handlers* (make-hash-table :test #'equal))
 (defvar *cli-environment-appliers* (make-hash-table :test #'equal))
 (defvar *cli-option-aliases-registered-p* nil)
+(defvar *current-cli-option-inline-p* nil)
 
 (defmacro define-cli-option (flag (options rest) &body body)
   `(setf (gethash ,flag *cli-option-handlers*)
@@ -57,6 +58,9 @@
 
 (defmacro define-cli-flag-option (flag place &optional (value t value-supplied-p) command)
   `(define-cli-option ,flag (options rest)
+     (when *current-cli-option-inline-p*
+       (error 'cli-error
+              :message (format nil "~A does not accept an inline value" ,flag)))
      (setf ,place ,(if value-supplied-p value t))
      ,@(when command
          `((setf (cli-options-command options) ,command)))

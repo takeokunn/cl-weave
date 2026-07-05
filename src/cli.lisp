@@ -25,7 +25,8 @@
     (let ((handler (gethash flag *cli-option-handlers*)))
       (unless handler
         (error 'cli-error :message (format nil "Unknown option: ~A" flag)))
-      (funcall handler options (if inline-p (list* inline-value rest) rest)))))
+      (let ((*current-cli-option-inline-p* inline-p))
+        (funcall handler options (if inline-p (list* inline-value rest) rest))))))
 
 (defun command-allows-positional-system-p (command)
   (member command '(:run :list :watch :metadata)))
