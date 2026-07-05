@@ -189,6 +189,8 @@ Built-in matchers:
 - `:to-be-instance-of`
 - `:to-contain`
 - `:to-have-length`
+- `:to-have-property`
+- `:to-be-close-to`
 - `:to-be-greater-than`
 - `:to-be-greater-than-or-equal`
 - `:to-be-less-than`
@@ -284,6 +286,35 @@ the body runs once per matcher. Failure reports include `:elapsed-seconds`,
 Allocation measurement uses the implementation's byte-consing counter; it is
 currently backed by SBCL and fails clearly on implementations that do not expose
 one.
+
+### Property Assertions
+
+`:to-have-property` is Vitest-style `toHaveProperty(path, value?)` for Lisp
+data. The path can be a scalar, list, or vector. It traverses property lists,
+association lists, hash tables, CLOS slots, and integer sequence indexes:
+
+```lisp
+(expect '(:user (:name "Ada" :roles #("dev" "ops")))
+        :to-have-property
+        '(:user :roles 1)
+        "ops")
+```
+
+Failures report `:path`, `:present`, and `:value` in `:actual`, plus the
+expected path and optional value in `:expected`.
+
+### Close Numeric Assertions
+
+`:to-be-close-to` mirrors Vitest `toBeCloseTo(value, numDigits?)`. The default
+digit count is `2`, and a value passes when
+`abs(expected - actual) < 10^-digits / 2`:
+
+```lisp
+(expect (+ 0.1d0 0.2d0) :to-be-close-to 0.3d0 5)
+```
+
+Failures report `:value`, `:expected-value`, `:num-digits`, `:difference`, and
+`:threshold`, so reporters can display numeric drift without reparsing strings.
 
 ### MOP Architecture Assertions
 

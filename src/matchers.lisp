@@ -100,6 +100,104 @@
   (when (typep value 'sequence)
     (length value)))
 
+(defun property-path-segments (path)
+  (cond
+    ((vectorp path) (coerce path 'list))
+    ((listp path) path)
+    (t (list path))))
+
+(defun sequence-index-value (sequence index)
+  (if (and (integerp index)
+           (not (minusp index))
+           (< index (length sequence)))
+      (values (elt sequence index) t)
+      (values nil nil)))
+
+(defun alist-value (entries key)
+  (let ((entry (assoc key entries :test #'equal)))
+    (if entry
+        (values (cdr entry) t)
+        (values nil nil))))
+
+(defun plist-value (plist key)
+  (loop for tail = plist then (cddr tail)
+        while (and (consp tail) (consp (cdr tail)))
+        for plist-key = (first tail)
+        for value = (second tail)
+        when (eql plist-key key)
+          return (values value t)
+        finally (return (values nil nil))))
+
+(defun object-slot-value (object slot-name)
+  (if (symbolp slot-name)
+      (handler-case
+          (if (slot-exists-p object slot-name)
+              (if (slot-boundp object slot-name)
+                  (values (slot-value object slot-name) t)
+                  (values nil t))
+              (values nil nil))
+        (error ()
+          (values nil nil)))
+      (values nil nil)))
+
+(defun property-segment-value (value segment)
+  (typecase value
+    (hash-table (gethash segment value))
+    (cons
+     (cond
+       ((integerp segment) (sequence-index-value value segment))
+       ((consp (first value)) (alist-value value segment))
+       (t (plist-value value segment))))
+    (vector
+     (sequence-index-value value segment))
+    (t
+     (object-slot-value value segment))))
+
+(defun property-path-value (value path)
+  (let ((current value))
+    (dolist (segment (property-path-segments path) (values t current))
+      (multiple-value-bind (next present-p)
+          (property-segment-value current segment)
+        (unless present-p
+          (return (values nil nil)))
+        (setf current next)))))
+
+(defun normalize-property-expected (expected matcher)
+  (unless (<= 1 (length expected) 2)
+    (error "Matcher ~S expects a property path and optional expected value, got ~D values."
+           matcher
+           (length expected)))
+  (values (first expected)
+          (second expected)
+          (= (length expected) 2)))
+
+(defun normalize-close-to-expected (expected matcher)
+  (unless (<= 1 (length expected) 2)
+    (error "Matcher ~S expects an expected number and optional digit count, got ~D values."
+           matcher
+           (length expected)))
+  (let ((target (first expected))
+        (digits (if (= (length expected) 2)
+                    (second expected)
+                    2)))
+    (unless (realp target)
+      (error "Matcher ~S expects a real target value, got ~S." matcher target))
+    (unless (and (integerp digits) (not (minusp digits)))
+      (error "Matcher ~S expects a non-negative integer digit count, got ~S."
+             matcher
+             digits))
+    (values target digits)))
+
+(defun close-to-threshold (digits)
+  (/ (expt 10 (- digits)) 2))
+
+(defun close-to-report (actual target digits difference threshold)
+  (list :value actual
+        :expected-value target
+        :num-digits digits
+        :difference difference
+        :threshold threshold))
+
 (defun snapshot-string (value)
   (let ((*print-case* :downcase)
         (*print-circle* t)
@@ -519,6 +617,33 @@
 (defmatcher :to-have-length (actual expected)
   (let ((length (sequence-length actual)))
     (and length (= length (expected-one expected :to-have-length)))))
+
+(defmatcher :to-have-property (actual expected)
+  (multiple-value-bind (path expected-value compare-value-p)
+      (normalize-property-expected expected :to-have-property)
+    (multiple-value-bind (present-p actual-value)
+        (property-path-value actual path)
+      (values (and present-p
+                   (or (not compare-value-p)
+                       (equalp actual-value expected-value)))
+              (list :path (property-path-segments path)
+                    :present present-p
+                    :value actual-value)
+              (append (list :path (property-path-segments path))
+                      (when compare-value-p
+                        (list :value expected-value)))))))
+
+(defmatcher :to-be-close-to (actual expected)
+  (multiple-value-bind (target digits)
+      (normalize-close-to-expected expected :to-be-close-to)
+    (let* ((threshold (close-to-threshold digits))
+           (difference (when (realp actual)
+                         (abs (- target actual)))))
+      (values (and difference (< difference threshold))
+              (close-to-report actual target digits difference threshold)
+              (list :value target
+                    :num-digits digits
+                    :threshold threshold)))))
 
 (defmatcher :to-be-greater-than (actual expected)
   (> actual (expected-one expected :to-be-greater-than)))

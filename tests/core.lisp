@@ -121,6 +121,32 @@
     ("to-have-length list" (expect '(:a :b :c) :to-have-length 3))
     ("to-have-length vector" (expect #(:a :b :c) :to-have-length 3))
     ("to-have-length string" (expect "abc" :to-have-length 3))
+    ("to-have-property plist"
+     (expect '(:user (:name "Ada" :roles #("dev" "ops")))
+             :to-have-property
+             '(:user :name)
+             "Ada"))
+    ("to-have-property alist"
+     (expect '((:user . ((:name . "Ada"))))
+             :to-have-property
+             '(:user :name)
+             "Ada"))
+    ("to-have-property hash-table"
+     (let ((table (make-hash-table :test #'equal)))
+       (setf (gethash "user" table) '(:name "Ada"))
+       (expect table :to-have-property #("user" :name) "Ada")))
+    ("to-have-property slot"
+     (expect (make-instance 'sample-widget :name "Ada")
+             :to-have-property
+             'name
+             "Ada"))
+    ("to-have-property sequence index"
+     (expect '(:users #("Ada" "Grace"))
+             :to-have-property
+             '(:users 1)
+             "Grace"))
+    ("to-be-close-to default digits" (expect 304/1000 :to-be-close-to 3/10))
+    ("to-be-close-to explicit digits" (expect (+ 0.1d0 0.2d0) :to-be-close-to 0.3d0 5))
     ("to-be-greater-than" (expect 10 :to-be-greater-than 9))
     ("to-be-greater-than-or-equal" (expect 10 :to-be-greater-than-or-equal 10))
     ("to-be-less-than" (expect 9 :to-be-less-than 10))
@@ -180,6 +206,43 @@
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
+
+  (it "reports property matcher failures with structured path data"
+    (handler-case
+        (progn
+          (expect '(:user (:name "Ada"))
+                  :to-have-property
+                  '(:user :age)
+                  37)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-have-property)
+          (expect (getf actual :path) :to-equal '(:user :age))
+          (expect (getf actual :present) :to-be nil)
+          (expect (getf expected :path) :to-equal '(:user :age))
+          (expect (getf expected :value) :to-be 37)))))
+
+  (it "reports close-to matcher failures with structured numeric data"
+    (handler-case
+        (progn
+          (expect 31/100 :to-be-close-to 3/10 2)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-close-to)
+          (expect (getf actual :value) :to-be 31/100)
+          (expect (getf actual :expected-value) :to-be 3/10)
+          (expect (getf actual :num-digits) :to-be 2)
+          (expect (getf actual :difference) :to-be 1/100)
+          (expect (getf actual :threshold) :to-be 1/200)
+          (expect (getf expected :value) :to-be 3/10)
+          (expect (getf expected :num-digits) :to-be 2)
+          (expect (getf expected :threshold) :to-be 1/200)))))
 
   (it "signals negated matcher failures with structured data"
     (handler-case

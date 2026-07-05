@@ -445,6 +445,35 @@ set `:negated t` in the assertion detail and preserve the raw matcher result in
 `:pass`, so agents can tell that the matcher itself succeeded but the negated
 expectation failed.
 
+Property matchers report normalized path traversal data. A failing
+`:to-have-property` assertion uses:
+
+```lisp
+(:actual (:path (:user :age)
+          :present nil
+          :value nil)
+ :expected (:path (:user :age)
+            :value 37))
+```
+
+When the path exists but the optional expected value differs, `:present` is true
+and `:value` contains the value found at that path. Paths are always reported as
+lists, even when the caller used a scalar or vector path.
+
+Close numeric matchers report the comparison tolerance as data. A failing
+`:to-be-close-to` assertion uses:
+
+```lisp
+(:actual (:value 31/100
+          :expected-value 3/10
+          :num-digits 2
+          :difference 1/100
+          :threshold 1/200)
+ :expected (:value 3/10
+            :num-digits 2
+            :threshold 1/200))
+```
+
 MOP architecture matchers report normalized architecture data instead of the raw
 input designator. A failing `:to-have-slot` assertion uses:
 
