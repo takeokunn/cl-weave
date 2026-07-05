@@ -445,6 +445,21 @@ set `:negated t` in the assertion detail and preserve the raw matcher result in
 `:pass`, so agents can tell that the matcher itself succeeded but the negated
 expectation failed.
 
+Deep containment matchers report the searched container and equality predicate.
+A failing `:to-contain-equal` assertion uses:
+
+```lisp
+(:actual (:container ((:id 1 :name "Ada"))
+          :value (:id 2 :name "Grace")
+          :test :equalp)
+ :expected (:value (:id 2 :name "Grace")
+            :test :equalp))
+```
+
+The matcher searches sequence elements and hash-table values with `equalp`.
+Use `:to-contain` for substring checks and shallow `equal` membership; use
+`:to-contain-equal` when nested Lisp data should compare structurally.
+
 Property matchers report normalized path traversal data. A failing
 `:to-have-property` assertion uses:
 

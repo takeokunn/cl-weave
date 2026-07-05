@@ -118,6 +118,18 @@
     ("to-contain list" (expect '(:a :b :c) :to-contain :b))
     ("to-contain vector" (expect #(:a :b :c) :to-contain :b))
     ("to-contain string" (expect "common-lisp" :to-contain "lisp"))
+    ("to-contain-equal list"
+     (expect '((:id 1 :name "Ada") (:id 2 :name "Grace"))
+             :to-contain-equal
+             '(:id 1 :name "Ada")))
+    ("to-contain-equal vector"
+     (expect #((:id 1 :roles ("dev")) (:id 2 :roles ("ops")))
+             :to-contain-equal
+             '(:id 2 :roles ("ops"))))
+    ("to-contain-equal hash-table values"
+     (let ((table (make-hash-table :test #'equal)))
+       (setf (gethash "user" table) '(:name "Ada" :roles ("dev")))
+       (expect table :to-contain-equal '(:name "Ada" :roles ("dev")))))
     ("to-have-length list" (expect '(:a :b :c) :to-have-length 3))
     ("to-have-length vector" (expect #(:a :b :c) :to-have-length 3))
     ("to-have-length string" (expect "abc" :to-have-length 3))
@@ -206,6 +218,24 @@
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
+
+  (it "reports contain-equal matcher failures with structured data"
+    (handler-case
+        (progn
+          (expect '((:id 1 :name "Ada"))
+                  :to-contain-equal
+                  '(:id 2 :name "Grace"))
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-contain-equal)
+          (expect (getf actual :container) :to-equal '((:id 1 :name "Ada")))
+          (expect (getf actual :value) :to-equal '(:id 2 :name "Grace"))
+          (expect (getf actual :test) :to-be :equalp)
+          (expect (getf expected :value) :to-equal '(:id 2 :name "Grace"))
+          (expect (getf expected :test) :to-be :equalp)))))
 
   (it "reports property matcher failures with structured path data"
     (handler-case

@@ -188,6 +188,7 @@ Built-in matchers:
 - `:to-be-type-of`
 - `:to-be-instance-of`
 - `:to-contain`
+- `:to-contain-equal`
 - `:to-have-length`
 - `:to-have-property`
 - `:to-be-close-to`
@@ -288,6 +289,21 @@ currently backed by SBCL and fails clearly on implementations that do not expose
 one.
 
 ### Property Assertions
+
+`:to-contain-equal` mirrors Vitest `toContainEqual(value)` for Lisp data. It
+checks sequence elements and hash-table values with `equalp`, so structurally
+equal lists, vectors, strings, numbers, characters, and nested data pass without
+requiring object identity:
+
+```lisp
+(expect '((:id 1 :name "Ada") (:id 2 :name "Grace"))
+        :to-contain-equal
+        '(:id 2 :name "Grace"))
+```
+
+Failures report the searched `:container`, expected `:value`, and comparison
+`:test`, allowing reporters and agents to explain whether the failure came from
+membership or equality semantics.
 
 `:to-have-property` is Vitest-style `toHaveProperty(path, value?)` for Lisp
 data. The path can be a scalar, list, or vector. It traverses property lists,

@@ -96,6 +96,20 @@
     (vector (not (null (find value container :test #'equal))))
     (t nil)))
 
+(defun contains-equal-value-p (container value)
+  (typecase container
+    (hash-table
+     (loop for candidate being the hash-values of container
+           thereis (equalp candidate value)))
+    (sequence
+     (not (null (position value container :test #'equalp))))
+    (t nil)))
+
+(defun contain-equal-report (container value)
+  (list :container container
+        :value value
+        :test :equalp))
+
 (defun sequence-length (value)
   (when (typep value 'sequence)
     (length value)))
@@ -613,6 +627,12 @@
 
 (defmatcher :to-contain (actual expected)
   (contains-value-p actual (expected-one expected :to-contain)))
+
+(defmatcher :to-contain-equal (actual expected)
+  (let ((value (expected-one expected :to-contain-equal)))
+    (values (contains-equal-value-p actual value)
+            (contain-equal-report actual value)
+            (list :value value :test :equalp))))
 
 (defmatcher :to-have-length (actual expected)
   (let ((length (sequence-length actual)))
