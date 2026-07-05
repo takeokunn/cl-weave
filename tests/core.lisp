@@ -3069,6 +3069,7 @@
                                   :aliases '("--customAlias")
                                   :commands '("custom-command")
                                   :argument "VALUE"
+                                  :value-kind :custom-value
                                   :environment '("CUSTOM_ENV")
                                   :description "custom option"))
                       :vitest-aliases
@@ -3092,6 +3093,7 @@
       (expect output :to-contain "\"custom-list-reporter\"")
       (expect output :to-contain "\"--custom\"")
       (expect output :to-contain "\"--customAlias\"")
+      (expect output :to-contain "\"valueKind\":\"custom-value\"")
       (expect output :to-contain "\"CUSTOM_ENV\"")
       (expect output :to-contain "\"custom option\"")
       (expect output :to-contain "\"custom.alias\"")
@@ -3114,10 +3116,12 @@
       (expect filter-option :not :to-be nil)
       (expect (getf filter-option :aliases) :to-contain "--testNamePattern")
       (expect (getf filter-option :commands) :to-contain "run")
+      (expect (getf filter-option :value-kind) :to-be :test-name-pattern)
       (expect (getf filter-option :environment) :to-contain "CL_WEAVE_TEST_FILTER")
       (expect snapshot-option :not :to-be nil)
       (expect (getf snapshot-option :aliases) :to-contain "--update")
       (expect (getf snapshot-option :aliases) :to-contain "--updateSnapshots")
+      (expect (getf snapshot-option :value-kind) :to-be :boolean)
       (expect (getf snapshot-option :environment)
               :to-contain "CL_WEAVE_UPDATE_SNAPSHOTS")))
 
@@ -3181,6 +3185,7 @@
                append (cons (getf entry :name)
                             (getf entry :aliases))))
         (dolist (entry (getf metadata :options))
+          (expect (getf entry :value-kind) :not :to-be nil)
           (dolist (command (getf entry :commands))
             (expect (member command (getf metadata :commands) :test #'string=)
                     :not :to-be nil))

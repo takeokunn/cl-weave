@@ -25,6 +25,17 @@ The JSON root is stable:
   "listReporters": ["spec", "sexp", "json", "jsonl"],
   "capabilities": ["describe-it-dsl"],
   "environment": ["CL_WEAVE_REPORTER"],
+  "options": [
+    {
+      "name": "--filter",
+      "aliases": ["--testNamePattern"],
+      "commands": ["run", "list", "watch"],
+      "argument": "TEXT",
+      "valueKind": "test-name-pattern",
+      "environment": ["CL_WEAVE_TEST_FILTER"],
+      "description": "Run or list tests whose Vitest-style path contains TEXT"
+    }
+  ],
   "vitestAliases": [{"alias": "it.each", "canonical": "it-each"}],
   "packageExports": [{"name": "cl-weave", "exports": ["describe", "expect", "it"]}],
   "matchers": [{"name": "to-be", "description": null}],
@@ -34,6 +45,10 @@ The JSON root is stable:
 
 `--reporter sexp` prints the same data as a Lisp plist. `--reporter spec` is
 accepted as the default CLI reporter and normalized to JSON for this command.
+`options[].argument` is the human-facing placeholder used in help text;
+`options[].valueKind` is the machine-facing value category agents should use
+when constructing commands. Boolean flags use `"boolean"` and keep
+`argument: null`.
 `packageExports` lists public external symbols by package in lower-case CL reader
 spelling so agents can discover the supported DSL and runtime API without
 scraping `package.lisp`.
