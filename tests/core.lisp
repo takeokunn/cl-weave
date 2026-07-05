@@ -3262,6 +3262,17 @@
       (expect usage :to-contain "--updateSnapshots")
       (expect usage :to-contain "--version"))))
 
+  (it "keeps command usage synchronized with CLI option metadata"
+    (let ((usage (cl-weave/cli::cli-usage)))
+      (dolist (entry (getf (cl-weave/cli::framework-metadata) :options))
+        (dolist (name (cons (getf entry :name) (getf entry :aliases)))
+          (let ((argument (getf entry :argument)))
+            (expect usage
+                    :to-contain
+                    (if argument
+                        (format nil "~A ~A" name argument)
+                        name)))))))
+
 (describe "asdf integration"
   (it "collects source files from ASDF systems"
     (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))

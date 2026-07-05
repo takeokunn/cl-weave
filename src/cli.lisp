@@ -702,49 +702,38 @@
              (nreverse (cli-options-load-files options)))
        (return options)))
 
+(defun cli-option-usage-name (name argument)
+  (if argument
+      (format nil "~A ~A" name argument)
+      name))
+
+(defun cli-option-usage-label (entry)
+  (format nil "~{~A~^, ~}"
+          (loop for name in (cons (getf entry :name) (getf entry :aliases))
+                collect (cli-option-usage-name name (getf entry :argument)))))
+
+(defun cli-option-usage-lines (entry)
+  (let* ((label (format nil "  ~A" (cli-option-usage-label entry)))
+         (description (getf entry :description))
+         (description-column 30))
+    (if (< (length label) description-column)
+        (list (format nil "~A~VT~A" label description-column description))
+        (list label
+              (format nil "~VT~A" description-column description)))))
+
 (defun cli-usage ()
   (format nil "~{~A~%~}"
-          '("Usage:"
-            "  cl-weave run [SYSTEM] [options]"
-            "  cl-weave list [SYSTEM] [options]"
-            "  cl-weave watch [SYSTEM] [options]"
-            "  cl-weave metadata [SYSTEM] [options]"
-            "  cl-weave version"
-            ""
-            "Options:"
-            "  --system SYSTEM           ASDF system to load before running tests"
-            "  --load FILE               Lisp file to load before running tests"
-            "  --reporter REPORTER       spec, sexp, json, jsonl, tap, github, or junit"
-            "  --filter, --testNamePattern TEXT"
-            "                            run tests whose Vitest-style path contains TEXT"
-            "  --output, --outputFile FILE"
-            "                            write reporter output to FILE"
-            "  --list                    discover tests without executing bodies"
-            "  --watch                   rerun an ASDF system when source files change"
-            "  --watch-interval, --watchInterval SECONDS"
-            "                            polling interval for watch mode"
-            "  --bail[=N|true|false]     stop after the first or N failures"
-            "  --retry INTEGER          retry failing tests INTEGER extra times"
-            "  --test-timeout-ms, --test-timeout, --testTimeout MS"
-            "                            default per-attempt timeout in milliseconds"
-            "  --shard INDEX/COUNT       select a deterministic CI shard"
-            "  --sequence ORDER          defined, random, or shuffle"
-            "  --seed INTEGER            deterministic random sequence seed"
-            "  --coverage                wrap execution with SBCL sb-cover"
-            "  --coverage-output, --coverageOutput FILE"
-            "                            save SBCL coverage state to FILE"
-            "  --pass-with-no-tests, --passWithNoTests"
-            "                            pass when filters select no tests"
-            "  --fail-with-no-tests, --failWithNoTests"
-            "                            fail when filters select no tests"
-            "  --snapshot-dir, --snapshotDir DIR"
-            "                            external snapshot directory"
-            "  --snapshot-file, --snapshotFile FILE"
-            "                            external snapshot file name"
-            "  --update-snapshots, --update, --updateSnapshots"
-            "                            update external snapshots during this run"
-            "  --version                print cl-weave version"
-            "  --help                    print this help")))
+          (append
+           '("Usage:"
+             "  cl-weave run [SYSTEM] [options]"
+             "  cl-weave list [SYSTEM] [options]"
+             "  cl-weave watch [SYSTEM] [options]"
+             "  cl-weave metadata [SYSTEM] [options]"
+             "  cl-weave version"
+             ""
+             "Options:")
+           (loop for entry in *metadata-cli-options*
+                 append (cli-option-usage-lines entry)))))
 
 (defun cli-version ()
   (or (ignore-errors
