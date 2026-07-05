@@ -3022,6 +3022,10 @@
         (expect output :to-contain "\"schemaVersion\":1")
         (expect output :to-contain "\"commands\"")
         (expect output :to-contain "\"metadata\"")
+        (expect output :to-contain "\"options\"")
+        (expect output :to-contain "\"--testNamePattern\"")
+        (expect output :to-contain "\"CL_WEAVE_TEST_FILTER\"")
+        (expect output :to-contain "\"--updateSnapshots\"")
         (expect output :to-contain "\"matchers\"")
         (expect output :to-contain "\"to-be-even\"")
         (expect output :to-contain "\"mutationOperators\"")
@@ -3047,6 +3051,7 @@
       (let ((output (with-output-to-string (stream)
                       (cl-weave/cli::report-framework-metadata options stream))))
         (expect output :to-contain ":KIND \"cl-weave-metadata\"")
+        (expect output :to-contain ":OPTIONS")
         (expect output :to-contain ":PACKAGE-EXPORTS"))))
 
   (it "serializes framework metadata from the supplied plist"
@@ -3059,6 +3064,13 @@
                       :list-reporters '("custom-list-reporter")
                       :capabilities '("custom-capability")
                       :environment '("CUSTOM_ENV")
+                      :options
+                      (list (list :name "--custom"
+                                  :aliases '("--customAlias")
+                                  :commands '("custom-command")
+                                  :argument "VALUE"
+                                  :environment '("CUSTOM_ENV")
+                                  :description "custom option"))
                       :vitest-aliases
                       (list (list :alias "custom.alias"
                                   :canonical "custom-canonical"))
@@ -3078,12 +3090,36 @@
       (expect output :to-contain "\"schemaVersion\":7")
       (expect output :to-contain "\"custom-command\"")
       (expect output :to-contain "\"custom-list-reporter\"")
+      (expect output :to-contain "\"--custom\"")
+      (expect output :to-contain "\"--customAlias\"")
+      (expect output :to-contain "\"CUSTOM_ENV\"")
+      (expect output :to-contain "\"custom option\"")
       (expect output :to-contain "\"custom.alias\"")
       (expect output :to-contain "\"custom-package\"")
       (expect output :to-contain "\"custom-matcher\"")
       (expect output :not :to-contain "\"cl-weave-metadata\"")
       (expect output :not :to-contain "\"cl-weave\"")
+      (expect output :not :to-contain "\"--testNamePattern\"")
       (expect output :not :to-contain "\"describe-it-dsl\"")))
+
+  (it "advertises parsed CLI options as structured metadata"
+    (let* ((metadata (cl-weave/cli::framework-metadata))
+           (options (getf metadata :options))
+           (filter-option (find "--filter" options
+                                :key (lambda (entry) (getf entry :name))
+                                :test #'string=))
+           (snapshot-option (find "--update-snapshots" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=)))
+      (expect filter-option :not :to-be nil)
+      (expect (getf filter-option :aliases) :to-contain "--testNamePattern")
+      (expect (getf filter-option :commands) :to-contain "run")
+      (expect (getf filter-option :environment) :to-contain "CL_WEAVE_TEST_FILTER")
+      (expect snapshot-option :not :to-be nil)
+      (expect (getf snapshot-option :aliases) :to-contain "--update")
+      (expect (getf snapshot-option :aliases) :to-contain "--updateSnapshots")
+      (expect (getf snapshot-option :environment)
+              :to-contain "CL_WEAVE_UPDATE_SNAPSHOTS")))
 
   (it "keeps Vitest aliases aligned with public package exports"
     (let* ((metadata (cl-weave/cli::framework-metadata))
@@ -3137,6 +3173,20 @@
         (dolist (key '(:commands :reporters :list-reporters
                        :capabilities :environment))
           (expect-unique-strings (getf metadata key)))
+        (expect-unique-strings
+         (mapcar (lambda (entry) (getf entry :name))
+                 (getf metadata :options)))
+        (expect-unique-strings
+         (loop for entry in (getf metadata :options)
+               append (cons (getf entry :name)
+                            (getf entry :aliases))))
+        (dolist (entry (getf metadata :options))
+          (dolist (command (getf entry :commands))
+            (expect (member command (getf metadata :commands) :test #'string=)
+                    :not :to-be nil))
+          (dolist (variable (getf entry :environment))
+            (expect (member variable (getf metadata :environment) :test #'string=)
+                    :not :to-be nil)))
         (expect-unique-strings (mapcar (lambda (entry) (getf entry :alias))
                                        (getf metadata :vitest-aliases)))
         (expect-unique-strings (mapcar (lambda (entry) (getf entry :name))

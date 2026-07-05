@@ -28,7 +28,7 @@ Early MVP. The current focus is a solid core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
-- AI-friendly CLI metadata for package exports, matchers, mutations, and aliases
+- AI-friendly CLI metadata for options, package exports, matchers, mutations, and aliases
 - source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs

@@ -343,6 +343,146 @@
     "CL_WEAVE_SNAPSHOT_FILE"
     "CL_WEAVE_UPDATE_SNAPSHOTS"))
 
+(defparameter *metadata-cli-options*
+  '((:name "--system"
+     :aliases nil
+     :commands ("run" "list" "watch" "metadata")
+     :argument "SYSTEM"
+     :environment ("CL_WEAVE_SYSTEM")
+     :description "ASDF system to load before command execution")
+    (:name "--load"
+     :aliases nil
+     :commands ("run" "list" "watch" "metadata")
+     :argument "FILE"
+     :environment nil
+     :description "Lisp file to load before command execution")
+    (:name "--reporter"
+     :aliases nil
+     :commands ("run" "list" "watch" "metadata")
+     :argument "REPORTER"
+     :environment ("CL_WEAVE_REPORTER")
+     :description "Reporter name for run, list, watch, or metadata output")
+    (:name "--filter"
+     :aliases ("--testNamePattern")
+     :commands ("run" "list" "watch")
+     :argument "TEXT"
+     :environment ("CL_WEAVE_TEST_FILTER")
+     :description "Run or list tests whose Vitest-style path contains TEXT")
+    (:name "--output"
+     :aliases ("--outputFile")
+     :commands ("run" "list" "watch" "metadata")
+     :argument "FILE"
+     :environment ("CL_WEAVE_OUTPUT_FILE")
+     :description "Write reporter output to FILE")
+    (:name "--list"
+     :aliases nil
+     :commands ("run" "list")
+     :argument nil
+     :environment ("CL_WEAVE_LIST")
+     :description "Discover tests without executing test bodies")
+    (:name "--watch"
+     :aliases nil
+     :commands ("run" "watch")
+     :argument nil
+     :environment ("CL_WEAVE_WATCH")
+     :description "Rerun an ASDF system when source files change")
+    (:name "--watch-interval"
+     :aliases ("--watchInterval")
+     :commands ("watch")
+     :argument "SECONDS"
+     :environment ("CL_WEAVE_WATCH_INTERVAL")
+     :description "Polling interval for watch mode")
+    (:name "--bail"
+     :aliases nil
+     :commands ("run" "watch")
+     :argument "N|true|false"
+     :environment ("CL_WEAVE_BAIL")
+     :description "Stop after the first failure, N failures, or disable fast-fail")
+    (:name "--retry"
+     :aliases nil
+     :commands ("run" "list" "watch")
+     :argument "INTEGER"
+     :environment ("CL_WEAVE_RETRY")
+     :description "Retry failing tests INTEGER extra times")
+    (:name "--test-timeout-ms"
+     :aliases ("--test-timeout" "--testTimeout" "--testTimeoutMs")
+     :commands ("run" "list" "watch")
+     :argument "MS"
+     :environment ("CL_WEAVE_TEST_TIMEOUT" "CL_WEAVE_TEST_TIMEOUT_MS")
+     :description "Default per-attempt timeout in milliseconds")
+    (:name "--shard"
+     :aliases nil
+     :commands ("run" "list" "watch")
+     :argument "INDEX/COUNT"
+     :environment ("CL_WEAVE_SHARD")
+     :description "Select a deterministic CI shard")
+    (:name "--sequence"
+     :aliases nil
+     :commands ("run" "list" "watch")
+     :argument "ORDER"
+     :environment ("CL_WEAVE_SEQUENCE")
+     :description "Execution order: defined, random, or shuffle")
+    (:name "--seed"
+     :aliases nil
+     :commands ("run" "list" "watch")
+     :argument "INTEGER"
+     :environment ("CL_WEAVE_SEQUENCE_SEED")
+     :description "Deterministic random sequence seed")
+    (:name "--coverage"
+     :aliases nil
+     :commands ("run" "watch")
+     :argument nil
+     :environment ("CL_WEAVE_COVERAGE")
+     :description "Wrap execution with SBCL sb-cover")
+    (:name "--coverage-output"
+     :aliases ("--coverageOutput")
+     :commands ("run" "watch")
+     :argument "FILE"
+     :environment ("CL_WEAVE_COVERAGE_FILE")
+     :description "Save SBCL coverage state to FILE")
+    (:name "--pass-with-no-tests"
+     :aliases ("--passWithNoTests")
+     :commands ("run" "watch")
+     :argument nil
+     :environment ("CL_WEAVE_PASS_WITH_NO_TESTS")
+     :description "Pass when filters select no tests")
+    (:name "--fail-with-no-tests"
+     :aliases ("--failWithNoTests")
+     :commands ("run" "watch")
+     :argument nil
+     :environment nil
+     :description "Fail when filters select no tests")
+    (:name "--snapshot-dir"
+     :aliases ("--snapshotDir")
+     :commands ("run" "watch")
+     :argument "DIR"
+     :environment ("CL_WEAVE_SNAPSHOT_DIR")
+     :description "External snapshot directory")
+    (:name "--snapshot-file"
+     :aliases ("--snapshotFile")
+     :commands ("run" "watch")
+     :argument "FILE"
+     :environment ("CL_WEAVE_SNAPSHOT_FILE")
+     :description "External snapshot file name")
+    (:name "--update-snapshots"
+     :aliases ("--update" "--updateSnapshots")
+     :commands ("run" "watch")
+     :argument nil
+     :environment ("CL_WEAVE_UPDATE_SNAPSHOTS")
+     :description "Update external snapshots during this run")
+    (:name "--version"
+     :aliases nil
+     :commands ("version")
+     :argument nil
+     :environment nil
+     :description "Print the cl-weave version")
+    (:name "--help"
+     :aliases nil
+     :commands ("help")
+     :argument nil
+     :environment nil
+     :description "Print command usage")))
+
 (defparameter *metadata-capabilities*
   '("describe-it-dsl"
     "vitest-dot-aliases"
@@ -633,6 +773,7 @@
    :list-reporters *metadata-list-reporters*
    :capabilities *metadata-capabilities*
    :environment *metadata-environment-variables*
+   :options *metadata-cli-options*
    :vitest-aliases
    (loop for (alias . canonical) in *metadata-vitest-aliases*
          collect (list :alias alias :canonical canonical))
@@ -690,6 +831,33 @@
              (write-char #\} stream)))
   (write-char #\] stream))
 
+(defun write-json-cli-options (options stream)
+  (write-char #\[ stream)
+  (loop for option in options
+        for firstp = t then nil
+        unless firstp do (write-char #\, stream)
+        do (progn
+             (write-char #\{ stream)
+             (write-json-key "name" stream)
+             (cl-weave::write-json-string (getf option :name) stream)
+             (write-char #\, stream)
+             (write-json-key "aliases" stream)
+             (write-json-string-list (getf option :aliases) stream)
+             (write-char #\, stream)
+             (write-json-key "commands" stream)
+             (write-json-string-list (getf option :commands) stream)
+             (write-char #\, stream)
+             (write-json-key "argument" stream)
+             (write-json-nullable-string (getf option :argument) stream)
+             (write-char #\, stream)
+             (write-json-key "environment" stream)
+             (write-json-string-list (getf option :environment) stream)
+             (write-char #\, stream)
+             (write-json-key "description" stream)
+             (write-json-nullable-string (getf option :description) stream)
+             (write-char #\} stream)))
+  (write-char #\] stream))
+
 (defun write-json-named-metadata (entries stream)
   (write-char #\[ stream)
   (loop for entry in entries
@@ -731,6 +899,7 @@
     (:list-reporters "listReporters" write-json-string-list)
     (:capabilities "capabilities" write-json-string-list)
     (:environment "environment" write-json-string-list)
+    (:options "options" write-json-cli-options)
     (:vitest-aliases "vitestAliases" write-json-aliases)
     (:package-exports "packageExports" write-json-package-exports)
     (:matchers "matchers" write-json-named-metadata)
