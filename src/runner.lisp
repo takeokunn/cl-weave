@@ -67,7 +67,12 @@
                  (call-around-hooks/k (rest hooks) continue)))))
 
 (defun call-test-case/k (suite test continue)
-  (let ((*test-context* (make-hash-table :test #'equal)))
+  (let ((*test-context* (make-hash-table :test #'equal))
+        (*assertion-count* 0)
+        (*expected-assertion-count* nil)
+        (*expected-assertion-count-form* nil)
+        (*has-assertions-required* nil)
+        (*has-assertions-form* nil))
     (unwind-protect
          (call-hooks/k
           (effective-before-hooks suite)
@@ -76,6 +81,7 @@
              (effective-around-hooks suite)
              (lambda ()
                (funcall (test-case-function test))
+               (verify-assertion-counts)
                (funcall continue)))))
       (call-hooks/k (effective-after-hooks suite) (lambda () nil)))))
 

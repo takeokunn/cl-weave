@@ -477,29 +477,33 @@
   (let* ((operator (first actual))
          (operands (rest actual))
          (values (loop for operand in operands collect (gensym "OPERAND-"))))
-    `(let ,(loop for value in values
-                 for operand in operands
-                 collect `(,value ,operand))
-       (unless (,operator ,@values)
-         (signal-smart-assertion-failure
-          ',form
-          ',operator
-          (list ,@(loop for operand in operands
-                        for value in values
-                        collect `(operand-report-form ',operand ,value)))
-          ',actual))
-       t)))
+    `(progn
+       (record-assertion)
+       (let ,(loop for value in values
+                   for operand in operands
+                   collect `(,value ,operand))
+         (unless (,operator ,@values)
+           (signal-smart-assertion-failure
+            ',form
+            ',operator
+            (list ,@(loop for operand in operands
+                          for value in values
+                          collect `(operand-report-form ',operand ,value)))
+            ',actual))
+         t))))
 
 (defun expand-smart-truthy-assertion (actual form)
   (let ((value (gensym "ACTUAL-")))
-    `(let ((,value ,actual))
-       (unless ,value
-         (signal-smart-assertion-failure
-          ',form
-          :truthy
-          ,value
-          t))
-       t)))
+    `(progn
+       (record-assertion)
+       (let ((,value ,actual))
+         (unless ,value
+           (signal-smart-assertion-failure
+            ',form
+            :truthy
+            ,value
+            t))
+         t))))
 
 (defun expand-smart-assertion (actual form)
   (if (smart-predicate-form-p actual)
@@ -515,11 +519,13 @@
         (tokens (if negated
                     `(:not ,@expectation)
                     expectation)))
-    `(let ((,value ,actual))
-       (assert-expectation
-        ,value
-        (list ,@tokens)
-        '(,macro-name ,actual ,@expectation)))))
+    `(progn
+       (record-assertion)
+       (let ((,value ,actual))
+         (assert-expectation
+          ,value
+          (list ,@tokens)
+          '(,macro-name ,actual ,@expectation))))))
 
 (defun ensure-expect-thunk (thunk matcher form)
   (unless (functionp thunk)
@@ -580,6 +586,18 @@
 
 (defmacro expect-not (actual &body expectation)
   (expand-matcher-expectation 'expect-not actual expectation :negated t))
+
+(defmacro expect-assertions (count)
+  `(set-expected-assertion-count ,count '(expect-assertions ,count)))
+
+(defmacro expect.assertions (count)
+  `(expect-assertions ,count))
+
+(defmacro expect-has-assertions ()
+  `(set-has-assertions-required '(expect-has-assertions)))
+
+(defmacro expect.hasAssertions ()
+  `(expect-has-assertions))
 
 (defmacro expect.not (actual &body expectation)
   `(expect-not ,actual ,@expectation))

@@ -16,7 +16,8 @@ Early MVP. The current focus is a solid core:
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
 - Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
-  `expect.resolves`, `expect.rejects`, and fixture aliases
+  `expect.resolves`, `expect.rejects`, `expect.assertions`,
+  `expect.hasAssertions`, and fixture aliases
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -150,6 +151,8 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect-not value :to-be nil)
 (expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
 (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
+(expect.assertions 2)
+(expect.hasAssertions)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -165,6 +168,11 @@ assertion fails with `:matcher :resolves` and `:actual` containing `:state`,
 `:condition-type`, and `:message`. `expect.rejects` requires the thunk to
 signal a condition and then applies the matcher to that condition object; a
 normally returned value fails with `:matcher :rejects`.
+
+`expect.assertions` and `expect.hasAssertions` are checked at the end of each
+test attempt and reset for retries and concurrent tests. Declaration forms do
+not count as assertions; executed `expect`, `expect-not`, smart assertions, and
+thunk aliases count once.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -900,13 +908,14 @@ selected and executed before the runner stopped.
   (expect (now) :to-be 0))
 ```
 
-`make-mock-function` creates an inspectable function object, close to
-Vitest's `vi.fn`. `mock-calls` returns a copy of the recorded argument lists,
-`mock-results` returns return/throw reports, and `clear-mock` resets both
-histories. `:to-have-returned-with` accepts Common Lisp multiple values as
-matcher operands, for example `(expect mock :to-have-returned-with :ok 42)`.
-Nth mock matchers use one-based indices. Nth returned matchers count only
-successful returns, while `mock-results` still keeps thrown result reports.
+`make-mock-function` creates an inspectable function object. `vi.fn` is the
+Vitest-shaped alias for the same constructor. `mock-calls` returns a copy of
+the recorded argument lists, `mock-results` returns return/throw reports, and
+`clear-mock` resets both histories. `:to-have-returned-with` accepts Common
+Lisp multiple values as matcher operands, for example
+`(expect mock :to-have-returned-with :ok 42)`. Nth mock matchers use one-based
+indices. Nth returned matchers count only successful returns, while
+`mock-results` still keeps thrown result reports.
 
 `with-mocked-functions` temporarily rewrites global function cells. The
 original function cells are restored with `unwind-protect`.

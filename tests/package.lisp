@@ -46,8 +46,12 @@
    #:describe-todo
    #:extend-expect
    #:expect
+   #:expect.assertions
+   #:expect-assertions
    #:expect.extend
    #:expect-extend
+   #:expect.hasAssertions
+   #:expect-has-assertions
    #:expect.not
    #:expect-not
    #:expect.rejects
@@ -106,6 +110,7 @@
    #:logic-variable-p
    #:logic-where
    #:make-mock-function
+   #:vi.fn
    #:mock-calls
    #:mock-results
    #:mutation-form

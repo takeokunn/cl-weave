@@ -758,6 +758,11 @@
     (setf (gethash mock *mock-states*) state)
     mock))
 
+(defun vi.fn (&optional (implementation (lambda (&rest arguments)
+                                          (declare (ignore arguments))
+                                          nil)))
+  (make-mock-function implementation))
+
 (defun mock-calls (mock)
   (copy-tree (mock-state-calls (mock-state-for mock))))
 

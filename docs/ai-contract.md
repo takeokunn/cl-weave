@@ -47,6 +47,8 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `test.run-if` -> `test-run-if`
 - `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
 - `test.skip.each` -> `test-skip-each`
+- `expect.assertions` -> `expect-assertions`
+- `expect.hasAssertions` -> `expect-has-assertions`
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
 - `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
@@ -136,6 +138,8 @@ Mock function matchers report call and result histories in `:actual`:
 ```
 
 Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
+`vi.fn` is a Vitest-shaped alias for `make-mock-function`; both constructors
+produce the same mock function contract and result history shape.
 Return-value matchers compare their operands with the recorded Common Lisp
 multiple values list. Ordered mock matchers use one-based indices:
 `:to-have-been-nth-called-with` reports `(:index n :arguments (...))`, and
@@ -409,6 +413,30 @@ For smart assertions, `matcher`, `actual`, and `expected` are still printable
 Lisp strings. A failing `(expect (= (+ 1 1) 3))` serializes the operand report
 through the `actual` field, so agents can read the exact evaluated values
 without scraping the human spec reporter.
+
+Assertion count declarations are per test attempt. They are reset for retries
+and concurrent tests, and the declaration forms do not increment the assertion
+counter. A failing exact count check uses:
+
+```lisp
+(:form (expect-assertions 2)
+ :matcher :assertions
+ :actual 1
+ :expected 2
+ :negated nil
+ :pass nil)
+```
+
+A failing "at least one assertion" check uses:
+
+```lisp
+(:form (expect-has-assertions)
+ :matcher :has-assertions
+ :actual 0
+ :expected (:minimum 1)
+ :negated nil
+ :pass nil)
+```
 
 `path` is the canonical machine path. `pathString` is the same path rendered in
 the Vitest-style human format used by filtering. `seconds` is retained for

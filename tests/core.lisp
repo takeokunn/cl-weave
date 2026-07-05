@@ -115,6 +115,15 @@
     ("to-be-falsy" (expect nil :to-be-falsy))
     ("to-be-null" (expect nil :to-be-null))
     ("to-be-defined" (expect :value :to-be-defined))
+    ("expect.assertions"
+     (progn
+       (expect.assertions 2)
+       (expect :a :to-be :a)
+       (expect-not nil :to-be t)))
+    ("expect.hasAssertions"
+     (progn
+       (expect.hasAssertions)
+       (expect t)))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
     ("to-be-one-of list" (expect :ready :to-be-one-of '(:pending :ready :done)))
@@ -910,6 +919,12 @@
        (expect value :to-satisfy #'integerp))
      cl-weave:it-property)
     (expect-macroexpands-through
+     (expect.assertions 1)
+     cl-weave:expect-assertions)
+    (expect-macroexpands-through
+     (expect.hasAssertions)
+     cl-weave:expect-has-assertions)
+    (expect-macroexpands-through
      (test.concurrent "parallel alias" (expect :ok :to-be :ok))
      cl-weave:test-concurrent)
     (expect-macroexpands-through
@@ -1427,6 +1442,48 @@
               :to-be-instance-of 'cl-weave:test-timeout)
       (expect (cl-weave:test-timeout-ms (cl-weave::test-event-condition event))
               :to-be 10)))
+
+  (it "fails a test when expect.assertions count is not met"
+    (let* ((test (cl-weave::make-test-case
+                  :name "missing assertion"
+                  :function (lambda ()
+                              (expect.assertions 2)
+                              (expect :only :to-be :only))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test))
+           (assertion (cl-weave::test-event-assertion event)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::assertion-detail-matcher assertion) :to-be :assertions)
+      (expect (cl-weave::assertion-detail-actual assertion) :to-be 1)
+      (expect (cl-weave::assertion-detail-expected assertion) :to-be 2)))
+
+  (it "fails a test when expect.hasAssertions observes no assertions"
+    (let* ((test (cl-weave::make-test-case
+                  :name "missing assertions"
+                  :function (lambda ()
+                              (expect.hasAssertions))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test))
+           (assertion (cl-weave::test-event-assertion event)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::assertion-detail-matcher assertion) :to-be :has-assertions)
+      (expect (cl-weave::assertion-detail-actual assertion) :to-be 0)
+      (expect (cl-weave::assertion-detail-expected assertion) :to-equal '(:minimum 1))))
+
+  (it "resets assertion counts for each retry attempt"
+    (let* ((attempts 0)
+           (test (cl-weave::make-test-case
+                  :name "eventual assertion count"
+                  :retry 1
+                  :function (lambda ()
+                              (incf attempts)
+                              (expect.assertions 1)
+                              (if (= attempts 1)
+                                  (progn
+                                    (expect :first :to-be :first)
+                                    (expect :extra :to-be :extra))
+                                  (expect :second :to-be :second)))))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect attempts :to-be 2)
+      (expect (cl-weave::test-event-status event) :to-be :pass)))
 
   (it "runs after-each cleanup when an attempt times out"
     (let* ((events nil)
@@ -2751,6 +2808,17 @@
       (expect mock :not :to-have-been-called)
       (expect (mock-calls mock) :to-equal nil)
       (expect (mock-results mock) :to-equal nil)))
+
+  (it "creates mock functions with the Vitest-shaped vi.fn alias"
+    (let ((mock (vi.fn (lambda (value)
+                         (values value (1+ value))))))
+      (multiple-value-bind (value incremented) (funcall mock 41)
+        (expect value :to-be 41)
+        (expect incremented :to-be 42))
+      (expect mock :to-have-been-called-times 1)
+      (expect mock :to-have-been-called-with 41)
+      (expect mock :to-have-returned-with 41 42)
+      (expect (mock-calls mock) :to-equal '((41)))))
 
   (it "matches ordered zero-argument mock calls"
     (let ((mock (make-mock-function (lambda () :pong))))

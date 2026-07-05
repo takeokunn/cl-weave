@@ -3,6 +3,11 @@
 (defvar *root-suite* nil)
 (defvar *current-suite* nil)
 (defvar *test-context* nil)
+(defvar *assertion-count* nil)
+(defvar *expected-assertion-count* nil)
+(defvar *expected-assertion-count-form* nil)
+(defvar *has-assertions-required* nil)
+(defvar *has-assertions-form* nil)
 
 (defstruct suite
   name
@@ -279,3 +284,58 @@
 
 (defun signal-assertion-failure (detail)
   (error 'assertion-failure :detail detail))
+
+(defun assertion-counting-active-p ()
+  (integerp *assertion-count*))
+
+(defun record-assertion ()
+  (when (assertion-counting-active-p)
+    (incf *assertion-count*))
+  t)
+
+(defun require-assertion-counting (form)
+  (unless (assertion-counting-active-p)
+    (error "cl-weave: ~S must be used inside a running test." form)))
+
+(defun set-expected-assertion-count (count form)
+  (require-assertion-counting form)
+  (unless (and (integerp count) (not (minusp count)))
+    (error "cl-weave: expect.assertions count must be a non-negative integer, got ~S."
+           count))
+  (setf *expected-assertion-count* count
+        *expected-assertion-count-form* form)
+  count)
+
+(defun set-has-assertions-required (form)
+  (require-assertion-counting form)
+  (setf *has-assertions-required* t
+        *has-assertions-form* form)
+  t)
+
+(defun assertion-count-failure-detail (form matcher actual expected)
+  (make-assertion-detail
+   :form form
+   :matcher matcher
+   :actual actual
+   :expected expected
+   :negated nil
+   :pass nil))
+
+(defun verify-assertion-counts ()
+  (when (and *expected-assertion-count*
+             (/= *assertion-count* *expected-assertion-count*))
+    (signal-assertion-failure
+     (assertion-count-failure-detail
+      *expected-assertion-count-form*
+      :assertions
+      *assertion-count*
+      *expected-assertion-count*)))
+  (when (and *has-assertions-required*
+             (zerop *assertion-count*))
+    (signal-assertion-failure
+     (assertion-count-failure-detail
+      *has-assertions-form*
+      :has-assertions
+      *assertion-count*
+      '(:minimum 1))))
+  t)
