@@ -462,6 +462,21 @@ String patterns use substring search. Function designators use
 Failure reasons are `:not-a-string`, `:no-match`, `:predicate-false`,
 `:predicate-error`, and `:invalid-pattern`.
 
+NaN matchers report both type information and predicate results. A failing
+`:to-be-nan` assertion uses:
+
+```lisp
+(:actual (:value 42
+          :type integer
+          :float nil
+          :nan nil)
+ :expected (:predicate :nan
+            :test :float-nan-p))
+```
+
+`:to-be-nan` accepts no expected operands and passes only when the actual value
+is a floating-point NaN.
+
 Deep containment matchers report the searched container and equality predicate.
 A failing `:to-contain-equal` assertion uses:
 
@@ -526,6 +541,24 @@ Close numeric matchers report the comparison tolerance as data. A failing
             :num-digits 2
             :threshold 1/200))
 ```
+
+Ordering matchers report the operator and real-number classification. A failing
+`:to-be-greater-than` assertion for a non-real actual value uses:
+
+```lisp
+(:actual (:value "10"
+          :expected-value 9
+          :matcher :to-be-greater-than
+          :operator >
+          :actual-real nil
+          :expected-real t)
+ :expected (:value 9
+            :matcher :to-be-greater-than
+            :operator >))
+```
+
+The same payload shape applies to `:to-be-greater-than-or-equal`,
+`:to-be-less-than`, and `:to-be-less-than-or-equal`.
 
 MOP architecture matchers report normalized architecture data instead of the raw
 input designator. A failing `:to-have-slot` assertion uses:

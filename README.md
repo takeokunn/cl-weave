@@ -184,6 +184,7 @@ Built-in matchers:
 - `:to-be-falsy`
 - `:to-be-null`
 - `:to-be-defined`
+- `:to-be-nan`
 - `:to-satisfy`
 - `:to-be-type-of`
 - `:to-be-instance-of`
@@ -308,6 +309,10 @@ Failures report the actual `:value`, requested `:pattern`, matching `:mode`,
 and normalized `:reason`, so reporters can distinguish non-string actual
 values, invalid patterns, predicate errors, and ordinary misses.
 
+`:to-be-nan` mirrors Vitest `toBeNaN()` for floating-point NaN values. It
+accepts no expected operands. Failure payloads include `:value`, `:type`,
+`:float`, and `:nan`; expected data is `(:predicate :nan :test :float-nan-p)`.
+
 `:to-contain-equal` mirrors Vitest `toContainEqual(value)` for Lisp data. It
 checks sequence elements and hash-table values with `equalp`, so structurally
 equal lists, vectors, strings, numbers, characters, and nested data pass without
@@ -368,6 +373,12 @@ digit count is `2`, and a value passes when
 
 Failures report `:value`, `:expected-value`, `:num-digits`, `:difference`, and
 `:threshold`, so reporters can display numeric drift without reparsing strings.
+
+The ordering matchers `:to-be-greater-than`,
+`:to-be-greater-than-or-equal`, `:to-be-less-than`, and
+`:to-be-less-than-or-equal` accept real expected values and fail cleanly for
+non-real actual values. Failure payloads include `:value`, `:expected-value`,
+`:matcher`, `:operator`, `:actual-real`, and `:expected-real`.
 
 ### MOP Architecture Assertions
 

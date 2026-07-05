@@ -71,6 +71,10 @@
            (lambda (expanded)
              (tree-contains-p expanded ',canonical-symbol))))
 
+#+sbcl
+(defun quiet-nan ()
+  (sb-kernel:make-double-float #x7ff80000 0))
+
 (defun tree-depth (tree)
   (if (consp tree)
       (1+ (reduce #'max tree :key #'tree-depth :initial-value 0))
@@ -111,6 +115,23 @@
     ("to-be-falsy" (expect nil :to-be-falsy))
     ("to-be-null" (expect nil :to-be-null))
     ("to-be-defined" (expect :value :to-be-defined))
+    #+sbcl
+    ("to-be-nan" (expect (quiet-nan) :to-be-nan))
+    ("to-be-nan failure payload"
+     (handler-case
+         (progn
+           (expect 42 :to-be-nan)
+           (error "Expected :to-be-nan to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-nan)
+           (expect (getf actual :value) :to-be 42)
+           (expect (getf actual :float) :to-be-falsy)
+           (expect (getf actual :nan) :to-be-falsy)
+           (expect (getf expected :predicate) :to-be :nan)
+           (expect (getf expected :test) :to-be :float-nan-p)))))
     ("to-satisfy" (expect 4 :to-satisfy #'evenp))
     ("to-be-type-of" (expect 10 :to-be-type-of 'integer))
     ("to-be-instance-of"
@@ -338,6 +359,26 @@
           (expect (getf expected :value) :to-be 3/10)
           (expect (getf expected :num-digits) :to-be 2)
           (expect (getf expected :threshold) :to-be 1/200)))))
+
+  (it "reports comparison matcher failures with structured numeric data"
+    (handler-case
+        (progn
+          (expect "10" :to-be-greater-than 9)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-greater-than)
+          (expect (getf actual :value) :to-equal "10")
+          (expect (getf actual :expected-value) :to-be 9)
+          (expect (getf actual :matcher) :to-be :to-be-greater-than)
+          (expect (getf actual :operator) :to-be '>)
+          (expect (getf actual :actual-real) :to-be-falsy)
+          (expect (getf actual :expected-real) :to-be-truthy)
+          (expect (getf expected :value) :to-be 9)
+          (expect (getf expected :matcher) :to-be :to-be-greater-than)
+          (expect (getf expected :operator) :to-be '>)))))
 
   (it "signals negated matcher failures with structured data"
     (handler-case

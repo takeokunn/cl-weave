@@ -82,12 +82,58 @@
     (error "Matcher ~S expects one expected value, got ~D." matcher (length expected)))
   (first expected))
 
+(defun expected-none (expected matcher)
+  (unless (null expected)
+    (error "Matcher ~S expects no expected values, got ~D." matcher (length expected))))
+
+(defun nan-value-p (value)
+  (and (floatp value)
+       #+sbcl
+       (sb-ext:float-nan-p value)
+       #-sbcl
+       (not (= value value))))
+
+(defun nan-report (actual)
+  (list :value actual
+        :type (type-of actual)
+        :float (floatp actual)
+        :nan (nan-value-p actual)))
+
+(defun nan-expected-report ()
+  '(:predicate :nan :test :float-nan-p))
+
 (defun non-negative-real-expected (expected matcher label)
   (let ((value (expected-one expected matcher)))
     (unless (and (realp value) (not (minusp value)))
       (error "Matcher ~S expects a non-negative real ~A, got ~S."
              matcher label value))
     value))
+
+(defun real-expected (expected matcher label)
+  (let ((value (expected-one expected matcher)))
+    (unless (realp value)
+      (error "Matcher ~S expects a real ~A, got ~S." matcher label value))
+    value))
+
+(defun comparison-report (actual expected matcher operator)
+  (list :value actual
+        :expected-value expected
+        :matcher matcher
+        :operator operator
+        :actual-real (realp actual)
+        :expected-real (realp expected)))
+
+(defun comparison-expected-report (expected matcher operator)
+  (list :value expected
+        :matcher matcher
+        :operator operator))
+
+(defmacro defcomparison-matcher (name operator)
+  `(defmatcher ,name (actual expected)
+     (let ((target (real-expected expected ,name "comparison target")))
+       (values (and (realp actual) (,operator actual target))
+               (comparison-report actual target ,name ',operator)
+               (comparison-expected-report target ,name ',operator)))))
 
 (defun contains-value-p (container value)
   (typecase container
@@ -771,6 +817,12 @@
   (declare (ignore expected))
   (not (null actual)))
 
+(defmatcher :to-be-nan (actual expected)
+  (expected-none expected :to-be-nan)
+  (values (nan-value-p actual)
+          (nan-report actual)
+          (nan-expected-report)))
+
 (defmatcher :to-satisfy (actual expected)
   (funcall (expected-one expected :to-satisfy) actual))
 
@@ -831,17 +883,10 @@
                     :num-digits digits
                     :threshold threshold)))))
 
-(defmatcher :to-be-greater-than (actual expected)
-  (> actual (expected-one expected :to-be-greater-than)))
-
-(defmatcher :to-be-greater-than-or-equal (actual expected)
-  (>= actual (expected-one expected :to-be-greater-than-or-equal)))
-
-(defmatcher :to-be-less-than (actual expected)
-  (< actual (expected-one expected :to-be-less-than)))
-
-(defmatcher :to-be-less-than-or-equal (actual expected)
-  (<= actual (expected-one expected :to-be-less-than-or-equal)))
+(defcomparison-matcher :to-be-greater-than >)
+(defcomparison-matcher :to-be-greater-than-or-equal >=)
+(defcomparison-matcher :to-be-less-than <)
+(defcomparison-matcher :to-be-less-than-or-equal <=)
 
 (defmatcher :to-throw (actual expected)
   (let* ((expectation (normalize-throw-expected expected :to-throw))
