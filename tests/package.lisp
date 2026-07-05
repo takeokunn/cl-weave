@@ -14,6 +14,7 @@
    #:beforeall
    #:before-each
    #:beforeeach
+   #:clear-all-mocks
    #:clear-mock
    #:clear-tests
    #:collect-mutations
@@ -110,6 +111,7 @@
    #:logic-variable-p
    #:logic-where
    #:make-mock-function
+   #:vi.clearAllMocks
    #:vi.fn
    #:mock-calls
    #:mock-results

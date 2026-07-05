@@ -139,8 +139,10 @@
    #:*snapshot-file-name*
    #:*update-snapshots*
    #:with-snapshot-updates
+   #:clear-all-mocks
    #:clear-mock
    #:make-mock-function
+   #:vi.clearAllMocks
    #:vi.fn
    #:mock-calls
    #:mock-results

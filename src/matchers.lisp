@@ -775,6 +775,16 @@
           (mock-state-results state) nil))
   mock)
 
+(defun clear-all-mocks ()
+  (maphash (lambda (mock state)
+             (declare (ignore state))
+             (clear-mock mock))
+           *mock-states*)
+  t)
+
+(defun vi.clearAllMocks ()
+  (clear-all-mocks))
+
 (defun mock-called-with-p (mock expected-arguments)
   (some (lambda (actual-arguments)
           (equal actual-arguments expected-arguments))

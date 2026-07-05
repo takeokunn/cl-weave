@@ -2820,6 +2820,19 @@
       (expect mock :to-have-returned-with 41 42)
       (expect (mock-calls mock) :to-equal '((41)))))
 
+  (it "clears all registered mock histories with vi.clearAllMocks"
+    (let ((left (vi.fn (lambda () :left)))
+          (right (make-mock-function (lambda (value) value))))
+      (expect (funcall left) :to-be :left)
+      (expect (funcall right :right) :to-be :right)
+      (expect left :to-have-been-called-times 1)
+      (expect right :to-have-been-called-with :right)
+      (expect (vi.clearAllMocks) :to-be t)
+      (expect left :not :to-have-been-called)
+      (expect right :not :to-have-been-called)
+      (expect (funcall left) :to-be :left)
+      (expect left :to-have-been-called-times 1)))
+
   (it "matches ordered zero-argument mock calls"
     (let ((mock (make-mock-function (lambda () :pong))))
       (expect (funcall mock) :to-be :pong)

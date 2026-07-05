@@ -911,8 +911,10 @@ selected and executed before the runner stopped.
 `make-mock-function` creates an inspectable function object. `vi.fn` is the
 Vitest-shaped alias for the same constructor. `mock-calls` returns a copy of
 the recorded argument lists, `mock-results` returns return/throw reports, and
-`clear-mock` resets both histories. `:to-have-returned-with` accepts Common
-Lisp multiple values as matcher operands, for example
+`clear-mock` resets both histories for one mock. `clear-all-mocks` and
+`vi.clearAllMocks` reset histories for every registered mock without replacing
+their implementations. `:to-have-returned-with` accepts Common Lisp multiple
+values as matcher operands, for example
 `(expect mock :to-have-returned-with :ok 42)`. Nth mock matchers use one-based
 indices. Nth returned matchers count only successful returns, while
 `mock-results` still keeps thrown result reports.
