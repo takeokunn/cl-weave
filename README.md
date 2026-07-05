@@ -17,7 +17,7 @@ Early MVP. The current focus is a solid core:
 - `it-each` / `test-each` and `describe-each` compile-time table tests
 - Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
   `expect.resolves`, `expect.rejects`, `expect.assertions`,
-  `expect.hasAssertions`, and fixture aliases
+  `expect.hasassertions`, and mock aliases using Common Lisp reader spelling
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -28,6 +28,7 @@ Early MVP. The current focus is a solid core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
+- AI-friendly CLI metadata for package exports, matchers, mutations, and aliases
 - source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
@@ -83,10 +84,11 @@ The packaged CLI is Vitest-shaped and intended for local use, CI, and AI
 agents:
 
 ```sh
-timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json
+timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --testTimeout 10000
 timeout 360s nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
 timeout 360s nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 timeout 120s nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
+timeout 120s nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
 timeout 360s nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
 timeout 360s nix run . -- watch cl-weave-tests --filter parser
 ```
@@ -109,12 +111,13 @@ nix develop --command timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-int
 nix develop --command timeout 360s env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
-The workflow uploads `cl-weave-results.json` and `cl-weave-junit.xml` as the
+The workflow uploads `cl-weave-results.json`, `cl-weave-events.jsonl`,
+`cl-weave-cli-results.json`, and `cl-weave-junit.xml` as the
 `cl-weave-test-reports` artifact. JSON result schema v4 is intended for AI
 agents and external automation: the root object identifies itself with
 `kind: "test-results"`, and every event includes both a machine `path` and a
-stable Vitest-style `pathString`. JUnit is intended for CI test result
-ingestion.
+stable Vitest-style `pathString`. JSONL is intended for streaming automation,
+and JUnit is intended for CI test result ingestion.
 
 ## API
 
@@ -152,7 +155,7 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
 (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
 (expect.assertions 2)
-(expect.hasAssertions)
+(expect.hasassertions)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -168,11 +171,17 @@ assertion fails with `:matcher :resolves` and `:actual` containing `:state`,
 `:condition-type`, and `:message`. `expect.rejects` requires the thunk to
 signal a condition and then applies the matcher to that condition object; a
 normally returned value fails with `:matcher :rejects`.
+The canonical Common Lisp forms are `expect-resolves` and `expect-rejects`;
+the dotted Vitest aliases macro-expand into those exported forms.
 
-`expect.assertions` and `expect.hasAssertions` are checked at the end of each
+`expect.assertions` and `expect.hasassertions` are checked at the end of each
 test attempt and reset for retries and concurrent tests. Declaration forms do
 not count as assertions; executed `expect`, `expect-not`, smart assertions, and
 thunk aliases count once.
+
+Dotted Vitest-shaped aliases use Common Lisp's actual unescaped reader spelling.
+JavaScript camelCase names are therefore lower-case in source, package exports,
+and metadata; prefer canonical hyphenated forms for generated Lisp.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -272,6 +281,7 @@ reported actual and expected values for structured reporters:
 
 ```lisp
 (cl-weave:defmatcher :to-have-status (response expected)
+  "Checks that a response plist has the expected HTTP status."
   (let ((actual-status (getf response :status))
         (wanted-status (first expected)))
     (values (= actual-status wanted-status)
@@ -286,6 +296,7 @@ Vitest-style bulk registration keeps related domain matchers together:
 ```lisp
 (cl-weave:expect.extend
   (:to-be-cache-hit (response expected)
+    "Checks that a response plist came from cache."
     (declare (ignore expected))
     (let ((state (getf response :cache)))
       (values (eq state :hit)
@@ -304,7 +315,24 @@ AI agents and generators can emit plain matcher data with `extend-expect`:
                 (wanted-status (first expected)))
             (values (= actual-status wanted-status)
                     `(:status ,actual-status)
-                    `(:status ,wanted-status)))))))
+                    `(:status ,wanted-status))))
+        :description
+        "Checks that a response plist has the expected HTTP status.")))
+```
+
+Matcher metadata is first-class data for AI tools, documentation generators,
+and editor integrations:
+
+```lisp
+(cl-weave:list-matchers)
+;; => ((:name :to-be :description nil)
+;;     (:name :to-have-status
+;;      :description "Checks that a response plist has the expected HTTP status.")
+;;     ...)
+
+(cl-weave:matcher-metadata :to-have-status)
+;; => (:name :to-have-status
+;;     :description "Checks that a response plist has the expected HTTP status.")
 ```
 
 ### Performance And Allocation
@@ -444,12 +472,23 @@ Mutation operators are data-backed and macro-extensible:
 
 ```lisp
 (cl-weave:defmutation-operator :keyword-toggle (form path)
+  "Toggles :enabled keyword literals to :disabled."
   (declare (ignore path))
   (when (eq form :enabled)
     (list :disabled)))
 
 (cl-weave:collect-mutations '(:enabled)
                             :operators '(:keyword-toggle))
+```
+
+The first string form in `defmutation-operator` becomes stable operator
+metadata. `list-mutation-operators` returns deterministic plist metadata for
+CI tools and agents:
+
+```lisp
+(cl-weave:list-mutation-operators)
+;; => ((:name :arithmetic-operator :description "...")
+;;     (:name :keyword-toggle :description "..."))
 ```
 
 The built-in operators cover arithmetic calls, comparison calls, boolean
@@ -482,7 +521,7 @@ survived, errored, and score fields.
 (describe.each ((:json "application/json"))
     "Vitest-shaped ~A reporter"
     (reporter content-type)
-  (beforeEach
+  (before-each
     (setf (gethash :content-type *test-context*) content-type))
   (it.each ((:ok :ok))
       "runs generated case ~A"
@@ -499,6 +538,11 @@ survived, errored, and score fields.
     (kind label)
   "blocked by upstream"
   (expect (list kind label) :to-equal '(:slow :case)))
+
+(it.todo.each ((:parser :stream) (:ffi :crash-boundary))
+    "documents generated todo ~A"
+    (area label)
+  "needs design")
 ```
 
 `it-each` and `test-each` expand into independent `it` forms at macro expansion
@@ -507,15 +551,17 @@ fixtures and cases keep the same semantics as hand-written suites. Dot aliases
 such as `it.each`, `test.each`, and `describe.each` macro-expand through the
 canonical hyphenated forms. Table aliases compose with the Vitest-shaped
 modifiers: `it.only.each`, `it.concurrent.each`, `it.sequential.each`,
-`it.fails.each`, `it.skip.each`, the matching `test.*.each` aliases, and
+`it.fails.each`, `it.skip.each`, `it.todo.each`, the matching `test.*.each`
+aliases, and
 suite-level `describe.only.each`, `describe.concurrent.each`,
-`describe.sequential.each`, and `describe.skip.each`. The full Vitest-shaped
-surface also includes
+`describe.sequential.each`, `describe.skip.each`, and `describe.todo.each`. The
+full Vitest-shaped surface also includes
 `it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
 `it.skip`, `it.skip-if`, `it.todo`, `it.isolated`, `it.property`, matching
 `test.*` aliases, suite-level `describe.concurrent`, `describe.sequential`,
 `describe.only`, `describe.run-if`, `describe.skip`, `describe.skip-if`,
-`describe.todo`, plus `expect.not` and camel-style fixture aliases.
+`describe.todo`, plus `expect.not`. Fixture hooks intentionally keep canonical
+Lisp names only.
 `docs/ai-contract.md` is the machine-readable normalization contract for
 agents.
 
@@ -615,8 +661,7 @@ diagnostic instead of silently running zero generated cases.
   (before-all
     (setf *state* (make-hash-table)))
 
-  ;; Common Lisp reads beforeAll as the same exported symbol as beforeall.
-  (beforeAll
+  (before-all
     (setf (gethash :created *state*) t))
 
   (before-each
@@ -644,8 +689,31 @@ diagnostic instead of silently running zero generated cases.
 `around-each` receives a continuation for the remaining around hooks and test
 body, so special variables can be dynamically rebound around only the case.
 Use `unwind-protect` inside `around-each` when the fixture owns cleanup.
-Camel-style aliases `beforeAll`, `afterAll`, `beforeEach`, and `afterEach`
-macro-expand through the canonical fixture forms.
+Fixture hooks intentionally use canonical Lisp names rather than camelCase
+aliases, because Common Lisp uppercases unescaped symbols while reading source.
+
+### CPS Continuation Helpers
+
+Use `with-continuation-result` when testing callback/CPS APIs that receive a
+continuation function. The macro binds the continuation name supplied in the
+binding list, runs the form, asserts that the continuation was called, and then
+exposes the first value passed to it.
+
+```lisp
+(it "tests a CPS parser"
+  (with-continuation-result (node next calledp)
+      (parse-token-cps "42" #'next)
+    (expect calledp :to-be-truthy)
+    (expect node :to-equal '(:number 42))))
+```
+
+Use `with-continuation-values` when the continuation carries multiple values:
+
+```lisp
+(with-continuation-values (values next)
+    (decode-cps input #'next)
+  (expect values :to-equal '(:ok (:amount 100))))
+```
 
 ### Skipping
 
@@ -674,10 +742,21 @@ hooks or test bodies. Skipped cases use the same event status and do not fail
 
 (it-todo "documents a missing edge case" "needs property generator")
 (test-todo "alias for it-todo")
+(test.todo.each ((:ast) (:ffi))
+    "documents future coverage for ~A"
+    (area)
+  "needs generator")
 
 (describe-todo "future protocol" "needs design"
   (it "documents the expected shape"
     (expect :draft :to-be :stable)))
+
+(describe.todo.each ((:json) (:sexp))
+    "future ~A reporter"
+    (reporter)
+  "needs snapshot contract"
+  (it "documents pending reporter behavior"
+    (expect reporter :to-satisfy #'keywordp)))
 ```
 
 When any suite or case is focused, `run-all` executes only the focused path.
@@ -702,6 +781,12 @@ hooks or test bodies. Todo cases use the same event status and do not fail
 dynamic `*test-context*` are recreated for every attempt. `:timeout-ms` fails the
 case if a single attempt exceeds the configured wall-clock budget. Timeout
 failures are reported as `test-timeout` conditions.
+
+CLI and CI runs can set suite-wide defaults with `--retry`,
+`CL_WEAVE_RETRY`, `--test-timeout-ms`, `--test-timeout`, `--testTimeout`,
+`CL_WEAVE_TEST_TIMEOUT_MS`, or `CL_WEAVE_TEST_TIMEOUT`. Per-test options take
+priority over global defaults, so `:retry 0` disables a global retry budget for
+one case and `:timeout-ms` replaces the global per-attempt timeout.
 
 `it-fails` and `test-fails` invert one runnable case: any assertion failure,
 error, or timeout is reported as `:pass`; an unexpectedly passing body is
@@ -906,20 +991,35 @@ selected and executed before the runner stopped.
 
 (with-mocked-functions (((symbol-function 'now) (lambda () 0)))
   (expect (now) :to-be 0))
+
+(let ((spy (vi.spyon 'now)))
+  (vi.mockreturnvalue spy 42)
+  (expect (now) :to-be 42)
+  (vi.mockrestore spy))
 ```
 
 `make-mock-function` creates an inspectable function object. `vi.fn` is the
-Vitest-shaped alias for the same constructor. `mock-calls` returns a copy of
-the recorded argument lists, `mock-results` returns return/throw reports, and
-`clear-mock` resets both histories for one mock. `reset-mock` resets histories
-and replaces that mock's implementation with the default no-op function.
-`mock-implementation` and `vi.mockImplementation` replace an existing mock's
-active implementation. `mock-return-value` and `vi.mockReturnValue` pin a
-single return value, while `mock-return-values` and `vi.mockReturnValues` pin
+Vitest-shaped alias for the same constructor. `mock-function-p`,
+`vi.ismockfunction`, and `vi.mocked` test whether a value is a registered
+cl-weave mock without signalling on non-functions. `mock-calls` returns a copy
+of the recorded argument lists, `mock-results` returns return/throw reports,
+and `clear-mock`
+or `vi.mockclear` resets both histories for one mock. `reset-mock` or
+`vi.mockreset` resets histories and replaces that mock's implementation with
+the default no-op function.
+`mock-implementation` and `vi.mockimplementation` replace an existing mock's
+active implementation. `mock-return-value` and `vi.mockreturnvalue` pin a
+single return value, while `mock-return-values` and `vi.mockreturnvalues` pin
 Common Lisp multiple values.
-`clear-all-mocks` and `vi.clearAllMocks` reset histories for every registered
+`clear-all-mocks` and `vi.clearallmocks` reset histories for every registered
 mock without replacing their implementations; `reset-all-mocks` and
-`vi.resetAllMocks` apply the reset behavior to every registered mock.
+`vi.resetallmocks` apply the reset behavior to every registered mock.
+`spy-on` and `vi.spyon` replace a symbol's function cell with a registered mock
+that calls the original function by default. `mock-restore` /
+`vi.mockrestore` restore that function cell when it is still bound to the spy,
+reset the spy history, and restore the spy implementation to the original
+function. `restore-all-mocks` and `vi.restoreallmocks` apply that behavior to
+every active spy while leaving regular `vi.fn` mocks untouched.
 `:to-have-returned-with` accepts Common Lisp multiple values as matcher
 operands, for example
 `(expect mock :to-have-returned-with :ok 42)`. Nth mock matchers use one-based
@@ -983,7 +1083,10 @@ reporters include failed and errored path summaries for focused reruns. See
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus positive
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
-`CL_WEAVE_BAIL` for fast-fail runs. Boolean environment variables treat
+`CL_WEAVE_BAIL` for fast-fail runs. It also accepts `CL_WEAVE_RETRY=N` for a
+global retry default and `CL_WEAVE_TEST_TIMEOUT_MS=N` or
+`CL_WEAVE_TEST_TIMEOUT=N` for a global per-attempt timeout default. Boolean
+environment variables treat
 `0`, `false`, `no`, `off`, and `nil` as false. Set
 `CL_WEAVE_PASS_WITH_NO_TESTS=false` to fail CI when filters select no tests.
 Set `CL_WEAVE_COVERAGE=1` to wrap execution with SBCL `sb-cover`, and set
@@ -999,8 +1102,9 @@ when a CI service should ingest test results as XML. List mode supports `spec`,
 The CLI keeps kebab-case flags as the canonical Lisp spelling and exposes
 Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
 `--testNamePattern`, `--watchInterval`, `--coverageOutput`,
-`--passWithNoTests`, `--failWithNoTests`, `--snapshotDir`, `--snapshotFile`,
-`--update`, and `--updateSnapshots`.
+`--outputFile`, `--testTimeout`, `--testTimeoutMs`, `--passWithNoTests`,
+`--failWithNoTests`, `--snapshotDir`, `--snapshotFile`, `--update`, and
+`--updateSnapshots`.
 
 ### ASDF System Runner and Watch Mode
 

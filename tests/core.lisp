@@ -81,6 +81,7 @@
       0))
 
 (defmatcher :to-be-even (actual expected)
+  "Passes when ACTUAL is an even integer."
   (declare (ignore expected))
   (values (and (integerp actual) (evenp actual))
           `(:value ,actual :parity ,(if (and (integerp actual) (evenp actual))
@@ -90,6 +91,7 @@
 
 (expect.extend
   (:to-be-odd (actual expected)
+    "Passes when ACTUAL is an odd integer."
     (declare (ignore expected))
     (values (and (integerp actual) (oddp actual))
             `(:value ,actual :parity ,(if (and (integerp actual) (oddp actual))
@@ -98,13 +100,15 @@
             '(:parity :odd))))
 
 (extend-expect
- (list
+  (list
   (list :to-be-between
         (lambda (actual expected)
           (destructuring-bind (low high) expected
             (values (and (realp actual) (<= low actual high))
                     `(:value ,actual :range (,low ,high))
-                    `(:range (,low ,high))))))))
+                    `(:range (,low ,high)))))
+        :description
+        "Passes when ACTUAL is within the inclusive numeric range.")))
 
 (describe "expect"
   (matcher-pass-cases
@@ -120,9 +124,9 @@
        (expect.assertions 2)
        (expect :a :to-be :a)
        (expect-not nil :to-be t)))
-    ("expect.hasAssertions"
+    ("expect.hasassertions"
      (progn
-       (expect.hasAssertions)
+       (expect.hasassertions)
        (expect t)))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
@@ -578,6 +582,25 @@
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal '(:range (1 10)))))))
 
+  (it "exposes stable matcher metadata for AI tooling"
+    (let* ((metadata (cl-weave:list-matchers))
+           (names (mapcar (lambda (entry) (getf entry :name)) metadata))
+           (sorted-names (sort (copy-list names) #'string< :key #'symbol-name))
+           (even (cl-weave:matcher-metadata :to-be-even))
+           (odd (cl-weave:matcher-metadata :to-be-odd))
+           (between (cl-weave:matcher-metadata :to-be-between)))
+      (expect names :to-equal sorted-names)
+      (expect names :to-contain :to-be)
+      (expect even :to-equal
+              '(:name :to-be-even
+                :description "Passes when ACTUAL is an even integer."))
+      (expect odd :to-equal
+              '(:name :to-be-odd
+                :description "Passes when ACTUAL is an odd integer."))
+      (expect between :to-equal
+              '(:name :to-be-between
+                :description "Passes when ACTUAL is within the inclusive numeric range."))))
+
   (it "signals smart assertion failures with operand values"
     (handler-case
         (progn
@@ -634,7 +657,7 @@
   (describe.each ((4 5 9))
       "dot table suite ~A plus ~A"
       (left right total)
-    (beforeEach
+    (before-each
       (setf (gethash :dot-table-total *test-context*) total))
     (it.each ((:alpha :alpha)
               (:beta :beta))
@@ -658,19 +681,31 @@
                    (tree-contains-p form :not)
                    (tree-contains-p form 'expect-not)))))
 
-  (it "expands expect.resolves into resolving thunk evaluation"
+  (it "expands expect.resolves into canonical expect-resolves"
     (expect (macroexpand-1 '(expect.resolves (lambda () :ok) :to-be :ok))
             :to-satisfy
             (lambda (form)
-              (and (tree-contains-p form 'cl-weave::call-resolving-expectation-thunk)
-                   (tree-contains-p form 'expect.resolves)))))
+              (tree-contains-p form 'expect-resolves))))
 
-  (it "expands expect.rejects into rejecting thunk evaluation"
+  (it "expands expect-resolves into resolving thunk evaluation"
+    (expect (macroexpand-1 '(expect-resolves (lambda () :ok) :to-be :ok))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::call-resolving-expectation-thunk)
+                   (tree-contains-p form 'expect-resolves)))))
+
+  (it "expands expect.rejects into canonical expect-rejects"
     (expect (macroexpand-1 '(expect.rejects (lambda () (error "boom")) :to-be-type-of 'simple-error))
             :to-satisfy
             (lambda (form)
+              (tree-contains-p form 'expect-rejects))))
+
+  (it "expands expect-rejects into rejecting thunk evaluation"
+    (expect (macroexpand-1 '(expect-rejects (lambda () (error "boom")) :to-be-type-of 'simple-error))
+            :to-satisfy
+            (lambda (form)
               (and (tree-contains-p form 'cl-weave::call-rejecting-expectation-thunk)
-                   (tree-contains-p form 'expect.rejects)))))
+                   (tree-contains-p form 'expect-rejects)))))
 
   (it "expands expect.extend into the custom matcher registry"
     (expect (macroexpand-1
@@ -689,6 +724,39 @@
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::signal-smart-assertion-failure)
                    (tree-contains-p form 'cl-weave::operand-report-form)))))
+
+  (it "expands with-continuation-result through the CPS value collector"
+    (expect (macroexpand-1
+             '(with-continuation-result (result next calledp)
+                  (funcall producer #'next)
+                (list result calledp)))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave:with-continuation-values)
+                   (tree-contains-p form 'next)
+                   (tree-contains-p form 'calledp)
+                   (tree-contains-p form 'result)))))
+
+  (it "expands with-continuation-values into a local continuation gate"
+    (expect (macroexpand-1
+             '(with-continuation-values (values next calledp)
+                  (funcall producer #'next)
+                values))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'flet)
+                   (tree-contains-p form 'next)
+                   (tree-contains-p form 'cl-weave::ensure-continuation-called)
+                   (tree-contains-p form 'calledp)
+                   (tree-contains-p form 'values)))))
+
+  (it "rejects non-symbol continuation bindings at macro expansion time"
+    (expect (lambda ()
+              (macroexpand
+               '(with-continuation-result (result 42)
+                    :not-called
+                  result)))
+            :to-throw))
 
   (it "expands it-only into focused test registration"
     (expect (macroexpand-1 '(it-only "focused" (expect 1 :to-be 1)))
@@ -909,6 +977,13 @@
      (it.todo "todo alias" "later")
      cl-weave:it-todo)
     (expect-macroexpands-through
+     (it.todo.each ((1 2 3))
+         "todo ~A and ~A"
+         (left right total)
+       "later"
+       (expect (+ left right) :to-be total))
+     cl-weave:it-todo-each)
+    (expect-macroexpands-through
      (it.isolated "isolated alias"
          (:systems ("cl-weave-tests") :timeout 5)
        (expect :ok :to-be :ok))
@@ -922,7 +997,7 @@
      (expect.assertions 1)
      cl-weave:expect-assertions)
     (expect-macroexpands-through
-     (expect.hasAssertions)
+     (expect.hasassertions)
      cl-weave:expect-has-assertions)
     (expect-macroexpands-through
      (test.concurrent "parallel alias" (expect :ok :to-be :ok))
@@ -979,6 +1054,13 @@
     (expect-macroexpands-through
      (test.todo "todo alias" "later")
      cl-weave:test-todo)
+    (expect-macroexpands-through
+     (test.todo.each ((1 2 3))
+         "todo alias ~A and ~A"
+         (left right total)
+       "later"
+       (expect (+ left right) :to-be total))
+     cl-weave:test-todo-each)
     (expect-macroexpands-through
      (test.isolated "isolated alias"
          (:systems ("cl-weave-tests") :timeout 5)
@@ -1042,17 +1124,21 @@
      (describe.todo "todo suite alias" "later")
      cl-weave:describe-todo)
     (expect-macroexpands-through
-     (beforeAll (setf *fixture-value* :ready))
-     cl-weave:before-all)
+     (describe.todo.each ((1 2 3))
+         "todo suite ~A and ~A"
+         (left right total)
+       "later"
+       (it "case" (expect (+ left right) :to-be total)))
+     cl-weave:describe-todo-each)
     (expect-macroexpands-through
      (expect.not 1 :to-be 2)
      cl-weave:expect-not)
     (expect-macroexpands-through
      (expect.resolves (lambda () :ok) :to-be :ok)
-     cl-weave:expect)
+     cl-weave:expect-resolves)
     (expect-macroexpands-through
      (expect.rejects (lambda () (error "boom")) :to-be-type-of 'simple-error)
-     cl-weave:expect))
+     cl-weave:expect-rejects))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))
@@ -1271,6 +1357,7 @@
               (tree-contains-p form 'cl-weave::run-property)))))
 
 (defmutation-operator :keyword-toggle (form path)
+  "Toggles :enabled keyword literals to :disabled."
   (declare (ignore path))
   (when (eq form :enabled)
     (list :disabled)))
@@ -1286,6 +1373,22 @@
               '(if (/= value 1) (+ value 2) nil))
       (expect (mapcar #'mutation-form mutations) :to-contain
               '(if (= value 1) (- value 2) nil))))
+
+  (it "lists mutation operators as deterministic metadata"
+    (let ((operators (list-mutation-operators))
+          (custom-metadata (mutation-operator-metadata :keyword-toggle)))
+      (expect (mapcar (lambda (entry) (getf entry :name)) operators)
+              :to-contain
+              :arithmetic-operator)
+      (expect (mapcar (lambda (entry) (getf entry :name)) operators)
+              :to-contain
+              :keyword-toggle)
+      (expect (getf (mutation-operator-metadata :arithmetic-operator) :description)
+              :to-contain
+              "arithmetic")
+      (expect (getf custom-metadata :description)
+              :to-equal
+              "Toggles :enabled keyword literals to :disabled.")))
 
   (it "supports macro-defined custom mutation operators"
     (let ((mutations (collect-mutations '(:enabled)
@@ -1360,6 +1463,12 @@
   (it "keeps before-all state across cases"
     (expect *fixture-events* :to-equal '(:before-each :after-each :before-each :before-all)))
 
+  (it "keeps camelCase fixture aliases out of the public package"
+    (dolist (name '("BEFOREALL" "AFTERALL" "BEFOREEACH" "AFTEREACH"))
+      (multiple-value-bind (symbol status) (find-symbol name "CL-WEAVE")
+        (declare (ignore symbol))
+        (expect-not status :to-be :external))))
+
   (it "wraps each test body with around-each continuations"
     (let ((root (cl-weave::make-suite :name "root"))
           (events nil))
@@ -1404,6 +1513,37 @@
         (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
       (expect (reverse events) :to-equal '(:around-cleanup :after)))))
 
+(describe "cps continuation helpers"
+  (it "captures the primary value passed to the local continuation"
+    (with-continuation-result (result next calledp)
+        (funcall (lambda (next)
+                   (funcall next :ok :ignored))
+                 #'next)
+      (expect calledp :to-be-truthy)
+      (expect result :to-be :ok)))
+
+  (it "captures every value passed to the local continuation"
+    (with-continuation-values (values next calledp)
+        (funcall (lambda (next)
+                   (funcall next :ok 42 "done"))
+                 #'next)
+      (expect calledp :to-be-truthy)
+      (expect values :to-equal '(:ok 42 "done"))))
+
+  (it "signals assertion-failure when the continuation is not called"
+    (handler-case
+        (with-continuation-result (result next)
+            :not-called
+          result)
+      (assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :continuation-called)
+          (expect (cl-weave::assertion-detail-actual detail) :to-equal '(:called nil))
+          (expect (cl-weave::assertion-detail-expected detail) :to-equal '(:called t))))
+      (:no-error (&rest values)
+        (declare (ignore values))
+        (error "Expected with-continuation-result to fail.")))))
+
 (describe "retry and timeout"
   (it "retries failing tests until they pass"
     (let* ((attempts 0)
@@ -1431,6 +1571,36 @@
       (expect (cl-weave::test-event-status event) :to-be :fail)
       (expect (cl-weave::test-event-assertion event) :to-be-defined)))
 
+  (it "applies global retry defaults to tests without local retry options"
+    (let* ((attempts 0)
+           (suite (cl-weave::make-suite :name "global retry"))
+           (test (cl-weave::make-test-case
+                  :name "eventual pass"
+                  :function (lambda ()
+                              (incf attempts)
+                              (when (< attempts 3)
+                                (expect attempts :to-be 3))))))
+      (cl-weave::add-child suite test)
+      (let ((events (cl-weave::collect-events suite :retry 2)))
+        (expect attempts :to-be 3)
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:pass)))))
+
+  (it "lets local retry options override global retry defaults"
+    (let* ((attempts 0)
+           (suite (cl-weave::make-suite :name "local retry"))
+           (test (cl-weave::make-test-case
+                  :name "still fails"
+                  :retry 0
+                  :function (lambda ()
+                              (incf attempts)
+                              (expect attempts :to-be 10)))))
+      (cl-weave::add-child suite test)
+      (let ((events (cl-weave::collect-events suite :retry 2)))
+        (expect attempts :to-be 1)
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:fail)))))
+
   (it "reports timed out tests as structured failures"
     (let* ((test (cl-weave::make-test-case
                   :name "slow"
@@ -1442,6 +1612,42 @@
               :to-be-instance-of 'cl-weave:test-timeout)
       (expect (cl-weave:test-timeout-ms (cl-weave::test-event-condition event))
               :to-be 10)))
+
+  (it "applies global timeout defaults to tests without local timeout options"
+    (let* ((suite (cl-weave::make-suite :name "global timeout"))
+           (test (cl-weave::make-test-case
+                  :name "slow"
+                  :function (lambda () (sleep 0.1)))))
+      (cl-weave::add-child suite test)
+      (let* ((events (cl-weave::collect-events suite :timeout-ms 10))
+             (event (first events)))
+        (expect (cl-weave::test-event-status event) :to-be :fail)
+        (expect (cl-weave::test-event-condition event)
+                :to-be-instance-of 'cl-weave:test-timeout)
+        (expect (cl-weave:test-timeout-ms
+                 (cl-weave::test-event-condition event))
+                :to-be 10))))
+
+  (it "lists effective retry and timeout defaults in test plans"
+    (let* ((suite (cl-weave::make-suite :name "plan defaults"))
+           (defaulted (cl-weave::make-test-case
+                       :name "defaulted"
+                       :function (lambda () t)))
+           (local (cl-weave::make-test-case
+                   :name "local"
+                   :retry 0
+                   :timeout-ms 25
+                   :function (lambda () t))))
+      (cl-weave::add-child suite defaulted)
+      (cl-weave::add-child suite local)
+      (let ((plan (cl-weave:collect-test-plan
+                   suite
+                   :retry 2
+                   :timeout-ms 100)))
+        (expect (mapcar #'cl-weave:test-plan-entry-retry plan)
+                :to-equal '(2 0))
+        (expect (mapcar #'cl-weave:test-plan-entry-timeout-ms plan)
+                :to-equal '(100 25)))))
 
   (it "fails a test when expect.assertions count is not met"
     (let* ((test (cl-weave::make-test-case
@@ -1456,11 +1662,11 @@
       (expect (cl-weave::assertion-detail-actual assertion) :to-be 1)
       (expect (cl-weave::assertion-detail-expected assertion) :to-be 2)))
 
-  (it "fails a test when expect.hasAssertions observes no assertions"
+  (it "fails a test when expect.hasassertions observes no assertions"
     (let* ((test (cl-weave::make-test-case
                   :name "missing assertions"
                   :function (lambda ()
-                              (expect.hasAssertions))))
+                              (expect.hasassertions))))
            (event (cl-weave::run-test-case (cl-weave::root-suite) test))
            (assertion (cl-weave::test-event-assertion event)))
       (expect (cl-weave::test-event-status event) :to-be :fail)
@@ -1874,6 +2080,25 @@
         (expect (mapcar #'cl-weave::test-event-reason events)
                 :to-equal '("intentional")))))
 
+  (it "registers todo.each cases without running bodies"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (ran nil))
+      (let ((cl-weave::*root-suite* root)
+            (cl-weave::*current-suite* nil))
+        (it-todo-each ((1 2 3) (2 3 5))
+            "adds ~A and ~A"
+            (left right total)
+          "awaiting implementation"
+          (setf ran (list left right total))))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:todo :todo))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("awaiting implementation" "awaiting implementation"))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("adds 1 and 2") ("adds 2 and 3")))
+        (expect ran :to-be nil))))
+
   (it "reports todo tests without running their body"
     (let* ((called nil)
            (test (cl-weave::make-test-case
@@ -1908,7 +2133,28 @@
         (expect (mapcar #'cl-weave::test-event-reason events)
                 :to-equal '("suite pending"))
         (expect (mapcar #'cl-weave::test-event-path events)
-                :to-equal '(("pending" "case")))))))
+                :to-equal '(("pending" "case"))))))
+
+  (it "registers todo.each suites with suppressed descendants"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (ran nil))
+      (let ((cl-weave::*root-suite* root)
+            (cl-weave::*current-suite* nil))
+        (describe-todo-each ((1 2 3) (2 3 5))
+            "pending ~A and ~A"
+            (left right total)
+          "suite pending"
+          (it "case"
+            (setf ran (list left right total)))))
+      (let ((events (cl-weave::collect-events root)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:todo :todo))
+        (expect (mapcar #'cl-weave::test-event-reason events)
+                :to-equal '("suite pending" "suite pending"))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("pending 1 and 2" "case")
+                            ("pending 2 and 3" "case")))
+        (expect ran :to-be nil)))))
 
 (describe "focus"
   (it "runs only focused tests when any focus exists"
@@ -2429,6 +2675,10 @@
                       "--output"
                       "results.json"
                       "--bail=2"
+                      "--retry"
+                      "3"
+                      "--test-timeout-ms"
+                      "2500"
                       "--shard"
                       "2/4"
                       "--sequence"
@@ -2460,6 +2710,8 @@
       (expect (cl-weave/cli::cli-options-output-file options)
               :to-equal "results.json")
       (expect (cl-weave/cli::cli-options-bail options) :to-be 2)
+      (expect (cl-weave/cli::cli-options-retry options) :to-be 3)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options) :to-be 2500)
       (expect (cl-weave/cli::cli-options-shard options) :to-equal '(2 4))
       (expect (cl-weave/cli::cli-options-order options) :to-be :random)
       (expect (cl-weave/cli::cli-options-seed options) :to-be 123)
@@ -2478,6 +2730,8 @@
                     '("run"
                       "--testNamePattern"
                       "cli"
+                      "--outputFile=vitest-results.json"
+                      "--testTimeout=1500"
                       "--coverageOutput=coverage.out"
                       "--passWithNoTests"
                       "--snapshotDir"
@@ -2489,9 +2743,13 @@
                           '("watch" "cl-weave-tests" "--watchInterval" "2.5")
                           (cl-weave/cli::make-cli-options)))
           (snapshot-options (cl-weave/cli::parse-cli-arguments
-                             '("run" "--updateSnapshots")
+                             '("run" "--updateSnapshots" "--testTimeoutMs" "1750")
                              (cl-weave/cli::make-cli-options))))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")
+      (expect (cl-weave/cli::cli-options-output-file options)
+              :to-equal "vitest-results.json")
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+              :to-be 1500)
       (expect (cl-weave/cli::cli-options-coverage-output options)
               :to-equal "coverage.out")
       (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be t)
@@ -2503,7 +2761,9 @@
       (expect (cl-weave/cli::cli-options-watch-interval watch-options)
               :to-be 2.5)
       (expect (cl-weave/cli::cli-options-update-snapshots snapshot-options)
-              :to-be t)))
+              :to-be t)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms snapshot-options)
+              :to-be 1750)))
 
   (it "parses watch intervals as explicit CLI text"
     (labels ((watch-interval-from-env (value)
@@ -2602,6 +2862,33 @@
                 :to-throw
                 "--bail must be true, false, or a positive integer"))))
 
+  (it "parses retry and timeout defaults from CI environment data"
+    (labels ((options-from (entries)
+               (with-mocked-functions
+                   (((symbol-function 'uiop:getenv)
+                     (lambda (name)
+                       (cdr (assoc name entries :test #'string=)))))
+                 (cl-weave/cli::options-from-environment))))
+      (let ((options (options-from '(("CL_WEAVE_RETRY" . "0")
+                                     ("CL_WEAVE_TEST_TIMEOUT" . "2500")))))
+        (expect (cl-weave/cli::cli-options-retry options) :to-be 0)
+        (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+                :to-be 2500))
+      (let ((options (options-from '(("CL_WEAVE_RETRY" . "3")
+                                     ("CL_WEAVE_TEST_TIMEOUT" . "2500")
+                                     ("CL_WEAVE_TEST_TIMEOUT_MS" . "125")))))
+        (expect (cl-weave/cli::cli-options-retry options) :to-be 3)
+        (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+                :to-be 125))
+      (expect (lambda ()
+                (options-from '(("CL_WEAVE_RETRY" . "-1"))))
+              :to-throw
+              "CL_WEAVE_RETRY must be a non-negative integer")
+      (expect (lambda ()
+                (options-from '(("CL_WEAVE_TEST_TIMEOUT_MS" . "0"))))
+              :to-throw
+              "CL_WEAVE_TEST_TIMEOUT_MS must be positive")))
+
   (it "requires explicit CI sequence seeds to be positive integers"
     (labels ((seed-from (value)
                (with-mocked-functions
@@ -2627,9 +2914,10 @@
       (with-mocked-functions
           (((symbol-function 'cl-weave:run-all)
             (lambda (&key reporter name-filter shard order seed bail coverage
-                     coverage-output pass-with-no-tests stream)
+                     retry timeout-ms coverage-output pass-with-no-tests stream)
               (declare (ignore reporter name-filter shard order seed bail coverage
-                               coverage-output pass-with-no-tests stream))
+                               retry timeout-ms coverage-output pass-with-no-tests
+                               stream))
               (setf observed
                     (list cl-weave:*snapshot-directory*
                           cl-weave:*snapshot-file-name*
@@ -2651,9 +2939,11 @@
              (with-mocked-functions
                  (((symbol-function 'cl-weave:run-all)
                    (lambda (&key reporter name-filter shard order seed bail coverage
-                            coverage-output pass-with-no-tests stream)
+                            retry timeout-ms coverage-output pass-with-no-tests
+                            stream)
                      (declare (ignore name-filter shard order seed bail coverage
-                                      coverage-output pass-with-no-tests))
+                                      retry timeout-ms coverage-output
+                                      pass-with-no-tests))
                      (expect reporter :to-be :json)
                      (cl-weave::report-json nil stream)
                      t)))
@@ -2681,6 +2971,118 @@
       (expect (cl-weave/cli::cli-options-watch watch-options) :to-be t)
       (expect (cl-weave/cli::cli-options-watch-interval watch-options)
               :to-be 1.5)))
+
+  (it "prints AI-friendly framework metadata"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("metadata" "cl-weave-tests")
+                    (cl-weave/cli::make-cli-options))))
+      (expect (cl-weave/cli::cli-options-command options) :to-be :metadata)
+      (expect (cl-weave/cli::cli-options-systems options)
+              :to-equal '("cl-weave-tests"))
+      (let ((output (with-output-to-string (stream)
+                      (cl-weave/cli::report-framework-metadata options stream))))
+        (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")
+        (expect output :to-contain "\"schemaVersion\":1")
+        (expect output :to-contain "\"commands\"")
+        (expect output :to-contain "\"metadata\"")
+        (expect output :to-contain "\"matchers\"")
+        (expect output :to-contain "\"to-be-even\"")
+        (expect output :to-contain "\"mutationOperators\"")
+        (expect output :to-contain "\"arithmetic-operator\"")
+        (expect output :to-contain "\"packageExports\"")
+        (expect output :to-contain "\"cl-weave\"")
+        (expect output :to-contain "\"describe\"")
+        (expect output :to-contain "\"expect\"")
+        (expect output :to-contain "\"vitestAliases\"")
+        (expect output :to-contain "\"describe.only.each\"")
+        (expect output :to-contain "\"it.property\"")
+        (expect output :to-contain "\"test.isolated\"")
+        (expect output :to-contain "\"expect.hasassertions\"")
+        (expect output :to-contain "\"vi.mocked\"")
+        (expect output :to-contain "\"vi.mockreturnvalues\"")
+        (expect output :to-contain "\"vi.clearallmocks\"")
+        (expect output :to-contain "\"vi.spyon\""))))
+
+  (it "allows Lisp-native metadata output"
+    (let ((options (cl-weave/cli::parse-cli-arguments
+                    '("metadata" "--reporter" "sexp")
+                    (cl-weave/cli::make-cli-options))))
+      (let ((output (with-output-to-string (stream)
+                      (cl-weave/cli::report-framework-metadata options stream))))
+        (expect output :to-contain ":KIND \"cl-weave-metadata\"")
+        (expect output :to-contain ":PACKAGE-EXPORTS"))))
+
+  (it "keeps Vitest aliases aligned with public package exports"
+    (let* ((metadata (cl-weave/cli::framework-metadata))
+           (exports (getf (find "cl-weave"
+                                (getf metadata :package-exports)
+                                :key (lambda (entry) (getf entry :name))
+                                :test #'string=)
+                          :exports)))
+      (flet ((exportedp (name)
+               (member name exports :test #'string=)))
+        (dolist (entry (getf metadata :vitest-aliases))
+          (expect (getf entry :alias) :to-satisfy #'exportedp)
+          (expect (getf entry :canonical) :to-satisfy #'exportedp)))))
+
+  (it "keeps package export metadata synchronized with actual packages"
+    (flet ((actual-exports (package-name)
+             (let ((exports '()))
+               (do-external-symbols (symbol (find-package (string-upcase package-name)))
+                 (push (string-downcase (symbol-name symbol)) exports))
+               (sort exports #'string<)))
+           (metadata-exports (package-name metadata)
+             (getf (find package-name
+                         (getf metadata :package-exports)
+                         :key (lambda (entry) (getf entry :name))
+                         :test #'string=)
+                   :exports)))
+      (let ((metadata (cl-weave/cli::framework-metadata)))
+        (let ((declared-core (metadata-exports "cl-weave" metadata))
+              (actual-core (actual-exports "cl-weave"))
+              (declared-cli (metadata-exports "cl-weave/cli" metadata))
+              (actual-cli (actual-exports "cl-weave/cli")))
+          (expect declared-core :to-equal actual-core)
+          (expect declared-cli :to-equal actual-cli)))))
+
+  (it "keeps framework metadata identifiers unique"
+    (labels ((duplicate-strings (values)
+               (let ((seen (make-hash-table :test #'equal))
+                     (duplicates '()))
+                 (dolist (value values)
+                   (if (gethash value seen)
+                       (pushnew value duplicates :test #'string=)
+                       (setf (gethash value seen) t)))
+                 (sort duplicates #'string<)))
+             (expect-unique-strings (values)
+               (expect (duplicate-strings values) :to-equal '()))
+             (metadata-names (entries)
+               (mapcar (lambda (entry)
+                         (string-downcase (symbol-name (getf entry :name))))
+                       entries)))
+      (let ((metadata (cl-weave/cli::framework-metadata)))
+        (dolist (key '(:commands :reporters :list-reporters
+                       :capabilities :environment))
+          (expect-unique-strings (getf metadata key)))
+        (expect-unique-strings (mapcar (lambda (entry) (getf entry :alias))
+                                       (getf metadata :vitest-aliases)))
+        (expect-unique-strings (mapcar (lambda (entry) (getf entry :name))
+                                       (getf metadata :package-exports)))
+        (dolist (entry (getf metadata :package-exports))
+          (expect-unique-strings (getf entry :exports)))
+        (expect-unique-strings (metadata-names (getf metadata :matchers)))
+        (expect-unique-strings (metadata-names (getf metadata :mutation-operators)))
+        (dolist (reporter (getf metadata :list-reporters))
+          (expect (member reporter (getf metadata :reporters) :test #'string=)
+                  :not :to-be nil)))))
+
+  (it "keeps metadata aliases in Common Lisp reader spelling"
+    (dolist (entry (getf (cl-weave/cli::framework-metadata) :vitest-aliases))
+      (dolist (name (list (getf entry :alias) (getf entry :canonical)))
+        (expect (every (lambda (char)
+                         (not (upper-case-p char)))
+                       name)
+                :to-be t))))
 
   (it "normalizes SBCL argument separators from nix run"
     (let ((options (cl-weave/cli::parse-cli-arguments
@@ -2723,10 +3125,14 @@
   (it "prints AI-friendly command usage"
     (let ((usage (cl-weave/cli::cli-usage)))
       (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
+      (expect usage :to-contain "cl-weave metadata [SYSTEM] [options]")
       (expect usage :to-contain "cl-weave version")
       (expect usage :to-contain "--reporter REPORTER")
       (expect usage :to-contain "--shard INDEX/COUNT")
+      (expect usage :to-contain "--retry INTEGER")
+      (expect usage :to-contain "--testTimeout MS")
       (expect usage :to-contain "--testNamePattern TEXT")
+      (expect usage :to-contain "--outputFile FILE")
       (expect usage :to-contain "--failWithNoTests")
       (expect usage :to-contain "--snapshotDir DIR")
       (expect usage :to-contain "--snapshotFile FILE")
@@ -2761,9 +3167,12 @@
           (output nil))
       (with-mocked-functions
           (((symbol-function 'cl-weave:run-system)
-            (lambda (system &key reporter stream name-filter shard order seed bail)
+            (lambda (system &key reporter stream name-filter shard order seed
+                                  bail retry timeout-ms)
               (declare (ignore stream))
-              (push (list system reporter name-filter shard order seed bail) calls)
+              (push (list system reporter name-filter shard order seed bail
+                          retry timeout-ms)
+                    calls)
               t)))
         (setf output
               (with-output-to-string (stream)
@@ -2777,9 +3186,12 @@
                          :order :random
                          :seed 123
                          :bail 1
+                         :retry 2
+                         :timeout-ms 250
                          :once t)
                         :to-be-truthy))))
-      (expect calls :to-equal '(("cl-weave" :json "expect" (1 2) :random 123 1)))
+      (expect calls
+              :to-equal '(("cl-weave" :json "expect" (1 2) :random 123 1 2 250)))
       (expect output :to-contain "cl-weave watch"))))
 
 (describe "mocking"
@@ -2809,6 +3221,16 @@
       (expect (mock-calls mock) :to-equal nil)
       (expect (mock-results mock) :to-equal nil)))
 
+  (it "clears one mock with the Vitest-shaped vi.mockclear alias"
+    (let ((mock (vi.fn (lambda (value) value))))
+      (expect (funcall mock :before) :to-be :before)
+      (expect mock :to-have-been-called-times 1)
+      (expect (vi.mockclear mock) :to-be mock)
+      (expect mock :not :to-have-been-called)
+      (expect (mock-results mock) :to-equal nil)
+      (expect (funcall mock :after) :to-be :after)
+      (expect mock :to-have-been-called-with :after)))
+
   (it "creates mock functions with the Vitest-shaped vi.fn alias"
     (let ((mock (vi.fn (lambda (value)
                          (values value (1+ value))))))
@@ -2820,19 +3242,28 @@
       (expect mock :to-have-returned-with 41 42)
       (expect (mock-calls mock) :to-equal '((41)))))
 
+  (it "detects mock functions with Lisp and Vitest-shaped predicates"
+    (let ((mock (vi.fn)))
+      (expect (mock-function-p mock) :to-be t)
+      (expect (vi.ismockfunction mock) :to-be t)
+      (expect (vi.mocked mock) :to-be t)
+      (expect (mock-function-p (lambda () :not-a-mock)) :to-be nil)
+      (expect (vi.ismockfunction :not-a-function) :to-be nil)
+      (expect (vi.mocked :not-a-function) :to-be nil)))
+
   (it "updates mock implementations with Lisp and Vitest-shaped aliases"
     (let ((mock (vi.fn)))
       (expect (funcall mock 1) :to-be nil)
       (expect (mock-implementation mock (lambda (value) (* value 2))) :to-be mock)
       (expect (funcall mock 21) :to-be 42)
       (expect mock :to-have-been-called-with 21)
-      (expect (vi.mockImplementation mock (lambda (value) (+ value 1))) :to-be mock)
+      (expect (vi.mockimplementation mock (lambda (value) (+ value 1))) :to-be mock)
       (expect (funcall mock 41) :to-be 42)
       (expect mock :to-have-returned-with 42)))
 
   (it "sets mock return values including Common Lisp multiple values"
     (let ((mock (vi.fn (lambda () :old))))
-      (expect (vi.mockReturnValue mock :next) :to-be mock)
+      (expect (vi.mockreturnvalue mock :next) :to-be mock)
       (expect (funcall mock :ignored) :to-be :next)
       (expect mock :to-have-returned-with :next)
       (expect (mock-return-values mock :ok 42) :to-be mock)
@@ -2840,7 +3271,7 @@
         (expect status :to-be :ok)
         (expect count :to-be 42))
       (expect mock :to-have-returned-with :ok 42)
-      (expect (vi.mockReturnValues mock :done 7) :to-be mock)
+      (expect (vi.mockreturnvalues mock :done 7) :to-be mock)
       (multiple-value-bind (status count) (funcall mock :ignored)
         (expect status :to-be :done)
         (expect count :to-be 7))
@@ -2852,14 +3283,40 @@
     (let ((mock (vi.fn)))
       (expect (lambda () (mock-implementation mock :not-a-function)) :to-throw)))
 
-  (it "clears all registered mock histories with vi.clearAllMocks"
+  (it "spies on global function cells and restores originals"
+    (expect (sample-size '(a b c)) :to-be 3)
+    (let ((spy (spy-on 'sample-size)))
+      (expect (mock-function-p spy) :to-be t)
+      (expect (sample-size '(a b c d)) :to-be 4)
+      (expect spy :to-have-been-called-with '(a b c d))
+      (expect spy :to-have-returned-with 4)
+      (expect (mock-return-value spy 99) :to-be spy)
+      (expect (sample-size '(a b)) :to-be 99)
+      (expect (mock-restore spy) :to-be spy)
+      (expect (sample-size '(a b)) :to-be 2)
+      (expect (mock-restore spy) :to-be spy)))
+
+  (it "restores all spies with Vitest-shaped aliases"
+    (let ((spy (vi.spyon 'sample-size)))
+      (expect (vi.mockreturnvalue spy 10) :to-be spy)
+      (expect (sample-size '(a b c)) :to-be 10)
+      (expect (vi.restoreallmocks) :to-be t)
+      (expect (sample-size '(a b c)) :to-be 3)
+      (expect spy :not :to-have-been-called)))
+
+  (it "rejects spy targets without function cells"
+    (expect (lambda () (spy-on "sample-size")) :to-throw)
+    (let ((missing (gensym "MISSING-FUNCTION-")))
+      (expect (lambda () (vi.spyon missing)) :to-throw)))
+
+  (it "clears all registered mock histories with vi.clearallmocks"
     (let ((left (vi.fn (lambda () :left)))
           (right (make-mock-function (lambda (value) value))))
       (expect (funcall left) :to-be :left)
       (expect (funcall right :right) :to-be :right)
       (expect left :to-have-been-called-times 1)
       (expect right :to-have-been-called-with :right)
-      (expect (vi.clearAllMocks) :to-be t)
+      (expect (vi.clearallmocks) :to-be t)
       (expect left :not :to-have-been-called)
       (expect right :not :to-have-been-called)
       (expect (funcall left) :to-be :left)
@@ -2874,14 +3331,23 @@
       (expect (funcall mock) :to-be nil)
       (expect mock :to-have-returned-with nil)))
 
-  (it "resets all registered mock histories and implementations with vi.resetAllMocks"
+  (it "resets one mock with the Vitest-shaped vi.mockreset alias"
+    (let ((mock (vi.fn (lambda () :custom))))
+      (expect (funcall mock) :to-be :custom)
+      (expect mock :to-have-been-called-times 1)
+      (expect (vi.mockreset mock) :to-be mock)
+      (expect mock :not :to-have-been-called)
+      (expect (funcall mock) :to-be nil)
+      (expect mock :to-have-returned-with nil)))
+
+  (it "resets all registered mock histories and implementations with vi.resetallmocks"
     (let ((left (vi.fn (lambda () :left)))
           (right (make-mock-function (lambda () :right))))
       (expect (funcall left) :to-be :left)
       (expect (funcall right) :to-be :right)
       (expect left :to-have-been-called-times 1)
       (expect right :to-have-been-called-times 1)
-      (expect (vi.resetAllMocks) :to-be t)
+      (expect (vi.resetallmocks) :to-be t)
       (expect left :not :to-have-been-called)
       (expect right :not :to-have-been-called)
       (expect (funcall left) :to-be nil)

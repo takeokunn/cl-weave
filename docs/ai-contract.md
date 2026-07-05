@@ -3,6 +3,41 @@
 `cl-weave` exposes structured test output as S-expressions and JSON so agents
 can parse results without scraping human text.
 
+## CLI Metadata Contract
+
+Agents should use `cl-weave metadata [SYSTEM]` as the discovery entrypoint
+before generating tests or interpreting project-specific matcher failures. The
+command loads the requested ASDF system and then emits JSON by default:
+
+```sh
+timeout 120s nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+```
+
+The JSON root is stable:
+
+```json
+{
+  "schemaVersion": 1,
+  "kind": "cl-weave-metadata",
+  "version": "0.1.0",
+  "commands": ["run", "list", "watch", "metadata", "version", "help"],
+  "reporters": ["spec", "sexp", "json", "jsonl", "tap", "github", "junit"],
+  "listReporters": ["spec", "sexp", "json", "jsonl"],
+  "capabilities": ["describe-it-dsl"],
+  "environment": ["CL_WEAVE_REPORTER"],
+  "vitestAliases": [{"alias": "it.each", "canonical": "it-each"}],
+  "packageExports": [{"name": "cl-weave", "exports": ["describe", "expect", "it"]}],
+  "matchers": [{"name": "to-be", "description": null}],
+  "mutationOperators": [{"name": "arithmetic-operator", "description": "..."}]
+}
+```
+
+`--reporter sexp` prints the same data as a Lisp plist. `--reporter spec` is
+accepted as the default CLI reporter and normalized to JSON for this command.
+`packageExports` lists public external symbols by package in lower-case CL reader
+spelling so agents can discover the supported DSL and runtime API without
+scraping `package.lisp`.
+
 ## DSL Alias Contract
 
 Vitest-shaped aliases are source-level macros only. Agents may normalize them
@@ -18,6 +53,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `describe.run-if` -> `describe-run-if`
 - `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
 - `describe.skip.each` -> `describe-skip-each`
+- `describe.todo.each` -> `describe-todo-each`
 - `it.each` -> `it-each`
 - `it.concurrent` -> `it-concurrent`
 - `it.concurrent.each` -> `it-concurrent-each`
@@ -32,6 +68,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `it.run-if` -> `it-run-if`
 - `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
 - `it.skip.each` -> `it-skip-each`
+- `it.todo.each` -> `it-todo-each`
 - `test` -> `it`
 - `test.each` -> `test-each`
 - `test.concurrent` -> `test-concurrent`
@@ -47,15 +84,17 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `test.run-if` -> `test-run-if`
 - `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
 - `test.skip.each` -> `test-skip-each`
+- `test.todo.each` -> `test-todo-each`
 - `expect.assertions` -> `expect-assertions`
-- `expect.hasAssertions` -> `expect-has-assertions`
+- `expect.hasassertions` -> `expect-has-assertions`
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
-- `beforeAll` / `afterAll` / `beforeEach` / `afterEach` -> canonical fixture macros
-
-Common Lisp uppercases unescaped symbols while reading source, so `beforeAll`
-and `beforeall` are the same exported symbol. The aliases do not change reporter
-schemas, runtime event shapes, or source location capture.
+- `expect.resolves` -> `expect-resolves`
+- `expect.rejects` -> `expect-rejects`
+Fixture hooks are exported as canonical Lisp forms: `before-all`, `after-all`,
+`before-each`, `around-each`, and `after-each`. Dotted Vitest-shaped aliases use
+Common Lisp's actual unescaped reader spelling: JavaScript camelCase names are
+lower-case in source, package exports, and metadata.
 
 ## S-Expression Reporter
 
@@ -102,6 +141,22 @@ payload. The matcher keyword is stored in `:matcher`; the optional second and
 third return values become `:actual` and `:expected`, which lets AI agents read
 domain-specific failure data without parsing human messages.
 
+Custom matcher definitions may attach a human-readable description as data.
+`defmatcher` and `expect.extend` read a leading string in the body.
+`extend-expect` accepts either a trailing string or `:description string`.
+Agents can inspect the registry without macroexpanding test files:
+
+```lisp
+(cl-weave:list-matchers)
+;; => ((:name :to-be :description nil)
+;;     (:name :to-have-status
+;;      :description "Checks that a response plist has the expected HTTP status."))
+
+(cl-weave:matcher-metadata :to-have-status)
+;; => (:name :to-have-status
+;;     :description "Checks that a response plist has the expected HTTP status.")
+```
+
 `extend-expect` accepts a list of matcher specs. Each spec starts with a symbol
 name and a two-argument function:
 
@@ -140,14 +195,26 @@ Mock function matchers report call and result histories in `:actual`:
 Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
 `vi.fn` is a Vitest-shaped alias for `make-mock-function`; both constructors
 produce the same mock function contract and result history shape.
-`mock-implementation` and `vi.mockImplementation` mutate the implementation of
+`mock-function-p`, `vi.ismockfunction`, and `vi.mocked` return true only for
+registered cl-weave mock functions and return false, not an error, for other
+values.
+`mock-implementation` and `vi.mockimplementation` mutate the implementation of
 an existing mock and return that mock. `mock-return-value` /
-`vi.mockReturnValue` and `mock-return-values` / `vi.mockReturnValues` are
+`vi.mockreturnvalue` and `mock-return-values` / `vi.mockreturnvalues` are
 constant return setters for single and Common Lisp multiple values.
-`clear-all-mocks` and `vi.clearAllMocks` clear every registered mock history
+`clear-mock` and `vi.mockclear` clear one registered mock history while
+preserving its implementation.
+`clear-all-mocks` and `vi.clearallmocks` clear every registered mock history
 while preserving mock implementations.
-`reset-mock`, `reset-all-mocks`, and `vi.resetAllMocks` clear histories and
-replace mock implementations with the default no-op function.
+`reset-mock` and `vi.mockreset` clear one mock history and replace its
+implementation with the default no-op function. `reset-all-mocks` and
+`vi.resetallmocks` apply that reset behavior to every registered mock.
+`spy-on` and `vi.spyon` replace a symbol function cell with a registered mock
+whose default implementation calls the original function. `mock-restore` /
+`vi.mockrestore` restore the function cell only when it is still bound to that
+spy, clear the spy history, and restore the spy implementation to the original
+function. `restore-all-mocks` and `vi.restoreallmocks` restore active spies
+without resetting regular `vi.fn` mocks.
 Return-value matchers compare their operands with the recorded Common Lisp
 multiple values list. Ordered mock matchers use one-based indices:
 `:to-have-been-nth-called-with` reports `(:index n :arguments (...))`, and
@@ -289,6 +356,19 @@ continue to parse S-expression or JSON reporter output for test results.
 Mutation reports are explicit API output, not part of `run-all` reporter
 payloads. Agents can call `run-mutations`, then serialize the resulting list
 with `report-mutations-sexp` or `report-mutations-json`.
+
+Mutation operators expose stable metadata separately from mutation results:
+
+```lisp
+(cl-weave:list-mutation-operators)
+;; => ((:name :arithmetic-operator
+;;      :description "Swaps arithmetic operator heads such as +, -, *, and /.")
+;;     ...)
+
+(cl-weave:mutation-operator-metadata :arithmetic-operator)
+;; => (:name :arithmetic-operator
+;;     :description "Swaps arithmetic operator heads such as +, -, *, and /.")
+```
 
 ```lisp
 (let ((results (cl-weave:run-mutations
@@ -676,11 +756,13 @@ contract through `CL_WEAVE_TEST_FILTER`.
 
 CLI flags use canonical kebab-case names and expose Vitest-shaped aliases for
 agent-generated commands: `--testNamePattern` maps to `--filter`,
-`--watchInterval` maps to `--watch-interval`, `--coverageOutput` maps to
-`--coverage-output`, `--passWithNoTests` maps to `--pass-with-no-tests`,
-`--failWithNoTests` maps to `--fail-with-no-tests`, `--snapshotDir` maps to
-`--snapshot-dir`, `--snapshotFile` maps to `--snapshot-file`, and both
-`--update` and `--updateSnapshots` map to `--update-snapshots`.
+`--outputFile` maps to `--output`, `--watchInterval` maps to
+`--watch-interval`, `--coverageOutput` maps to `--coverage-output`,
+`--testTimeout` and `--testTimeoutMs` map to `--test-timeout-ms`,
+`--passWithNoTests` maps to `--pass-with-no-tests`, `--failWithNoTests` maps
+to `--fail-with-no-tests`, `--snapshotDir` maps to `--snapshot-dir`,
+`--snapshotFile` maps to `--snapshot-file`, and both `--update` and
+`--updateSnapshots` map to `--update-snapshots`.
 
 Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
@@ -688,10 +770,11 @@ the run is considered successful by default because no selected test failed.
 Set `:pass-with-no-tests nil` or use the CLI/environment equivalent to make an
 empty selection fail while keeping reporter payloads empty.
 
-Suite-level `describe-skip` and `describe-todo` compose with the same selection
-rules. Selected descendant cases are emitted as ordinary `:skip` or `:todo`
-events with the suite reason in `:reason`; suite hooks and test bodies are not
-executed while the suite is suppressed.
+Suite-level `describe-skip`, `describe-skip-each`, `describe-todo`, and
+`describe-todo-each` compose with the same selection rules. Selected descendant
+cases are emitted as ordinary `:skip` or `:todo` events with the suite reason in
+`:reason`; suite hooks and test bodies are not executed while the suite is
+suppressed.
 
 Conditional registration macros keep the same reporter contract.
 `it-skip-if`, `test-skip-if`, and `describe-skip-if` emit ordinary `:skip`
@@ -752,6 +835,25 @@ before `around-each`; `after-each` hooks run after the continuation returns or
 unwinds. Around hooks compose from outer suites to inner suites. Use
 `unwind-protect` inside an around hook for deterministic cleanup. Reporter
 schemas are unchanged.
+
+## CPS Continuation Helper Contract
+
+`with-continuation-result` and `with-continuation-values` bind the continuation
+symbol supplied in the binding list while evaluating their form. The tested CPS
+API should call that local function, usually as `#'next`.
+
+```lisp
+(with-continuation-result (value next calledp)
+    (compute-cps input #'next)
+  (expect calledp :to-be-truthy)
+  (expect value :to-equal expected))
+```
+
+`with-continuation-result` binds the first value passed to the continuation.
+`with-continuation-values` binds the complete value list. The optional third
+binding receives whether the continuation was called. If the continuation is not
+called, cl-weave signals `assertion-failure` with matcher
+`:continuation-called`, actual `(:called nil)`, and expected `(:called t)`.
 
 ## Test Plan Contract
 
@@ -900,10 +1002,21 @@ Case options are passed as a keyword plist immediately after the case name:
 only to `:fail` and `:error` attempt events. The runner emits only the final
 event, so reporter schemas do not expose intermediate attempts.
 
+Command runners can set a global retry default with `--retry N` or
+`CL_WEAVE_RETRY=N`. Local `:retry` wins over the global default, including
+`:retry 0` for one-shot cases inside a globally retried suite.
+
 `:timeout-ms` is a per-attempt wall-clock budget. When an attempt times out, the
 final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `:assertion` is `nil`. Fixture hooks are still executed through the same
 `before-each` / `around-each` / `after-each` contract as ordinary test attempts.
+
+Command runners can set a global timeout default with `--test-timeout-ms N`,
+`--test-timeout N`, `--testTimeout N`, `--testTimeoutMs N`,
+`CL_WEAVE_TEST_TIMEOUT_MS=N`, or `CL_WEAVE_TEST_TIMEOUT=N`. Local
+`:timeout-ms` wins over the global default. List mode and structured test-plan
+reporters expose the effective retry and timeout values after applying these
+defaults.
 
 `:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
 parallel execution with adjacent concurrent cases. `describe-concurrent` /

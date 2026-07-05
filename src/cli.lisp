@@ -16,6 +16,8 @@
   watch
   (watch-interval 0.5)
   bail
+  (retry 0)
+  test-timeout-ms
   shard
   (order :defined :type keyword)
   seed
@@ -81,6 +83,13 @@
   (let ((integer (parse-complete-integer value name)))
     (unless (plusp integer)
       (error 'cli-error :message (format nil "~A must be positive: ~A" name value)))
+    integer))
+
+(defun parse-non-negative-integer (value name)
+  (let ((integer (parse-complete-integer value name)))
+    (when (minusp integer)
+      (error 'cli-error
+             :message (format nil "~A must be a non-negative integer: ~A" name value)))
     integer))
 
 (defun parse-positive-number (value name)
@@ -225,6 +234,24 @@
     (setf (cli-options-bail options) (parse-bail value))
     remaining))
 
+(define-cli-option "--retry" (options rest)
+  (let ((retry (require-option-argument "--retry" rest)))
+    (setf (cli-options-retry options)
+          (parse-non-negative-integer retry "--retry"))
+    (rest rest)))
+
+(define-cli-option "--test-timeout-ms" (options rest)
+  (let ((timeout-ms (require-option-argument "--test-timeout-ms" rest)))
+    (setf (cli-options-test-timeout-ms options)
+          (parse-positive-integer timeout-ms "--test-timeout-ms"))
+    (rest rest)))
+
+(define-cli-option "--test-timeout" (options rest)
+  (let ((timeout-ms (require-option-argument "--test-timeout" rest)))
+    (setf (cli-options-test-timeout-ms options)
+          (parse-positive-integer timeout-ms "--test-timeout"))
+    (rest rest)))
+
 (define-cli-option "--shard" (options rest)
   (let ((shard (require-option-argument "--shard" rest)))
     (setf (cli-options-shard options) (parse-shard shard))
@@ -273,7 +300,10 @@
   rest)
 
 (define-cli-option-alias "--testNamePattern" "--filter")
+(define-cli-option-alias "--outputFile" "--output")
 (define-cli-option-alias "--watchInterval" "--watch-interval")
+(define-cli-option-alias "--testTimeout" "--test-timeout-ms")
+(define-cli-option-alias "--testTimeoutMs" "--test-timeout-ms")
 (define-cli-option-alias "--coverageOutput" "--coverage-output")
 (define-cli-option-alias "--passWithNoTests" "--pass-with-no-tests")
 (define-cli-option-alias "--failWithNoTests" "--fail-with-no-tests")
@@ -281,6 +311,127 @@
 (define-cli-option-alias "--snapshotFile" "--snapshot-file")
 (define-cli-option-alias "--update" "--update-snapshots")
 (define-cli-option-alias "--updateSnapshots" "--update-snapshots")
+
+(defparameter *metadata-commands*
+  '("run" "list" "watch" "metadata" "version" "help"))
+
+(defparameter *metadata-reporters*
+  '("spec" "sexp" "json" "jsonl" "tap" "github" "junit"))
+
+(defparameter *metadata-list-reporters*
+  '("spec" "sexp" "json" "jsonl"))
+
+(defparameter *metadata-environment-variables*
+  '("CL_WEAVE_SYSTEM"
+    "CL_WEAVE_REPORTER"
+    "CL_WEAVE_TEST_FILTER"
+    "CL_WEAVE_OUTPUT_FILE"
+    "CL_WEAVE_LIST"
+    "CL_WEAVE_WATCH"
+    "CL_WEAVE_WATCH_INTERVAL"
+    "CL_WEAVE_BAIL"
+    "CL_WEAVE_RETRY"
+    "CL_WEAVE_TEST_TIMEOUT"
+    "CL_WEAVE_TEST_TIMEOUT_MS"
+    "CL_WEAVE_SHARD"
+    "CL_WEAVE_SEQUENCE"
+    "CL_WEAVE_SEQUENCE_SEED"
+    "CL_WEAVE_COVERAGE"
+    "CL_WEAVE_COVERAGE_FILE"
+    "CL_WEAVE_PASS_WITH_NO_TESTS"
+    "CL_WEAVE_SNAPSHOT_DIR"
+    "CL_WEAVE_SNAPSHOT_FILE"
+    "CL_WEAVE_UPDATE_SNAPSHOTS"))
+
+(defparameter *metadata-capabilities*
+  '("describe-it-dsl"
+    "vitest-dot-aliases"
+    "expect-matchers"
+    "smart-s-expression-assertions"
+    "fixtures"
+    "around-each-continuations"
+    "mock-functions"
+    "snapshots"
+    "property-tests"
+    "mutation-testing"
+    "subprocess-isolation"
+    "coverage"
+    "watch"
+    "sharding"
+    "sequence-ordering"
+    "retry"
+    "timeout"
+    "logic-test-plan"
+    "public-package-exports"
+    "cps-continuation-helpers"))
+
+(defparameter *metadata-vitest-aliases*
+  '(("describe.each" . "describe-each")
+    ("describe.skip" . "describe-skip")
+    ("describe.skip.each" . "describe-skip-each")
+    ("describe.todo" . "describe-todo")
+    ("describe.todo.each" . "describe-todo-each")
+    ("describe.only" . "describe-only")
+    ("describe.only.each" . "describe-only-each")
+    ("describe.concurrent" . "describe-concurrent")
+    ("describe.concurrent.each" . "describe-concurrent-each")
+    ("describe.sequential" . "describe-sequential")
+    ("describe.sequential.each" . "describe-sequential-each")
+    ("describe.run-if" . "describe-run-if")
+    ("describe.skip-if" . "describe-skip-if")
+    ("it.each" . "it-each")
+    ("it.skip" . "it-skip")
+    ("it.skip.each" . "it-skip-each")
+    ("it.todo" . "it-todo")
+    ("it.todo.each" . "it-todo-each")
+    ("it.concurrent" . "it-concurrent")
+    ("it.concurrent.each" . "it-concurrent-each")
+    ("it.sequential" . "it-sequential")
+    ("it.sequential.each" . "it-sequential-each")
+    ("it.fails" . "it-fails")
+    ("it.fails.each" . "it-fails-each")
+    ("it.only" . "it-only")
+    ("it.only.each" . "it-only-each")
+    ("it.run-if" . "it-run-if")
+    ("it.skip-if" . "it-skip-if")
+    ("it.property" . "it-property")
+    ("it.isolated" . "it-isolated")
+    ("test.each" . "test-each")
+    ("test.skip" . "test-skip")
+    ("test.skip.each" . "test-skip-each")
+    ("test.todo" . "test-todo")
+    ("test.todo.each" . "test-todo-each")
+    ("test.concurrent" . "test-concurrent")
+    ("test.concurrent.each" . "test-concurrent-each")
+    ("test.sequential" . "test-sequential")
+    ("test.sequential.each" . "test-sequential-each")
+    ("test.fails" . "test-fails")
+    ("test.fails.each" . "test-fails-each")
+    ("test.only" . "test-only")
+    ("test.only.each" . "test-only-each")
+    ("test.run-if" . "test-run-if")
+    ("test.skip-if" . "test-skip-if")
+    ("test.property" . "test-property")
+    ("test.isolated" . "test-isolated")
+    ("expect.not" . "expect-not")
+    ("expect.resolves" . "expect-resolves")
+    ("expect.rejects" . "expect-rejects")
+    ("expect.assertions" . "expect-assertions")
+    ("expect.hasassertions" . "expect-has-assertions")
+    ("expect.extend" . "expect-extend")
+    ("vi.fn" . "make-mock-function")
+    ("vi.spyon" . "spy-on")
+    ("vi.mocked" . "mock-function-p")
+    ("vi.ismockfunction" . "mock-function-p")
+    ("vi.mockimplementation" . "mock-implementation")
+    ("vi.mockreturnvalue" . "mock-return-value")
+    ("vi.mockreturnvalues" . "mock-return-values")
+    ("vi.mockclear" . "clear-mock")
+    ("vi.mockreset" . "reset-mock")
+    ("vi.mockrestore" . "mock-restore")
+    ("vi.clearallmocks" . "clear-all-mocks")
+    ("vi.resetallmocks" . "reset-all-mocks")
+    ("vi.restoreallmocks" . "restore-all-mocks")))
 
 (defun options-from-environment ()
   (let ((options (make-cli-options)))
@@ -299,6 +450,18 @@
     (when (environment-value "CL_WEAVE_BAIL")
       (setf (cli-options-bail options)
             (parse-bail (environment-value "CL_WEAVE_BAIL"))))
+    (when (environment-value "CL_WEAVE_RETRY")
+      (setf (cli-options-retry options)
+            (parse-non-negative-integer (environment-value "CL_WEAVE_RETRY")
+                                        "CL_WEAVE_RETRY")))
+    (when (environment-value "CL_WEAVE_TEST_TIMEOUT")
+      (setf (cli-options-test-timeout-ms options)
+            (parse-positive-integer (environment-value "CL_WEAVE_TEST_TIMEOUT")
+                                    "CL_WEAVE_TEST_TIMEOUT")))
+    (when (environment-value "CL_WEAVE_TEST_TIMEOUT_MS")
+      (setf (cli-options-test-timeout-ms options)
+            (parse-positive-integer (environment-value "CL_WEAVE_TEST_TIMEOUT_MS")
+                                    "CL_WEAVE_TEST_TIMEOUT_MS")))
     (when (environment-value "CL_WEAVE_SHARD")
       (setf (cli-options-shard options)
             (parse-shard (environment-value "CL_WEAVE_SHARD"))))
@@ -339,7 +502,7 @@
     options))
 
 (defun command-token-p (token)
-  (member token '("run" "list" "watch" "version" "help") :test #'string=))
+  (member token *metadata-commands* :test #'string=))
 
 (defun apply-command-token (options token)
   (cond
@@ -350,6 +513,7 @@
     ((string= token "watch")
      (setf (cli-options-command options) :watch
            (cli-options-watch options) t))
+    ((string= token "metadata") (setf (cli-options-command options) :metadata))
     ((string= token "version") (setf (cli-options-version options) t))
     ((string= token "help") (setf (cli-options-help options) t))))
 
@@ -362,7 +526,7 @@
       (funcall handler options (if inline-p (list* inline-value rest) rest)))))
 
 (defun command-allows-positional-system-p (command)
-  (member command '(:run :list :watch)))
+  (member command '(:run :list :watch :metadata)))
 
 (defun normalize-cli-arguments (argv)
   (if (and argv (string= (first argv) "--"))
@@ -404,6 +568,7 @@
             "  cl-weave run [SYSTEM] [options]"
             "  cl-weave list [SYSTEM] [options]"
             "  cl-weave watch [SYSTEM] [options]"
+            "  cl-weave metadata [SYSTEM] [options]"
             "  cl-weave version"
             ""
             "Options:"
@@ -412,12 +577,16 @@
             "  --reporter REPORTER       spec, sexp, json, jsonl, tap, github, or junit"
             "  --filter, --testNamePattern TEXT"
             "                            run tests whose Vitest-style path contains TEXT"
-            "  --output FILE             write reporter output to FILE"
+            "  --output, --outputFile FILE"
+            "                            write reporter output to FILE"
             "  --list                    discover tests without executing bodies"
             "  --watch                   rerun an ASDF system when source files change"
             "  --watch-interval, --watchInterval SECONDS"
             "                            polling interval for watch mode"
             "  --bail[=N|true|false]     stop after the first or N failures"
+            "  --retry INTEGER          retry failing tests INTEGER extra times"
+            "  --test-timeout-ms, --test-timeout, --testTimeout MS"
+            "                            default per-attempt timeout in milliseconds"
             "  --shard INDEX/COUNT       select a deterministic CI shard"
             "  --sequence ORDER          defined, random, or shuffle"
             "  --seed INTEGER            deterministic random sequence seed"
@@ -443,12 +612,167 @@
           (and system (asdf:component-version system))))
       "unknown"))
 
+(defun package-export-metadata (package-designator)
+  (let ((package (or (find-package package-designator)
+                     (error 'cli-error
+                            :message (format nil "Unknown metadata package: ~A"
+                                             package-designator)))))
+    (list :name (string-downcase (package-name package))
+          :exports
+          (sort (loop for symbol being the external-symbols of package
+                      collect (string-downcase (symbol-name symbol)))
+                #'string<))))
+
+(defun framework-metadata ()
+  (list
+   :kind "cl-weave-metadata"
+   :schema-version 1
+   :version (cli-version)
+   :commands *metadata-commands*
+   :reporters *metadata-reporters*
+   :list-reporters *metadata-list-reporters*
+   :capabilities *metadata-capabilities*
+   :environment *metadata-environment-variables*
+   :vitest-aliases
+   (loop for (alias . canonical) in *metadata-vitest-aliases*
+         collect (list :alias alias :canonical canonical))
+   :package-exports (list (package-export-metadata :cl-weave)
+                          (package-export-metadata :cl-weave/cli))
+   :matchers (cl-weave:list-matchers)
+   :mutation-operators (cl-weave:list-mutation-operators)))
+
+(defun metadata-reporter (options)
+  (let ((reporter (cli-options-reporter options)))
+    (cond
+      ((eq reporter :spec) :json)
+      ((member reporter '(:json :sexp)) reporter)
+      (t (error 'cli-error
+                :message "cl-weave: metadata mode supports json and sexp reporters.")))))
+
+(defun metadata-symbol-name (symbol)
+  (string-downcase (symbol-name symbol)))
+
+(defun write-json-key (key stream)
+  (cl-weave::write-json-string key stream)
+  (write-char #\: stream))
+
+(defun write-json-string-list (values stream)
+  (write-char #\[ stream)
+  (loop for value in values
+        for firstp = t then nil
+        unless firstp do (write-char #\, stream)
+        do (cl-weave::write-json-string value stream))
+  (write-char #\] stream))
+
+(defun write-json-nullable-string (value stream)
+  (if value
+      (cl-weave::write-json-string value stream)
+      (write-string "null" stream)))
+
+(defun write-json-aliases (aliases stream)
+  (write-char #\[ stream)
+  (loop for entry in aliases
+        for firstp = t then nil
+        unless firstp do (write-char #\, stream)
+        do (progn
+             (write-char #\{ stream)
+             (write-json-key "alias" stream)
+             (cl-weave::write-json-string (getf entry :alias) stream)
+             (write-char #\, stream)
+             (write-json-key "canonical" stream)
+             (cl-weave::write-json-string (getf entry :canonical) stream)
+             (write-char #\} stream)))
+  (write-char #\] stream))
+
+(defun write-json-named-metadata (entries stream)
+  (write-char #\[ stream)
+  (loop for entry in entries
+        for firstp = t then nil
+        unless firstp do (write-char #\, stream)
+        do (progn
+             (write-char #\{ stream)
+             (write-json-key "name" stream)
+             (cl-weave::write-json-string
+              (metadata-symbol-name (getf entry :name))
+              stream)
+             (write-char #\, stream)
+             (write-json-key "description" stream)
+             (write-json-nullable-string (getf entry :description) stream)
+             (write-char #\} stream)))
+  (write-char #\] stream))
+
+(defun write-json-package-exports (entries stream)
+  (write-char #\[ stream)
+  (loop for entry in entries
+        for firstp = t then nil
+        unless firstp do (write-char #\, stream)
+        do (progn
+             (write-char #\{ stream)
+             (write-json-key "name" stream)
+             (cl-weave::write-json-string (getf entry :name) stream)
+             (write-char #\, stream)
+             (write-json-key "exports" stream)
+             (write-json-string-list (getf entry :exports) stream)
+             (write-char #\} stream)))
+  (write-char #\] stream))
+
+(defun write-framework-metadata-json (metadata stream)
+  (write-char #\{ stream)
+  (write-json-key "schemaVersion" stream)
+  (write (getf metadata :schema-version) :stream stream)
+  (write-char #\, stream)
+  (write-json-key "kind" stream)
+  (cl-weave::write-json-string (getf metadata :kind) stream)
+  (write-char #\, stream)
+  (write-json-key "version" stream)
+  (cl-weave::write-json-string (getf metadata :version) stream)
+  (write-char #\, stream)
+  (write-json-key "commands" stream)
+  (write-json-string-list (getf metadata :commands) stream)
+  (write-char #\, stream)
+  (write-json-key "reporters" stream)
+  (write-json-string-list (getf metadata :reporters) stream)
+  (write-char #\, stream)
+  (write-json-key "listReporters" stream)
+  (write-json-string-list (getf metadata :list-reporters) stream)
+  (write-char #\, stream)
+  (write-json-key "capabilities" stream)
+  (write-json-string-list (getf metadata :capabilities) stream)
+  (write-char #\, stream)
+  (write-json-key "environment" stream)
+  (write-json-string-list (getf metadata :environment) stream)
+  (write-char #\, stream)
+  (write-json-key "vitestAliases" stream)
+  (write-json-aliases (getf metadata :vitest-aliases) stream)
+  (write-char #\, stream)
+  (write-json-key "packageExports" stream)
+  (write-json-package-exports (getf metadata :package-exports) stream)
+  (write-char #\, stream)
+  (write-json-key "matchers" stream)
+  (write-json-named-metadata (getf metadata :matchers) stream)
+  (write-char #\, stream)
+  (write-json-key "mutationOperators" stream)
+  (write-json-named-metadata (getf metadata :mutation-operators) stream)
+  (write-char #\} stream)
+  (terpri stream))
+
+(defun report-framework-metadata (options stream)
+  (let ((metadata (framework-metadata)))
+    (case (metadata-reporter options)
+      (:json (write-framework-metadata-json metadata stream))
+      (:sexp (write metadata :stream stream :pretty t)
+             (terpri stream)))))
+
 (defun ensure-valid-reporter-for-command (options)
-  (when (and (cli-options-list options)
-             (not (member (cli-options-reporter options)
-                          cl-weave::*list-reporters*)))
-    (error 'cli-error
-           :message "cl-weave: list mode supports spec, sexp, json, and jsonl reporters.")))
+  (cond
+    ((eq (cli-options-command options) :metadata)
+     (metadata-reporter options)
+     t)
+    ((and (cli-options-list options)
+          (not (member (cli-options-reporter options)
+                       cl-weave::*list-reporters*)))
+     (error 'cli-error
+            :message "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))))
 
 (defun load-requested-inputs (options)
   (dolist (system (cli-options-systems options))
@@ -480,6 +804,12 @@
           (or (cli-options-snapshot-file options)
               cl-weave:*snapshot-file-name*)))
     (cond
+      ((eq (cli-options-command options) :metadata)
+       (call-with-output-stream
+        options
+        (lambda (stream)
+          (report-framework-metadata options stream)))
+       t)
       ((cli-options-list options)
        (call-with-output-stream
         options
@@ -490,6 +820,8 @@
            :shard (cli-options-shard options)
            :order (cli-options-order options)
            :seed (cli-options-seed options)
+           :retry (cli-options-retry options)
+           :timeout-ms (cli-options-test-timeout-ms options)
            :stream stream)))
        t)
       ((cli-options-watch options)
@@ -500,6 +832,8 @@
                               :order (cli-options-order options)
                               :seed (cli-options-seed options)
                               :bail (cli-options-bail options)
+                              :retry (cli-options-retry options)
+                              :timeout-ms (cli-options-test-timeout-ms options)
                               :include-dependencies t
                               :interval (cli-options-watch-interval options)))
       (t
@@ -513,6 +847,8 @@
            :order (cli-options-order options)
            :seed (cli-options-seed options)
            :bail (cli-options-bail options)
+           :retry (cli-options-retry options)
+           :timeout-ms (cli-options-test-timeout-ms options)
            :coverage (cli-options-coverage options)
            :coverage-output (cli-options-coverage-output options)
            :pass-with-no-tests (cli-options-pass-with-no-tests options)

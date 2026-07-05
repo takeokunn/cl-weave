@@ -6,14 +6,10 @@
    #:*test-context*
    #:around-each
    #:after-all
-   #:afterall
    #:after-each
-   #:aftereach
    #:assertion-failure
    #:before-all
-   #:beforeall
    #:before-each
-   #:beforeeach
    #:clear-all-mocks
    #:clear-mock
    #:clear-tests
@@ -33,6 +29,7 @@
    #:describe.skip.each
    #:describe.skip-if
    #:describe.todo
+   #:describe.todo.each
    #:describe-concurrent
    #:describe-concurrent-each
    #:describe-each
@@ -45,18 +42,21 @@
    #:describe-skip-each
    #:describe-skip-if
    #:describe-todo
+   #:describe-todo-each
    #:extend-expect
    #:expect
    #:expect.assertions
    #:expect-assertions
    #:expect.extend
    #:expect-extend
-   #:expect.hasAssertions
+   #:expect.hasassertions
    #:expect-has-assertions
    #:expect.not
    #:expect-not
    #:expect.rejects
+   #:expect-rejects
    #:expect.resolves
+   #:expect-resolves
    #:gen-boolean
    #:gen-form
    #:gen-integer
@@ -102,31 +102,48 @@
    #:it.skip-if
    #:it-skip-if
    #:it.todo
+   #:it.todo.each
    #:it-todo
+   #:it-todo-each
    #:isolated-result-exit-code
    #:isolated-result-status
    #:isolated-result-stderr
    #:isolated-result-timed-out-p
+   #:list-mutation-operators
    #:logic-query
    #:logic-variable-p
    #:logic-where
    #:make-mock-function
+   #:mock-function-p
    #:mock-implementation
    #:mock-return-value
    #:mock-return-values
    #:reset-all-mocks
    #:reset-mock
-   #:vi.clearAllMocks
+   #:restore-all-mocks
+   #:mock-restore
+   #:spy-on
+   #:with-continuation-result
+   #:with-continuation-values
+   #:vi.clearallmocks
    #:vi.fn
-   #:vi.mockImplementation
-   #:vi.mockReturnValue
-   #:vi.mockReturnValues
-   #:vi.resetAllMocks
+   #:vi.ismockfunction
+   #:vi.mocked
+   #:vi.mockclear
+   #:vi.mockimplementation
+   #:vi.mockreset
+   #:vi.mockrestore
+   #:vi.mockreturnvalue
+   #:vi.mockreturnvalues
+   #:vi.resetallmocks
+   #:vi.restoreallmocks
+   #:vi.spyon
    #:mock-calls
    #:mock-results
    #:mutation-form
    #:mutation-id
    #:mutation-operator
+   #:mutation-operator-metadata
    #:mutation-original
    #:mutation-path
    #:mutation-replacement
@@ -173,5 +190,7 @@
    #:test.skip-if
    #:test-skip-if
    #:test.todo
+   #:test.todo.each
    #:test-todo
+   #:test-todo-each
    #:with-mocked-functions))

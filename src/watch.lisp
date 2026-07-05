@@ -84,7 +84,9 @@
                          shard
                          order
                          seed
-                         bail)
+                         bail
+                         retry
+                         timeout-ms)
   "Load SYSTEM through ASDF, then run the currently registered cl-weave tests."
   (asdf:load-system system :force t)
   (run-all
@@ -94,7 +96,9 @@
    :shard shard
    :order order
    :seed seed
-   :bail bail))
+   :bail bail
+   :retry retry
+   :timeout-ms timeout-ms))
 
 (defun watch-system (system &key (reporter :spec)
                             (stream *standard-output*)
@@ -104,6 +108,8 @@
                             order
                             seed
                             bail
+                            retry
+                            timeout-ms
                             include-dependencies
                             (interval 0.5)
                             once)
@@ -127,7 +133,9 @@
                                :shard shard
                                :order order
                                :seed seed
-                               :bail bail)
+                               :bail bail
+                               :retry retry
+                               :timeout-ms timeout-ms)
              (when once
                (return nil)))
            (setf state new-state)

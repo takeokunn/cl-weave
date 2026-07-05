@@ -70,41 +70,43 @@
                           (destructuring-bind ,bindings ',case
                             ,@forms))))))
 
-(defmacro describe.each (cases name bindings &body body)
-  `(describe-each ,cases ,name ,bindings ,@body))
+(defmacro describe-todo-each (cases name bindings &body body)
+  (let ((reason (if (and body (stringp (first body))) (first body) "todo"))
+        (forms (if (and body (stringp (first body))) (rest body) body)))
+    `(progn
+       ,@(loop for case in cases
+               collect `(describe-todo ,(apply #'format nil name case)
+                          ,reason
+                          (destructuring-bind ,bindings ',case
+                            ,@forms))))))
 
-(defmacro describe.only.each (cases name bindings &body body)
-  `(describe-only-each ,cases ,name ,bindings ,@body))
+(defmacro define-suite-alias (alias target)
+  `(defmacro ,alias (name &body body)
+     (list* ',target name body)))
 
-(defmacro describe.concurrent.each (cases name bindings &body body)
-  `(describe-concurrent-each ,cases ,name ,bindings ,@body))
+(defmacro define-suite-each-alias (alias target)
+  `(defmacro ,alias (cases name bindings &body body)
+     (list* ',target cases name bindings body)))
 
-(defmacro describe.sequential.each (cases name bindings &body body)
-  `(describe-sequential-each ,cases ,name ,bindings ,@body))
+(defmacro define-conditional-suite-alias (alias target)
+  `(defmacro ,alias (condition name &body body)
+     (list* ',target condition name body)))
 
-(defmacro describe.skip.each (cases name bindings &body body)
-  `(describe-skip-each ,cases ,name ,bindings ,@body))
+(define-suite-each-alias describe.each describe-each)
+(define-suite-each-alias describe.only.each describe-only-each)
+(define-suite-each-alias describe.concurrent.each describe-concurrent-each)
+(define-suite-each-alias describe.sequential.each describe-sequential-each)
+(define-suite-each-alias describe.skip.each describe-skip-each)
+(define-suite-each-alias describe.todo.each describe-todo-each)
 
-(defmacro describe.only (name &body body)
-  `(describe-only ,name ,@body))
+(define-suite-alias describe.only describe-only)
+(define-suite-alias describe.concurrent describe-concurrent)
+(define-suite-alias describe.sequential describe-sequential)
+(define-suite-alias describe.skip describe-skip)
+(define-suite-alias describe.todo describe-todo)
 
-(defmacro describe.concurrent (name &body body)
-  `(describe-concurrent ,name ,@body))
-
-(defmacro describe.sequential (name &body body)
-  `(describe-sequential ,name ,@body))
-
-(defmacro describe.skip (name &body body)
-  `(describe-skip ,name ,@body))
-
-(defmacro describe.todo (name &body body)
-  `(describe-todo ,name ,@body))
-
-(defmacro describe.skip-if (condition name &body body)
-  `(describe-skip-if ,condition ,name ,@body))
-
-(defmacro describe.run-if (condition name &body body)
-  `(describe-run-if ,condition ,name ,@body))
+(define-conditional-suite-alias describe.skip-if describe-skip-if)
+(define-conditional-suite-alias describe.run-if describe-run-if)
 
 (defun option-plist-form-p (form)
   (and (consp form)
@@ -264,6 +266,13 @@
        ,@(loop for case in cases
                collect `(it-skip ,(apply #'format nil name case) ,reason)))))
 
+(defmacro it-todo-each (cases name bindings &body body)
+  (declare (ignore bindings))
+  (let ((reason (if (and body (stringp (first body))) (first body) "todo")))
+    `(progn
+       ,@(loop for case in cases
+               collect `(it-todo ,(apply #'format nil name case) ,reason)))))
+
 (defmacro it-property (name bindings &body body)
   (let ((names (mapcar #'first bindings))
         (generators (mapcar #'second bindings)))
@@ -274,53 +283,45 @@
         ',names
         '(it-property ,name ,bindings ,@body)))))
 
-(defmacro it.concurrent (name &body body)
-  `(it-concurrent ,name ,@body))
+(defmacro define-test-like-alias (alias target)
+  `(defmacro ,alias (name &body body)
+     (list* ',target name body)))
 
-(defmacro it.sequential (name &body body)
-  `(it-sequential ,name ,@body))
+(defmacro define-test-like-each-alias (alias target)
+  `(defmacro ,alias (cases name bindings &body body)
+     (list* ',target cases name bindings body)))
 
-(defmacro it.each (cases name bindings &body body)
-  `(it-each ,cases ,name ,bindings ,@body))
+(defmacro define-test-property-alias (alias target)
+  `(defmacro ,alias (name bindings &body body)
+     (list* ',target name bindings body)))
 
-(defmacro it.only.each (cases name bindings &body body)
-  `(it-only-each ,cases ,name ,bindings ,@body))
+(defmacro define-test-control-alias (alias target default-reason)
+  `(defmacro ,alias (name &optional (reason ,default-reason))
+     (list ',target name reason)))
 
-(defmacro it.concurrent.each (cases name bindings &body body)
-  `(it-concurrent-each ,cases ,name ,bindings ,@body))
+(defmacro define-conditional-test-alias (alias target)
+  `(defmacro ,alias (condition name &body body)
+     (list* ',target condition name body)))
 
-(defmacro it.sequential.each (cases name bindings &body body)
-  `(it-sequential-each ,cases ,name ,bindings ,@body))
+(define-test-like-alias it.concurrent it-concurrent)
+(define-test-like-alias it.sequential it-sequential)
+(define-test-like-alias it.fails it-fails)
+(define-test-like-alias it.isolated it-isolated)
+(define-test-like-alias it.only it-only)
 
-(defmacro it.fails.each (cases name bindings &body body)
-  `(it-fails-each ,cases ,name ,bindings ,@body))
+(define-test-like-each-alias it.each it-each)
+(define-test-like-each-alias it.only.each it-only-each)
+(define-test-like-each-alias it.concurrent.each it-concurrent-each)
+(define-test-like-each-alias it.sequential.each it-sequential-each)
+(define-test-like-each-alias it.fails.each it-fails-each)
+(define-test-like-each-alias it.skip.each it-skip-each)
+(define-test-like-each-alias it.todo.each it-todo-each)
 
-(defmacro it.skip.each (cases name bindings &body body)
-  `(it-skip-each ,cases ,name ,bindings ,@body))
-
-(defmacro it.fails (name &body body)
-  `(it-fails ,name ,@body))
-
-(defmacro it.isolated (name &body body)
-  `(it-isolated ,name ,@body))
-
-(defmacro it.property (name bindings &body body)
-  `(it-property ,name ,bindings ,@body))
-
-(defmacro it.only (name &body body)
-  `(it-only ,name ,@body))
-
-(defmacro it.run-if (condition name &body body)
-  `(it-run-if ,condition ,name ,@body))
-
-(defmacro it.skip (name &optional (reason "skipped"))
-  `(it-skip ,name ,reason))
-
-(defmacro it.skip-if (condition name &body body)
-  `(it-skip-if ,condition ,name ,@body))
-
-(defmacro it.todo (name &optional (reason "todo"))
-  `(it-todo ,name ,reason))
+(define-test-property-alias it.property it-property)
+(define-conditional-test-alias it.run-if it-run-if)
+(define-conditional-test-alias it.skip-if it-skip-if)
+(define-test-control-alias it.skip it-skip "skipped")
+(define-test-control-alias it.todo it-todo "todo")
 
 (defmacro test (name &body body)
   `(it ,name ,@body))
@@ -349,6 +350,9 @@
 (defmacro test-skip-each (cases name bindings &body body)
   `(it-skip-each ,cases ,name ,bindings ,@body))
 
+(defmacro test-todo-each (cases name bindings &body body)
+  `(it-todo-each ,cases ,name ,bindings ,@body))
+
 (defmacro test-only (name &body body)
   `(it-only ,name ,@body))
 
@@ -373,53 +377,25 @@
 (defmacro test-run-if (condition name &body body)
   `(it-run-if ,condition ,name ,@body))
 
-(defmacro test.concurrent (name &body body)
-  `(test-concurrent ,name ,@body))
+(define-test-like-alias test.concurrent test-concurrent)
+(define-test-like-alias test.sequential test-sequential)
+(define-test-like-alias test.fails test-fails)
+(define-test-like-alias test.isolated test-isolated)
+(define-test-like-alias test.only test-only)
 
-(defmacro test.sequential (name &body body)
-  `(test-sequential ,name ,@body))
+(define-test-like-each-alias test.each test-each)
+(define-test-like-each-alias test.only.each test-only-each)
+(define-test-like-each-alias test.concurrent.each test-concurrent-each)
+(define-test-like-each-alias test.sequential.each test-sequential-each)
+(define-test-like-each-alias test.fails.each test-fails-each)
+(define-test-like-each-alias test.skip.each test-skip-each)
+(define-test-like-each-alias test.todo.each test-todo-each)
 
-(defmacro test.each (cases name bindings &body body)
-  `(test-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.only.each (cases name bindings &body body)
-  `(test-only-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.concurrent.each (cases name bindings &body body)
-  `(test-concurrent-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.sequential.each (cases name bindings &body body)
-  `(test-sequential-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.fails.each (cases name bindings &body body)
-  `(test-fails-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.skip.each (cases name bindings &body body)
-  `(test-skip-each ,cases ,name ,bindings ,@body))
-
-(defmacro test.fails (name &body body)
-  `(test-fails ,name ,@body))
-
-(defmacro test.isolated (name &body body)
-  `(test-isolated ,name ,@body))
-
-(defmacro test.only (name &body body)
-  `(test-only ,name ,@body))
-
-(defmacro test.property (name bindings &body body)
-  `(test-property ,name ,bindings ,@body))
-
-(defmacro test.run-if (condition name &body body)
-  `(test-run-if ,condition ,name ,@body))
-
-(defmacro test.skip (name &optional (reason "skipped"))
-  `(test-skip ,name ,reason))
-
-(defmacro test.skip-if (condition name &body body)
-  `(test-skip-if ,condition ,name ,@body))
-
-(defmacro test.todo (name &optional (reason "todo"))
-  `(test-todo ,name ,reason))
+(define-test-property-alias test.property test-property)
+(define-conditional-test-alias test.run-if test-run-if)
+(define-conditional-test-alias test.skip-if test-skip-if)
+(define-test-control-alias test.skip test-skip "skipped")
+(define-test-control-alias test.todo test-todo "todo")
 
 (defmacro before-all (&body body)
   `(register-before-all (lambda () ,@body)))
@@ -436,17 +412,52 @@
 (defmacro after-each (&body body)
   `(register-after-each (lambda () ,@body)))
 
-(defmacro beforeall (&body body)
-  `(before-all ,@body))
+(defun signal-continuation-not-called (form)
+  (signal-assertion-failure
+   (make-assertion-detail
+    :form form
+    :matcher :continuation-called
+    :actual '(:called nil)
+    :expected '(:called t)
+    :negated nil
+    :pass nil)))
 
-(defmacro afterall (&body body)
-  `(after-all ,@body))
+(defun ensure-continuation-called (calledp form)
+  (unless calledp
+    (signal-continuation-not-called form))
+  t)
 
-(defmacro beforeeach (&body body)
-  `(before-each ,@body))
+(defun require-continuation-binding-symbol (name form)
+  (unless (and name (symbolp name))
+    (error "cl-weave: continuation binding in ~S must be a symbol, got ~S."
+           form
+           name))
+  name)
 
-(defmacro aftereach (&body body)
-  `(after-each ,@body))
+(defmacro with-continuation-values ((values continuation &optional calledp) form &body body)
+  (let* ((source `(with-continuation-values
+                   (,values ,continuation ,@(when calledp (list calledp)))
+                   ,form
+                   ,@body))
+         (continuation-name (require-continuation-binding-symbol continuation source))
+         (captured-values (gensym "CONTINUATION-VALUES-"))
+         (called (gensym "CONTINUATION-CALLED-")))
+    `(let ((,captured-values nil)
+           (,called nil))
+       (flet ((,continuation-name (&rest next-values)
+                (setf ,called t
+                      ,captured-values next-values)))
+         ,form)
+       (ensure-continuation-called ,called ',form)
+       (let ((,values ,captured-values)
+             ,@(when calledp `((,calledp ,called))))
+         ,@body))))
+
+(defmacro with-continuation-result ((value continuation &optional calledp) form &body body)
+  (let ((values (gensym "CONTINUATION-VALUES-")))
+    `(with-continuation-values (,values ,continuation ,@(when calledp `(,calledp))) ,form
+       (let ((,value (first ,values)))
+         ,@body))))
 
 (defparameter *smart-assertion-operators*
   '(= /= < <= > >= eql equal equalp string= string-equal))
@@ -596,23 +607,29 @@
 (defmacro expect-has-assertions ()
   `(set-has-assertions-required '(expect-has-assertions)))
 
-(defmacro expect.hasAssertions ()
+(defmacro expect.hasassertions ()
   `(expect-has-assertions))
 
 (defmacro expect.not (actual &body expectation)
   `(expect-not ,actual ,@expectation))
 
-(defmacro expect.resolves (thunk &body expectation)
+(defmacro expect-resolves (thunk &body expectation)
   `(expect (call-resolving-expectation-thunk
             ,thunk
-            '(expect.resolves ,thunk ,@expectation))
+            '(expect-resolves ,thunk ,@expectation))
+           ,@expectation))
+
+(defmacro expect.resolves (thunk &body expectation)
+  `(expect-resolves ,thunk ,@expectation))
+
+(defmacro expect-rejects (thunk &body expectation)
+  `(expect (call-rejecting-expectation-thunk
+            ,thunk
+            '(expect-rejects ,thunk ,@expectation))
            ,@expectation))
 
 (defmacro expect.rejects (thunk &body expectation)
-  `(expect (call-rejecting-expectation-thunk
-            ,thunk
-            '(expect.rejects ,thunk ,@expectation))
-           ,@expectation))
+  `(expect-rejects ,thunk ,@expectation))
 
 (defmacro with-snapshot-updates (&body body)
   `(let ((*update-snapshots* t))

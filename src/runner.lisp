@@ -3,6 +3,8 @@
 (defvar *test-name-filter* nil)
 (defvar *test-sequence-order* :defined)
 (defvar *test-sequence-seed* 0)
+(defvar *default-retry* 0)
+(defvar *default-timeout-ms* nil)
 (defvar *retry-test-restart-marker* (list :retry-test-restart))
 (defvar *runner-default-condition-handler-disabled* nil)
 
@@ -102,15 +104,33 @@
    :location (test-case-location test)
    :elapsed-internal-time (- (get-internal-real-time) start)))
 
+(defun normalize-retry-count (retry)
+  (cond
+    ((null retry) 0)
+    ((and (integerp retry) (not (minusp retry))) retry)
+    (t (error "Retry must be NIL or a non-negative integer: ~S" retry))))
+
+(defun normalize-timeout-ms (timeout-ms)
+  (cond
+    ((null timeout-ms) nil)
+    ((and (integerp timeout-ms) (plusp timeout-ms)) timeout-ms)
+    (t (error "Timeout must be NIL or a positive integer in milliseconds: ~S"
+              timeout-ms))))
+
 (defun retry-count (test)
-  (let ((retry (test-case-retry test)))
-    (if (and (integerp retry) (plusp retry))
-        retry
-        0)))
+  (normalize-retry-count
+   (if (null (test-case-retry test))
+       *default-retry*
+       (test-case-retry test))))
+
+(defun effective-timeout-ms (test)
+  (normalize-timeout-ms
+   (or (test-case-timeout-ms test)
+       *default-timeout-ms*)))
 
 (defun timeout-seconds (test)
-  (let ((timeout-ms (test-case-timeout-ms test)))
-    (when (and (numberp timeout-ms) (plusp timeout-ms))
+  (let ((timeout-ms (effective-timeout-ms test)))
+    (when timeout-ms
       (/ timeout-ms 1000.0))))
 
 (defun call-test-case-with-timeout/k (suite test timeout continue)
@@ -182,7 +202,7 @@
                        (offer-condition-to-outer-handlers condition)
                        (let ((timeout (make-condition
                                        'test-timeout
-                                       :timeout-ms (test-case-timeout-ms test))))
+                                       :timeout-ms (effective-timeout-ms test))))
                          (return-from attempt
                            (setf event
                                  (make-event :fail
@@ -437,7 +457,7 @@
    :reason reason
    :focused (and focus-enabled (or ancestor-focused (test-case-focus test)))
    :retry (retry-count test)
-   :timeout-ms (test-case-timeout-ms test)
+   :timeout-ms (effective-timeout-ms test)
    :concurrent (effective-concurrent-test-case-p test execution-mode)
    :location (test-case-location test)))
 
@@ -469,6 +489,8 @@
         (captured-test-name-filter *test-name-filter*)
         (captured-test-sequence-order *test-sequence-order*)
         (captured-test-sequence-seed *test-sequence-seed*)
+        (captured-default-retry *default-retry*)
+        (captured-default-timeout-ms *default-timeout-ms*)
         (captured-isolated-timeout-seconds *isolated-timeout-seconds*)
         (captured-snapshot-directory *snapshot-directory*)
         (captured-snapshot-file-name *snapshot-file-name*)
@@ -483,6 +505,8 @@
                      (*test-name-filter* captured-test-name-filter)
                      (*test-sequence-order* captured-test-sequence-order)
                      (*test-sequence-seed* captured-test-sequence-seed)
+                     (*default-retry* captured-default-retry)
+                     (*default-timeout-ms* captured-default-timeout-ms)
                      (*isolated-timeout-seconds* captured-isolated-timeout-seconds)
                      (*snapshot-directory* captured-snapshot-directory)
                      (*snapshot-file-name* captured-snapshot-file-name)
@@ -686,19 +710,23 @@
             suppressed-reason
             execution-mode))))))
 
-(defun collect-events (suite &key name-filter bail shard order seed)
+(defun collect-events (suite &key name-filter bail shard order seed retry timeout-ms)
   (let* ((focus-enabled (focused-suite-p suite))
          (normalized-filter (normalized-test-filter name-filter))
          (normalized-shard (normalize-shard shard))
          (normalized-order (normalize-sequence-order order))
          (normalized-seed (normalize-sequence-seed seed))
+         (normalized-retry (normalize-retry-count retry))
+         (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
          (shard-paths (collect-shard-paths
                        suite
                        focus-enabled
                        normalized-filter
                        normalized-shard)))
     (let ((*test-sequence-order* normalized-order)
-          (*test-sequence-seed* normalized-seed))
+          (*test-sequence-seed* normalized-seed)
+          (*default-retry* normalized-retry)
+          (*default-timeout-ms* normalized-timeout-ms))
       (collect-suite-events/k
        suite
        (make-execution-control :bail-limit (normalize-bail bail))
@@ -829,19 +857,23 @@
             suppressed-reason
             execution-mode))))))
 
-(defun collect-test-plan (suite &key name-filter shard order seed)
+(defun collect-test-plan (suite &key name-filter shard order seed retry timeout-ms)
   (let* ((focus-enabled (focused-suite-p suite))
          (normalized-filter (normalized-test-filter name-filter))
          (normalized-shard (normalize-shard shard))
          (normalized-order (normalize-sequence-order order))
          (normalized-seed (normalize-sequence-seed seed))
+         (normalized-retry (normalize-retry-count retry))
+         (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
          (shard-paths (collect-shard-paths
                        suite
                        focus-enabled
                        normalized-filter
                        normalized-shard)))
     (let ((*test-sequence-order* normalized-order)
-          (*test-sequence-seed* normalized-seed))
+          (*test-sequence-seed* normalized-seed)
+          (*default-retry* normalized-retry)
+          (*default-timeout-ms* normalized-timeout-ms))
       (collect-suite-plan/k
        suite
        #'identity
@@ -950,6 +982,8 @@
                   order
                   seed
                   bail
+                  retry
+                  timeout-ms
                   coverage
                   coverage-output
                   (pass-with-no-tests t)
@@ -966,7 +1000,9 @@
                     :shard shard
                     :order order
                     :seed seed
-                    :bail bail)))
+                    :bail bail
+                    :retry retry
+                    :timeout-ms timeout-ms)))
        (ecase reporter
          (:spec (report-spec events stream))
          (:sexp (report-sexp events stream))
@@ -983,14 +1019,18 @@
                      (name-filter *test-name-filter*)
                      shard
                      order
-                     seed)
+                     seed
+                     retry
+                     timeout-ms)
   (ensure-list-reporter reporter)
   (let ((plan (collect-test-plan
                (root-suite)
                :name-filter name-filter
                :shard shard
                :order order
-               :seed seed)))
+               :seed seed
+               :retry retry
+               :timeout-ms timeout-ms)))
     (ecase reporter
       (:spec (report-plan-spec plan stream))
       (:sexp (report-plan-sexp plan stream))

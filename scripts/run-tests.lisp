@@ -118,6 +118,38 @@
       (error "cl-weave: ~A must contain a positive integer: ~A" name value))
     parsed))
 
+(defun parse-non-negative-integer (value name)
+  (multiple-value-bind (parsed position)
+      (parse-integer value :junk-allowed t)
+    (unless (and parsed
+                 (not (minusp parsed))
+                 (= position (length value)))
+      (error "cl-weave: ~A must contain a non-negative integer: ~A" name value))
+    parsed))
+
+(defun requested-retry ()
+  #+sbcl
+  (let ((value (sb-ext:posix-getenv "CL_WEAVE_RETRY")))
+    (if (and value (not (string= value "")))
+        (parse-non-negative-integer value "CL_WEAVE_RETRY")
+        nil))
+  #-sbcl
+  nil)
+
+(defun requested-test-timeout-ms ()
+  #+sbcl
+  (let* ((timeout-ms (sb-ext:posix-getenv "CL_WEAVE_TEST_TIMEOUT_MS"))
+         (timeout (sb-ext:posix-getenv "CL_WEAVE_TEST_TIMEOUT"))
+         (value (or timeout-ms timeout))
+         (name (if timeout-ms
+                   "CL_WEAVE_TEST_TIMEOUT_MS"
+                   "CL_WEAVE_TEST_TIMEOUT")))
+    (if (and value (not (string= value "")))
+        (parse-positive-integer value name)
+        nil))
+  #-sbcl
+  nil)
+
 (defun requested-shard ()
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_SHARD")))
@@ -254,7 +286,9 @@
       (update-snapshots (requested-update-snapshots-p))
       (shard (requested-shard))
       (sequence-order (requested-sequence-order))
-      (sequence-seed (requested-sequence-seed)))
+      (sequence-seed (requested-sequence-seed))
+      (retry (requested-retry))
+      (test-timeout-ms (requested-test-timeout-ms)))
   (flet ((with-requested-stream (callback)
            (if output-file
                (with-open-file (stream output-file
@@ -278,6 +312,8 @@
              :shard shard
              :order sequence-order
              :seed sequence-seed
+             :retry retry
+             :timeout-ms test-timeout-ms
              :stream stream)))
          (sb-ext:exit :code 0))
         ((requested-watch-p)
@@ -287,6 +323,8 @@
                                 :shard shard
                                 :order sequence-order
                                 :seed sequence-seed
+                                :retry retry
+                                :timeout-ms test-timeout-ms
                                 :bail (requested-bail)
                                 :include-dependencies t
                                 :interval (requested-watch-interval)))
@@ -300,6 +338,8 @@
                          :shard shard
                          :order sequence-order
                          :seed sequence-seed
+                         :retry retry
+                         :timeout-ms test-timeout-ms
                          :bail (requested-bail)
                          :coverage coverage
                          :coverage-output coverage-output

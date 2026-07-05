@@ -2,14 +2,16 @@
 
 (defstruct matcher
   name
-  function)
+  function
+  description)
 
 (defvar *matchers* (make-hash-table :test #'eq))
 
 (defstruct mock-state
   implementation
   calls
-  results)
+  results
+  restore)
 
 (defvar *mock-states* (make-hash-table :test #'eq))
 (defvar *snapshot-directory* #P"__snapshots__/")
@@ -26,7 +28,14 @@
            implementation))
   implementation)
 
-(defun register-matcher (name function)
+(defun matcher-description-value (description matcher)
+  (when (and description (not (stringp description)))
+    (error "cl-weave: matcher ~S description must be a string or NIL, got ~S."
+           matcher
+           description))
+  description)
+
+(defun register-matcher (name function &key description)
   (unless (symbolp name)
     (error "cl-weave: matcher name must be a symbol, got ~S." name))
   (unless (functionp function)
@@ -34,7 +43,9 @@
            name
            function))
   (setf (gethash name *matchers*)
-        (make-matcher :name name :function function))
+        (make-matcher :name name
+                      :function function
+                      :description (matcher-description-value description name)))
   name)
 
 (defun matcher-spec-name (spec)
@@ -47,25 +58,45 @@
     ((and (consp spec) (functionp (second spec))) (second spec))
     (t (error "cl-weave: matcher spec ~S must provide a function as its second value." spec))))
 
+(defun matcher-spec-description (spec)
+  (let ((tail (cddr spec)))
+    (cond
+      ((null tail) nil)
+      ((and (= (length tail) 1) (stringp (first tail)))
+       (first tail))
+      ((and (= (length tail) 2) (eq (first tail) :description))
+       (matcher-description-value (second tail) (matcher-spec-name spec)))
+      (t
+       (error "cl-weave: matcher spec ~S must end with no metadata, a description string, or :description string."
+              spec)))))
+
 (defun extend-expect (specs)
   (dolist (spec specs specs)
     (register-matcher (matcher-spec-name spec)
-                      (matcher-spec-function spec))))
+                      (matcher-spec-function spec)
+                      :description (matcher-spec-description spec))))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (defun validate-matcher-lambda-list (actual expected operator)
     (unless (and (symbolp actual) (symbolp expected))
       (error "cl-weave: ~S matcher bindings must be symbols, got ~S."
              operator
-             (list actual expected)))))
+             (list actual expected))))
+
+  (defun split-matcher-body (body)
+    (if (and (consp body) (stringp (first body)))
+        (values (first body) (rest body))
+        (values nil body))))
 
 (defmacro defmatcher (name (actual expected) &body body)
   (unless (symbolp name)
     (error "cl-weave: defmatcher name must be a symbol, got ~S." name))
   (validate-matcher-lambda-list actual expected 'defmatcher)
-  `(register-matcher ',name
-                     (lambda (,actual ,expected)
-                       ,@body)))
+  (multiple-value-bind (description forms) (split-matcher-body body)
+    `(register-matcher ',name
+                       (lambda (,actual ,expected)
+                         ,@forms)
+                       :description ,description)))
 
 (defmacro expect-extend (&body definitions)
   `(extend-expect
@@ -76,9 +107,12 @@
                (unless (symbolp name)
                  (error "cl-weave: expect-extend matcher name must be a symbol, got ~S." name))
                (validate-matcher-lambda-list actual expected 'expect-extend)
-               `(list ',name
-                      (lambda (,actual ,expected)
-                        ,@body)))))))
+               (multiple-value-bind (description forms) (split-matcher-body body)
+                 `(list ',name
+                        (lambda (,actual ,expected)
+                          ,@forms)
+                        :description
+                        ,description)))))))
 
 (defmacro expect.extend (&body definitions)
   `(expect-extend ,@definitions))
@@ -86,6 +120,18 @@
 (defun matcher-named (name)
   (or (gethash name *matchers*)
       (error "Unknown cl-weave matcher: ~S" name)))
+
+(defun matcher-metadata (name)
+  (let ((matcher (matcher-named name)))
+    (list :name (matcher-name matcher)
+          :description (matcher-description matcher))))
+
+(defun list-matchers ()
+  (sort (loop for matcher being the hash-values of *matchers*
+              collect (matcher-metadata (matcher-name matcher)))
+        #'string<
+        :key (lambda (metadata)
+               (symbol-name (getf metadata :name)))))
 
 (defun expected-one (expected matcher)
   (unless (= (length expected) 1)
@@ -749,7 +795,8 @@
 (defun make-mock-function (&optional (implementation #'default-mock-implementation))
   (let* ((state (make-mock-state :implementation (ensure-mock-implementation implementation)
                                  :calls nil
-                                 :results nil))
+                                 :results nil
+                                 :restore nil))
          (mock (lambda (&rest arguments)
                  (register-mock-call state arguments)
                  (handler-case
@@ -769,6 +816,15 @@
 (defun vi.fn (&optional (implementation #'default-mock-implementation))
   (make-mock-function implementation))
 
+(defun mock-function-p (value)
+  (nth-value 1 (gethash value *mock-states*)))
+
+(defun vi.ismockfunction (value)
+  (mock-function-p value))
+
+(defun vi.mocked (value)
+  (mock-function-p value))
+
 (defun mock-calls (mock)
   (copy-tree (mock-state-calls (mock-state-for mock))))
 
@@ -780,7 +836,7 @@
         (ensure-mock-implementation implementation))
   mock)
 
-(defun vi.mockImplementation (mock implementation)
+(defun vi.mockimplementation (mock implementation)
   (mock-implementation mock implementation))
 
 (defun mock-return-values (mock &rest values)
@@ -788,14 +844,33 @@
                               (declare (ignore arguments))
                               (values-list values))))
 
-(defun vi.mockReturnValues (mock &rest values)
+(defun vi.mockreturnvalues (mock &rest values)
   (apply #'mock-return-values mock values))
 
 (defun mock-return-value (mock value)
   (mock-return-values mock value))
 
-(defun vi.mockReturnValue (mock value)
+(defun vi.mockreturnvalue (mock value)
   (mock-return-value mock value))
+
+(defun spy-on (symbol)
+  (unless (symbolp symbol)
+    (error "cl-weave: spy target must be a symbol, got ~S." symbol))
+  (unless (fboundp symbol)
+    (error "cl-weave: spy target must name a function cell, got ~S." symbol))
+  (let* ((original (symbol-function symbol))
+         (mock (make-mock-function original))
+         (state (mock-state-for mock)))
+    (setf (mock-state-restore state)
+          (lambda ()
+            (setf (mock-state-implementation state) original)
+            (when (eq (symbol-function symbol) mock)
+              (setf (symbol-function symbol) original))))
+    (setf (symbol-function symbol) mock)
+    mock))
+
+(defun vi.spyon (symbol)
+  (spy-on symbol))
 
 (defun clear-mock (mock)
   (let ((state (mock-state-for mock)))
@@ -803,10 +878,28 @@
           (mock-state-results state) nil))
   mock)
 
+(defun vi.mockclear (mock)
+  (clear-mock mock))
+
 (defun reset-mock (mock)
   (mock-implementation mock #'default-mock-implementation)
   (clear-mock mock)
   mock)
+
+(defun vi.mockreset (mock)
+  (reset-mock mock))
+
+(defun mock-restore (mock)
+  (let* ((state (mock-state-for mock))
+         (restore (mock-state-restore state)))
+    (when restore
+      (clear-mock mock)
+      (funcall restore)
+      (setf (mock-state-restore state) nil))
+    mock))
+
+(defun vi.mockrestore (mock)
+  (mock-restore mock))
 
 (defun clear-all-mocks ()
   (maphash (lambda (mock state)
@@ -815,7 +908,7 @@
            *mock-states*)
   t)
 
-(defun vi.clearAllMocks ()
+(defun vi.clearallmocks ()
   (clear-all-mocks))
 
 (defun reset-all-mocks ()
@@ -825,8 +918,18 @@
            *mock-states*)
   t)
 
-(defun vi.resetAllMocks ()
+(defun vi.resetallmocks ()
   (reset-all-mocks))
+
+(defun restore-all-mocks ()
+  (maphash (lambda (mock state)
+             (when (mock-state-restore state)
+               (mock-restore mock)))
+           *mock-states*)
+  t)
+
+(defun vi.restoreallmocks ()
+  (restore-all-mocks))
 
 (defun mock-called-with-p (mock expected-arguments)
   (some (lambda (actual-arguments)

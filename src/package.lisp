@@ -5,14 +5,10 @@
    #:*test-context*
    #:around-each
    #:after-all
-   #:afterall
    #:after-each
-   #:aftereach
    #:assertion-failure
    #:before-all
-   #:beforeall
    #:before-each
-   #:beforeeach
    #:clear-tests
    #:collect-test-plan
    #:collect-mutations
@@ -46,6 +42,8 @@
    #:describe-skip-if
    #:describe.todo
    #:describe-todo
+   #:describe.todo.each
+   #:describe-todo-each
    #:defmatcher
    #:extend-expect
    #:expect
@@ -53,12 +51,14 @@
    #:expect-assertions
    #:expect.extend
    #:expect-extend
-   #:expect.hasAssertions
+   #:expect.hasassertions
    #:expect-has-assertions
    #:expect.not
    #:expect-not
    #:expect.rejects
+   #:expect-rejects
    #:expect.resolves
+   #:expect-resolves
    #:expected-failure-missed
    #:expected-failure-missed-reason
    #:gen-boolean
@@ -117,14 +117,25 @@
    #:it-skip-if
    #:it.todo
    #:it-todo
+   #:it.todo.each
+   #:it-todo-each
    #:list-tests
    #:logic-query
    #:logic-variable-p
    #:logic-where
+   #:list-matchers
+   #:list-mutation-operators
+   #:matcher
+   #:matcher-description
+   #:matcher-metadata
+   #:matcher-name
    #:mutation
    #:mutation-form
    #:mutation-id
    #:mutation-operator
+   #:mutation-operator-description
+   #:mutation-operator-metadata
+   #:mutation-operator-name
    #:mutation-original
    #:mutation-path
    #:mutation-replacement
@@ -139,25 +150,40 @@
    #:*snapshot-file-name*
    #:*update-snapshots*
    #:with-snapshot-updates
+   #:with-continuation-result
+   #:with-continuation-values
    #:clear-all-mocks
    #:clear-mock
    #:make-mock-function
+   #:mock-function-p
    #:mock-implementation
    #:mock-return-value
    #:mock-return-values
    #:reset-all-mocks
    #:reset-mock
-   #:vi.clearAllMocks
+   #:restore-all-mocks
+   #:mock-restore
+   #:spy-on
+   #:vi.clearallmocks
    #:vi.fn
-   #:vi.mockImplementation
-   #:vi.mockReturnValue
-   #:vi.mockReturnValues
-   #:vi.resetAllMocks
+   #:vi.ismockfunction
+   #:vi.mocked
+   #:vi.mockclear
+   #:vi.mockimplementation
+   #:vi.mockreset
+   #:vi.mockrestore
+   #:vi.mockreturnvalue
+   #:vi.mockreturnvalues
+   #:vi.resetallmocks
+   #:vi.restoreallmocks
+   #:vi.spyon
    #:mock-calls
    #:mock-results
    #:*test-sequence-order*
    #:*test-sequence-seed*
    #:*test-name-filter*
+   #:*default-retry*
+   #:*default-timeout-ms*
    #:asdf-system-files
    #:report-mutations-json
    #:report-mutations-sexp
@@ -214,6 +240,8 @@
    #:test-skip-if
    #:test.todo
    #:test-todo
+   #:test.todo.each
+   #:test-todo-each
    #:test-failure
    #:test-timeout
    #:test-timeout-ms
