@@ -53,6 +53,8 @@
    #:expect-extend
    #:expect.not
    #:expect-not
+   #:expect.rejects
+   #:expect.resolves
    #:expected-failure-missed
    #:expected-failure-missed-reason
    #:gen-boolean

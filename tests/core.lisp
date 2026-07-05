@@ -262,6 +262,36 @@
              :to-throw
              (lambda (condition)
                (search "predicate" (princ-to-string condition)))))
+    ("expect.resolves" (expect.resolves (lambda () 42) :to-be 42))
+    ("expect.rejects condition type"
+     (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error))
+    ("expect.resolves rejected thunk payload"
+     (handler-case
+         (progn
+           (expect.resolves (lambda () (error "boom")) :to-be :ok)
+           (error "Expected expect.resolves to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :resolves)
+           (expect (getf actual :state) :to-be :rejected)
+           (expect (getf actual :condition-type) :to-be 'simple-error)
+           (expect (getf actual :message) :to-match "boom")
+           (expect expected :to-equal '(:state :resolved))))))
+    ("expect.rejects resolved thunk payload"
+     (handler-case
+         (progn
+           (expect.rejects (lambda () :ok) :to-be-type-of 'simple-error)
+           (error "Expected expect.rejects to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :rejects)
+           (expect (getf actual :state) :to-be :resolved)
+           (expect (getf actual :value) :to-be :ok)
+           (expect expected :to-equal '(:state :rejected))))))
     ("to-run-under-ms" (expect (lambda () (+ 1 1)) :to-run-under-ms 1000))
     ("to-cons-less-than"
      (expect (lambda () nil) :to-cons-less-than most-positive-fixnum))
@@ -618,6 +648,20 @@
               (and (tree-contains-p form 'cl-weave::assert-expectation)
                    (tree-contains-p form :not)
                    (tree-contains-p form 'expect-not)))))
+
+  (it "expands expect.resolves into resolving thunk evaluation"
+    (expect (macroexpand-1 '(expect.resolves (lambda () :ok) :to-be :ok))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::call-resolving-expectation-thunk)
+                   (tree-contains-p form 'expect.resolves)))))
+
+  (it "expands expect.rejects into rejecting thunk evaluation"
+    (expect (macroexpand-1 '(expect.rejects (lambda () (error "boom")) :to-be-type-of 'simple-error))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::call-rejecting-expectation-thunk)
+                   (tree-contains-p form 'expect.rejects)))))
 
   (it "expands expect.extend into the custom matcher registry"
     (expect (macroexpand-1
@@ -987,7 +1031,13 @@
      cl-weave:before-all)
     (expect-macroexpands-through
      (expect.not 1 :to-be 2)
-     cl-weave:expect-not))
+     cl-weave:expect-not)
+    (expect-macroexpands-through
+     (expect.resolves (lambda () :ok) :to-be :ok)
+     cl-weave:expect)
+    (expect-macroexpands-through
+     (expect.rejects (lambda () (error "boom")) :to-be-type-of 'simple-error)
+     cl-weave:expect))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))

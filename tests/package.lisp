@@ -50,6 +50,8 @@
    #:expect-extend
    #:expect.not
    #:expect-not
+   #:expect.rejects
+   #:expect.resolves
    #:gen-boolean
    #:gen-form
    #:gen-integer

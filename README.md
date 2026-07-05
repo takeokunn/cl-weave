@@ -15,7 +15,8 @@ Early MVP. The current focus is a solid core:
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
 - `it-each` / `test-each` and `describe-each` compile-time table tests
-- Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`, and fixture aliases
+- Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
+  `expect.resolves`, `expect.rejects`, and fixture aliases
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
@@ -147,6 +148,8 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
   (expect form :to-match-snapshot "suite/case"))
 (expect value :not :to-be nil)
 (expect-not value :to-be nil)
+(expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
+(expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -154,6 +157,14 @@ matcher, actual, expected, negation, and pass metadata through conditions and
 reporters. `expect-not` is Vitest-style sugar for matcher assertions that
 should fail when the underlying matcher passes; it uses the same structured
 failure payload as `(expect value :not matcher ...)`.
+
+`expect.resolves` and `expect.rejects` adapt Vitest's promise assertion shape
+to Lisp thunks. `expect.resolves` runs a zero-argument function and applies the
+matcher to its primary returned value. If the thunk signals a condition, the
+assertion fails with `:matcher :resolves` and `:actual` containing `:state`,
+`:condition-type`, and `:message`. `expect.rejects` requires the thunk to
+signal a condition and then applies the matcher to that condition object; a
+normally returned value fails with `:matcher :rejects`.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or

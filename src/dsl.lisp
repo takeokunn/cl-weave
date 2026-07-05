@@ -521,6 +521,58 @@
         (list ,@tokens)
         '(,macro-name ,actual ,@expectation)))))
 
+(defun ensure-expect-thunk (thunk matcher form)
+  (unless (functionp thunk)
+    (signal-assertion-failure
+     (make-assertion-detail
+      :form form
+      :matcher matcher
+      :actual (list :callable nil :value thunk)
+      :expected '(:callable t)
+      :negated nil
+      :pass nil)))
+  thunk)
+
+(defun rejected-thunk-report (condition)
+  (list :state :rejected
+        :condition-type (type-of condition)
+        :message (princ-to-string condition)))
+
+(defun resolved-thunk-report (value)
+  (list :state :resolved :value value))
+
+(defun call-resolving-expectation-thunk (thunk form)
+  (let ((callable (ensure-expect-thunk thunk :resolves form)))
+    (handler-case
+        (funcall callable)
+      (condition (condition)
+        (signal-assertion-failure
+         (make-assertion-detail
+          :form form
+          :matcher :resolves
+          :actual (rejected-thunk-report condition)
+          :expected '(:state :resolved)
+          :negated nil
+          :pass nil))))))
+
+(defun call-rejecting-expectation-thunk (thunk form)
+  (let ((callable (ensure-expect-thunk thunk :rejects form)))
+    (multiple-value-bind (rejected-p result)
+        (handler-case
+            (values nil (funcall callable))
+          (condition (condition)
+            (values t condition)))
+      (if rejected-p
+          result
+          (signal-assertion-failure
+           (make-assertion-detail
+            :form form
+            :matcher :rejects
+            :actual (resolved-thunk-report result)
+            :expected '(:state :rejected)
+            :negated nil
+            :pass nil))))))
+
 (defmacro expect (actual &body expectation)
   (if expectation
       (expand-matcher-expectation 'expect actual expectation)
@@ -531,6 +583,18 @@
 
 (defmacro expect.not (actual &body expectation)
   `(expect-not ,actual ,@expectation))
+
+(defmacro expect.resolves (thunk &body expectation)
+  `(expect (call-resolving-expectation-thunk
+            ,thunk
+            '(expect.resolves ,thunk ,@expectation))
+           ,@expectation))
+
+(defmacro expect.rejects (thunk &body expectation)
+  `(expect (call-rejecting-expectation-thunk
+            ,thunk
+            '(expect.rejects ,thunk ,@expectation))
+           ,@expectation))
 
 (defmacro with-snapshot-updates (&body body)
   `(let ((*update-snapshots* t))

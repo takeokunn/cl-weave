@@ -445,6 +445,34 @@ set `:negated t` in the assertion detail and preserve the raw matcher result in
 `:pass`, so agents can tell that the matcher itself succeeded but the negated
 expectation failed.
 
+Vitest-style resolving and rejecting assertions use Lisp thunks instead of
+JavaScript promises:
+
+```lisp
+(expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
+(expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
+```
+
+`expect.resolves` applies the matcher to the thunk's primary value. If the
+thunk signals a condition first, the assertion detail uses:
+
+```lisp
+(:matcher :resolves
+ :actual (:state :rejected
+          :condition-type simple-error
+          :message "missing user")
+ :expected (:state :resolved))
+```
+
+`expect.rejects` applies the matcher to the condition object. If the thunk
+returns normally, the assertion detail uses:
+
+```lisp
+(:matcher :rejects
+ :actual (:state :resolved :value :ok)
+ :expected (:state :rejected))
+```
+
 String pattern matchers report normalized pattern semantics. A failing
 `:to-match` assertion uses:
 
