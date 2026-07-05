@@ -1944,7 +1944,34 @@
                      :coverage-output "coverage.dat")
                     :to-be-truthy))))
       (expect (reverse calls)
-              :to-equal '(:require :test (:save "coverage.dat"))))))
+              :to-equal '(:require :test (:save "coverage.dat")))))
+
+  (it "saves coverage when the covered run errors"
+    (let ((calls nil))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::require-coverage-support)
+            (lambda ()
+              (push :require calls)
+              t))
+           ((symbol-function 'cl-weave:reset-coverage)
+            (lambda ()
+              (push :reset calls)
+              t))
+           ((symbol-function 'cl-weave:save-coverage)
+            (lambda (path)
+              (push (list :save path) calls)
+              path)))
+        (expect (lambda ()
+                  (cl-weave::call-with-coverage
+                   t
+                   "coverage.dat"
+                   t
+                   (lambda ()
+                     (push :body calls)
+                     (error "boom"))))
+                :to-throw "boom"))
+      (expect (reverse calls)
+              :to-equal '(:require :reset :body (:save "coverage.dat"))))))
 
 (describe "expected failures"
   (it-fails "passes when the body fails"
