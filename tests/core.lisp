@@ -130,6 +130,49 @@
      (let ((table (make-hash-table :test #'equal)))
        (setf (gethash "user" table) '(:name "Ada" :roles ("dev")))
        (expect table :to-contain-equal '(:name "Ada" :roles ("dev")))))
+    ("to-match substring"
+     (expect "common-lisp" :to-match "lisp"))
+    ("to-match predicate"
+     (expect "Common Lisp"
+             :to-match
+             (lambda (text)
+               (search "Lisp" text))))
+    ("to-match failure payload"
+     (handler-case
+         (progn
+           (expect "common-lisp" :to-match "scheme")
+           (error "Expected :to-match to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match)
+           (expect (getf actual :value) :to-equal "common-lisp")
+           (expect (getf actual :pattern) :to-equal "scheme")
+           (expect (getf actual :mode) :to-be :substring)
+           (expect (getf actual :reason) :to-be :no-match)
+           (expect (getf expected :pattern) :to-equal "scheme")
+           (expect (getf expected :test) :to-be :substring)))))
+    ("to-match-object plist subset"
+     (expect '(:id 1 :name "Ada" :roles ("dev" "ops"))
+             :to-match-object
+             '(:name "Ada")))
+    ("to-match-object nested plist subset"
+     (expect '(:user (:id 1 :profile (:name "Ada" :active t)) :meta :ignored)
+             :to-match-object
+             '(:user (:profile (:active t)))))
+    ("to-match-object vector exact shape"
+     (expect #((:id 1 :name "Ada") (:id 2 :name "Grace" :role "compiler"))
+             :to-match-object
+             #((:id 1) (:role "compiler"))))
+    ("to-match-object hash-table subset"
+     (let ((table (make-hash-table :test #'equal)))
+       (setf (gethash "user" table) '(:name "Ada" :roles #("dev" "ops")))
+       (expect table :to-match-object '(("user" . (:roles #("dev" "ops")))))))
+    ("to-match-object slot subset"
+     (expect (make-instance 'sample-widget :name "Ada" :state :ready)
+             :to-match-object
+             '((name . "Ada") (state . :ready))))
     ("to-have-length list" (expect '(:a :b :c) :to-have-length 3))
     ("to-have-length vector" (expect #(:a :b :c) :to-have-length 3))
     ("to-have-length string" (expect "abc" :to-have-length 3))
@@ -236,6 +279,28 @@
           (expect (getf actual :test) :to-be :equalp)
           (expect (getf expected :value) :to-equal '(:id 2 :name "Grace"))
           (expect (getf expected :test) :to-be :equalp)))))
+
+  (it "reports match-object matcher failures with structured path data"
+    (handler-case
+        (progn
+          (expect '(:user (:name "Ada" :roles #("dev")))
+                  :to-match-object
+                  '(:user (:name "Grace")))
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail))
+               (expected (cl-weave::assertion-detail-expected detail))
+               (failure (getf actual :failure)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-object)
+          (expect (getf actual :subset) :to-equal '(:user (:name "Grace")))
+          (expect (getf failure :path) :to-equal '(:user :name))
+          (expect (getf failure :reason) :to-be :value-mismatch)
+          (expect (getf failure :actual-value) :to-equal "Ada")
+          (expect (getf failure :expected-value) :to-equal "Grace")
+          (expect (getf failure :test) :to-be :equalp)
+          (expect (getf expected :subset) :to-equal '(:user (:name "Grace")))
+          (expect (getf expected :test) :to-be :partial-equalp)))))
 
   (it "reports property matcher failures with structured path data"
     (handler-case

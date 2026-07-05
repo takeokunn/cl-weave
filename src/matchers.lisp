@@ -110,6 +110,56 @@
         :value value
         :test :equalp))
 
+(defun match-pattern-mode (pattern)
+  (cond
+    ((stringp pattern) :substring)
+    ((functionp pattern) :predicate)
+    ((and (symbolp pattern) (fboundp pattern)) :predicate)
+    (t :invalid)))
+
+(defun match-pattern-report (actual pattern mode reason &optional condition)
+  (let ((report (list :value actual
+                      :pattern pattern
+                      :mode mode
+                      :reason reason)))
+    (if condition
+        (append report (list :error (princ-to-string condition)))
+        report)))
+
+(defun match-pattern-expected-report (pattern mode)
+  (list :pattern pattern
+        :test (ecase mode
+                (:substring :substring)
+                (:predicate :predicate)
+                (:invalid :valid-pattern))))
+
+(defun match-string-pattern-p (actual pattern)
+  (let ((mode (match-pattern-mode pattern)))
+    (cond
+      ((not (stringp actual))
+       (values nil
+               (match-pattern-report actual pattern mode :not-a-string)
+               (match-pattern-expected-report pattern mode)))
+      ((eq mode :substring)
+       (let ((pass (not (null (search pattern actual)))))
+         (values pass
+                 (match-pattern-report actual pattern mode (if pass :matched :no-match))
+                 (match-pattern-expected-report pattern mode))))
+      ((eq mode :predicate)
+       (handler-case
+           (let ((pass (not (null (funcall pattern actual)))))
+             (values pass
+                     (match-pattern-report actual pattern mode (if pass :matched :predicate-false))
+                     (match-pattern-expected-report pattern mode)))
+         (condition (condition)
+           (values nil
+                   (match-pattern-report actual pattern mode :predicate-error condition)
+                   (match-pattern-expected-report pattern mode)))))
+      (t
+       (values nil
+               (match-pattern-report actual pattern mode :invalid-pattern)
+               (match-pattern-expected-report pattern mode))))))
+
 (defun sequence-length (value)
   (when (typep value 'sequence)
     (length value)))
@@ -153,6 +203,111 @@
         (error ()
           (values nil nil)))
       (values nil nil)))
+
+(defun alist-object-p (value)
+  (and (consp value)
+       (listp value)
+       (every #'consp value)))
+
+(defun plist-object-p (value)
+  (and (consp value)
+       (listp value)
+       (evenp (length value))
+       (loop for tail on value by #'cddr
+             always (symbolp (first tail)))))
+
+(defun object-subset-designator-p (value)
+  (or (hash-table-p value)
+      (alist-object-p value)
+      (plist-object-p value)))
+
+(defun object-entry-list (value)
+  (cond
+    ((hash-table-p value)
+     (loop for key being the hash-keys of value using (hash-value entry-value)
+           collect (list key entry-value)))
+    ((alist-object-p value)
+     (loop for (key . entry-value) in value
+           collect (list key entry-value)))
+    ((plist-object-p value)
+     (loop for (key entry-value) on value by #'cddr
+           collect (list key entry-value)))
+    (t nil)))
+
+(defun object-property-value (object key)
+  (typecase object
+    (hash-table (gethash key object))
+    (cons
+     (cond
+       ((alist-object-p object) (alist-value object key))
+       ((plist-object-p object) (plist-value object key))
+       (t (values nil nil))))
+    (t
+     (object-slot-value object key))))
+
+(defun match-object-failure (path reason actual-value expected-value)
+  (list :path path
+        :reason reason
+        :actual-value actual-value
+        :expected-value expected-value
+        :test :equalp))
+
+(declaim (ftype function match-object-sequence-p))
+
+(defun match-object-value-p (actual expected &optional (path nil))
+  (cond
+    ((object-subset-designator-p expected)
+     (block mismatch
+       (dolist (entry (object-entry-list expected) (values t nil))
+         (destructuring-bind (key expected-value) entry
+           (multiple-value-bind (actual-value present-p)
+               (object-property-value actual key)
+             (unless present-p
+               (return-from mismatch
+                 (values nil (match-object-failure (append path (list key))
+                                                   :missing-property
+                                                   nil
+                                                   expected-value))))
+             (multiple-value-bind (pass failure)
+                 (match-object-value-p actual-value
+                                       expected-value
+                                       (append path (list key)))
+               (unless pass
+                 (return-from mismatch (values nil failure)))))))))
+    ((equalp actual expected)
+     (values t nil))
+    ((and (vectorp expected) (not (stringp expected)))
+     (match-object-sequence-p actual expected path))
+    (t
+     (values nil (match-object-failure path :value-mismatch actual expected)))))
+
+(defun match-object-sequence-p (actual expected path)
+  (cond
+    ((not (typep actual 'sequence))
+     (values nil (match-object-failure path :type-mismatch actual expected)))
+    ((/= (length actual) (length expected))
+     (values nil (match-object-failure path :length-mismatch
+                                        (length actual)
+                                        (length expected))))
+    (t
+     (block mismatch
+       (loop for index below (length expected)
+             do (multiple-value-bind (pass failure)
+                    (match-object-value-p (elt actual index)
+                                          (elt expected index)
+                                          (append path (list index)))
+                  (unless pass
+                    (return-from mismatch (values nil failure)))))
+       (values t nil)))))
+
+(defun match-object-report (actual subset failure)
+  (list :value actual
+        :subset subset
+        :failure failure))
+
+(defun match-object-expected-report (subset)
+  (list :subset subset
+        :test :partial-equalp))
 
 (defun property-segment-value (value segment)
   (typecase value
@@ -628,11 +783,22 @@
 (defmatcher :to-contain (actual expected)
   (contains-value-p actual (expected-one expected :to-contain)))
 
+(defmatcher :to-match (actual expected)
+  (match-string-pattern-p actual (expected-one expected :to-match)))
+
 (defmatcher :to-contain-equal (actual expected)
   (let ((value (expected-one expected :to-contain-equal)))
     (values (contains-equal-value-p actual value)
             (contain-equal-report actual value)
             (list :value value :test :equalp))))
+
+(defmatcher :to-match-object (actual expected)
+  (let ((subset (expected-one expected :to-match-object)))
+    (multiple-value-bind (pass failure)
+        (match-object-value-p actual subset)
+      (values pass
+              (match-object-report actual subset failure)
+              (match-object-expected-report subset)))))
 
 (defmatcher :to-have-length (actual expected)
   (let ((length (sequence-length actual)))

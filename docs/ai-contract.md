@@ -445,6 +445,23 @@ set `:negated t` in the assertion detail and preserve the raw matcher result in
 `:pass`, so agents can tell that the matcher itself succeeded but the negated
 expectation failed.
 
+String pattern matchers report normalized pattern semantics. A failing
+`:to-match` assertion uses:
+
+```lisp
+(:actual (:value "common-lisp"
+          :pattern "scheme"
+          :mode :substring
+          :reason :no-match)
+ :expected (:pattern "scheme"
+            :test :substring))
+```
+
+String patterns use substring search. Function designators use
+`:mode :predicate` and pass when the predicate returns a non-`nil` value.
+Failure reasons are `:not-a-string`, `:no-match`, `:predicate-false`,
+`:predicate-error`, and `:invalid-pattern`.
+
 Deep containment matchers report the searched container and equality predicate.
 A failing `:to-contain-equal` assertion uses:
 
@@ -459,6 +476,27 @@ A failing `:to-contain-equal` assertion uses:
 The matcher searches sequence elements and hash-table values with `equalp`.
 Use `:to-contain` for substring checks and shallow `equal` membership; use
 `:to-contain-equal` when nested Lisp data should compare structurally.
+
+Partial object matchers report the original value, requested subset, and the
+first divergent path. A failing `:to-match-object` assertion uses:
+
+```lisp
+(:actual (:value (:user (:name "Ada"))
+          :subset (:user (:name "Grace"))
+          :failure (:path (:user :name)
+                    :reason :value-mismatch
+                    :actual-value "Ada"
+                    :expected-value "Grace"
+                    :test :equalp))
+ :expected (:subset (:user (:name "Grace"))
+            :test :partial-equalp))
+```
+
+The subset can be a property list, association list, or hash table. Actual
+objects can be property lists, association lists, hash tables, or CLOS objects
+with matching slot names. Expected vectors are matched against actual sequences
+with exact length and order. Failure reasons are `:missing-property`,
+`:value-mismatch`, `:length-mismatch`, and `:type-mismatch`.
 
 Property matchers report normalized path traversal data. A failing
 `:to-have-property` assertion uses:

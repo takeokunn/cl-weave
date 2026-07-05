@@ -188,7 +188,9 @@ Built-in matchers:
 - `:to-be-type-of`
 - `:to-be-instance-of`
 - `:to-contain`
+- `:to-match`
 - `:to-contain-equal`
+- `:to-match-object`
 - `:to-have-length`
 - `:to-have-property`
 - `:to-be-close-to`
@@ -290,6 +292,22 @@ one.
 
 ### Property Assertions
 
+`:to-match` mirrors Vitest `toMatch(pattern)` for strings. A string pattern
+checks substring containment; a function designator acts as a Lisp-native
+predicate and passes when it returns a non-`nil` value:
+
+```lisp
+(expect "common-lisp" :to-match "lisp")
+(expect "Common Lisp"
+        :to-match
+        (lambda (text)
+          (search "Lisp" text)))
+```
+
+Failures report the actual `:value`, requested `:pattern`, matching `:mode`,
+and normalized `:reason`, so reporters can distinguish non-string actual
+values, invalid patterns, predicate errors, and ordinary misses.
+
 `:to-contain-equal` mirrors Vitest `toContainEqual(value)` for Lisp data. It
 checks sequence elements and hash-table values with `equalp`, so structurally
 equal lists, vectors, strings, numbers, characters, and nested data pass without
@@ -304,6 +322,25 @@ requiring object identity:
 Failures report the searched `:container`, expected `:value`, and comparison
 `:test`, allowing reporters and agents to explain whether the failure came from
 membership or equality semantics.
+
+`:to-match-object` mirrors Vitest `toMatchObject(subset)` for Lisp records.
+Expected property lists, association lists, and hash tables are treated as
+partial object shapes; actual values may be property lists, association lists,
+hash tables, or slot-bearing instances. Nested expected objects are checked
+recursively with `equalp`. Expected vectors match actual sequences
+element-by-element with the same length and order:
+
+```lisp
+(expect '(:user (:name "Ada" :roles #("dev" "ops"))
+          :meta :ignored)
+        :to-match-object
+        '(:user (:roles #("dev" "ops"))))
+```
+
+Failures report the original `:value`, requested `:subset`, and a normalized
+`:failure` payload with `:path`, `:reason`, `:actual-value`, and
+`:expected-value`. This gives humans and agents a stable explanation of the
+first divergent property.
 
 `:to-have-property` is Vitest-style `toHaveProperty(path, value?)` for Lisp
 data. The path can be a scalar, list, or vector. It traverses property lists,
