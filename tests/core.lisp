@@ -3070,6 +3070,7 @@
                                   :commands '("custom-command")
                                   :argument "VALUE"
                                   :value-kind :custom-value
+                                  :choices '("custom-choice")
                                   :environment '("CUSTOM_ENV")
                                   :description "custom option"))
                       :vitest-aliases
@@ -3094,6 +3095,7 @@
       (expect output :to-contain "\"--custom\"")
       (expect output :to-contain "\"--customAlias\"")
       (expect output :to-contain "\"valueKind\":\"custom-value\"")
+      (expect output :to-contain "\"choices\":[\"custom-choice\"]")
       (expect output :to-contain "\"CUSTOM_ENV\"")
       (expect output :to-contain "\"custom option\"")
       (expect output :to-contain "\"custom.alias\"")
@@ -3110,6 +3112,12 @@
            (filter-option (find "--filter" options
                                 :key (lambda (entry) (getf entry :name))
                                 :test #'string=))
+           (reporter-option (find "--reporter" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=))
+           (sequence-option (find "--sequence" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=))
            (snapshot-option (find "--update-snapshots" options
                                   :key (lambda (entry) (getf entry :name))
                                   :test #'string=)))
@@ -3117,7 +3125,14 @@
       (expect (getf filter-option :aliases) :to-contain "--testNamePattern")
       (expect (getf filter-option :commands) :to-contain "run")
       (expect (getf filter-option :value-kind) :to-be :test-name-pattern)
+      (expect (getf filter-option :choices) :to-equal '())
       (expect (getf filter-option :environment) :to-contain "CL_WEAVE_TEST_FILTER")
+      (expect reporter-option :not :to-be nil)
+      (expect (getf reporter-option :choices) :to-contain "json")
+      (expect (getf reporter-option :choices) :to-contain "junit")
+      (expect sequence-option :not :to-be nil)
+      (expect (getf sequence-option :choices)
+              :to-equal '("defined" "random" "shuffle"))
       (expect snapshot-option :not :to-be nil)
       (expect (getf snapshot-option :aliases) :to-contain "--update")
       (expect (getf snapshot-option :aliases) :to-contain "--updateSnapshots")
@@ -3186,6 +3201,9 @@
                             (getf entry :aliases))))
         (dolist (entry (getf metadata :options))
           (expect (getf entry :value-kind) :not :to-be nil)
+          (expect (member :choices entry) :not :to-be nil)
+          (expect (getf entry :choices) :to-satisfy #'listp)
+          (expect-unique-strings (getf entry :choices))
           (dolist (command (getf entry :commands))
             (expect (member command (getf metadata :commands) :test #'string=)
                     :not :to-be nil))
