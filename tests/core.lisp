@@ -2598,6 +2598,16 @@
                 (:test ?test))
               :to-equal '(((?test . ("logic" "runs")))))))
 
+  (it "rejects cyclic logic bindings"
+    (multiple-value-bind (bindings matched-p)
+        (cl-weave::unify-logic-values '?x '(:node ?x) nil)
+      (declare (ignore bindings))
+      (expect matched-p :to-be nil))
+    (multiple-value-bind (bindings matched-p)
+        (cl-weave::unify-logic-values '(:node ?x) '?x nil)
+      (declare (ignore bindings))
+      (expect matched-p :to-be nil)))
+
   (it "queries test plans with macro clauses"
     (let* ((root (cl-weave::make-suite :name "root"))
            (suite (cl-weave::add-child

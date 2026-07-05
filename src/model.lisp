@@ -85,6 +85,15 @@
 (defun extend-logic-binding (variable value bindings)
   (acons variable value bindings))
 
+(defun logic-occurs-in-p (variable value bindings)
+  (let ((value (logic-walk value bindings)))
+    (cond
+      ((eql variable value) t)
+      ((consp value)
+       (or (logic-occurs-in-p variable (car value) bindings)
+           (logic-occurs-in-p variable (cdr value) bindings)))
+      (t nil))))
+
 (defun unify-logic-values (left right bindings)
   (let ((left (logic-walk left bindings))
         (right (logic-walk right bindings)))
@@ -95,8 +104,14 @@
          (if head-ok-p
              (unify-logic-values (rest left) (rest right) head-bindings)
              (values nil nil))))
-      ((logic-variable-p left) (values (extend-logic-binding left right bindings) t))
-      ((logic-variable-p right) (values (extend-logic-binding right left bindings) t))
+      ((logic-variable-p left)
+       (if (logic-occurs-in-p left right bindings)
+           (values nil nil)
+           (values (extend-logic-binding left right bindings) t)))
+      ((logic-variable-p right)
+       (if (logic-occurs-in-p right left bindings)
+           (values nil nil)
+           (values (extend-logic-binding right left bindings) t)))
       ((equal left right) (values bindings t))
       (t (values nil nil)))))
 
