@@ -161,12 +161,12 @@
          (progn
            (write-isolated-script script form systems package)
            (let* ((process
-                    (sb-ext:run-program
-                     (isolated-sbcl-program)
-                     (list "--noinform" "--non-interactive" "--load" (namestring script))
-                     :search t
-                     :wait nil
-                     :output stdout
+                     (sb-ext:run-program
+                      (isolated-sbcl-program)
+                      (list "--script" (namestring script))
+                      :search t
+                      :wait nil
+                      :output stdout
                      :error stderr
                      :environment (isolated-process-environment home)
                      :if-output-exists :supersede

@@ -1,0 +1,229 @@
+(in-package #:cl-weave/cli)
+
+(defmacro with-cli-snapshot-settings ((options) &body body)
+  `(let ((cl-weave:*update-snapshots* (cli-options-update-snapshots ,options))
+         (cl-weave:*snapshot-directory*
+           (or (cli-options-snapshot-directory ,options)
+               cl-weave:*snapshot-directory*))
+         (cl-weave:*snapshot-file-name*
+           (or (cli-options-snapshot-file ,options)
+               cl-weave:*snapshot-file-name*)))
+     ,@body))
+
+(defun command-dispatch-kind (options)
+  (cond
+    ((eq (cli-options-command options) :metadata) :metadata)
+    ((cli-options-list options) :list)
+    ((cli-options-watch options) :watch)
+    (t :run)))
+
+(defun ensure-valid-reporter-for-command (options)
+  (case (command-dispatch-kind options)
+    (:metadata
+     (metadata-reporter options)
+     t)
+    (:list
+     (unless (member (cli-options-reporter options)
+                     cl-weave::*list-reporters*)
+       (error 'cli-error
+              :message "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
+     t)
+    ((:run :watch)
+     (handler-case
+         (progn
+           (cl-weave::ensure-run-reporter (cli-options-reporter options))
+           t)
+       (error (condition)
+         (error 'cli-error :message (princ-to-string condition)))))))
+
+(defun ensure-watch-command-system (options)
+  (when (and (eq (command-dispatch-kind options) :watch)
+             (null (cli-options-systems options)))
+    (error 'cli-error
+           :message "Watch mode requires SYSTEM as a positional argument or --system SYSTEM.")))
+
+(defun pathname-asd-file-p (pathname)
+  (let ((type (pathname-type pathname)))
+    (and type (string-equal type "asd"))))
+
+(defun pathname-directory-pathname (pathname)
+  (uiop:pathname-directory-pathname (uiop:ensure-pathname pathname)))
+
+(defun load-file-asd-directory (pathname)
+  (let ((resolved (uiop:ensure-pathname pathname)))
+    (pathname-directory-pathname
+     (if (pathname-asd-file-p resolved)
+         resolved
+         (or (probe-file resolved) resolved)))))
+
+(defun system-bootstrap-directories (options)
+  (remove-duplicates
+   (cons (uiop:getcwd)
+         (loop for file in (cli-options-load-files options)
+               collect (load-file-asd-directory file)))
+   :test #'equal))
+
+(defun directory-asd-files (directory)
+  (sort (copy-list (directory (merge-pathnames "*.asd" directory)))
+        #'string<
+        :key #'namestring))
+
+(defun bootstrap-local-asd-definitions (options)
+  (dolist (directory (system-bootstrap-directories options))
+    (dolist (pathname (directory-asd-files directory))
+      (asdf:load-asd pathname))))
+
+(defun ensure-requested-system-visible (system options)
+  (unless (asdf:find-system system nil)
+    (bootstrap-local-asd-definitions options))
+  (unless (asdf:find-system system nil)
+    (error 'cli-error
+           :message
+           (format nil
+                   "Unable to locate ASDF system ~S. Run cl-weave from the project root, pass --load path/to/system.asd, or configure CL_SOURCE_REGISTRY."
+                   system))))
+
+(defun load-requested-inputs (options)
+  (dolist (system (cli-options-systems options))
+    (ensure-requested-system-visible system options)
+    (asdf:load-system system))
+  (dolist (file (cli-options-load-files options))
+    (load file)))
+
+(defun call-with-output-stream (options callback)
+  (let ((output-file (cli-options-output-file options)))
+    (if output-file
+        (with-open-file (stream output-file
+                                :direction :output
+                                :if-exists :supersede
+                                :if-does-not-exist :create)
+          (funcall callback stream))
+        (funcall callback *standard-output*))))
+
+(defun shared-execution-argument-pairs (options)
+  (list :reporter (cli-options-reporter options)
+        :name-filter (cli-options-name-filter options)
+        :shard (cli-options-shard options)
+        :order (cli-options-order options)
+        :seed (cli-options-seed options)))
+
+(defun run-execution-argument-pairs (options)
+  (append (shared-execution-argument-pairs options)
+          (list :bail (cli-options-bail options)
+                :coverage (cli-options-coverage options)
+                :coverage-output (cli-options-coverage-output options)
+                :pass-with-no-tests (cli-options-pass-with-no-tests options)
+                :retry (cli-options-retry options)
+                :timeout-ms (cli-options-test-timeout-ms options)
+                :max-workers (cli-options-max-workers options))))
+
+(defun call-list-command (options stream)
+  (apply #'cl-weave:list-tests
+         (append (shared-execution-argument-pairs options)
+                 (list :retry (cli-options-retry options)
+                       :timeout-ms (cli-options-test-timeout-ms options)
+                       :stream stream))))
+
+(defun call-run-command (options stream)
+  (apply #'cl-weave:run-all
+         (append (run-execution-argument-pairs options)
+                 (list :stream stream))))
+
+(defun watch-command-call-arguments (options)
+  (values
+   (first (cli-options-systems options))
+   (append (run-execution-argument-pairs options)
+           (list :include-dependencies t
+                 :once (cli-options-watch-once options)
+                 :interval (cli-options-watch-interval options)))))
+
+(defun command-execution-plan (options)
+  (case (command-dispatch-kind options)
+    (:metadata
+     (list :kind :metadata))
+    (:list
+     (list :kind :list))
+    (:watch
+     (multiple-value-bind (system arguments)
+         (watch-command-call-arguments options)
+       (list :kind :watch
+             :system system
+             :arguments arguments)))
+    (:run
+     (list :kind :run))))
+
+(defun command-plan-stream-callback (plan options)
+  (case (getf plan :kind)
+    (:metadata
+     (lambda (stream)
+       (report-framework-metadata options stream)))
+    (:list
+     (lambda (stream)
+       (call-list-command options stream)))
+    (:watch
+     (let ((system (getf plan :system))
+           (arguments (getf plan :arguments)))
+       (lambda (stream)
+         (apply #'cl-weave:watch-system
+                system
+                (append arguments
+                        (list :stream stream))))))
+    (:run
+     (lambda (stream)
+       (call-run-command options stream)))))
+
+(defun command-plan-success-kind-p (plan)
+  (member (getf plan :kind) '(:metadata :list) :test #'eq))
+
+(defun execute-command-plan (plan options)
+  (let ((result
+          (call-with-output-stream
+           options
+           (command-plan-stream-callback plan options))))
+    (if (command-plan-success-kind-p plan)
+        t
+        result)))
+
+(defun run-command (options)
+  (ensure-valid-reporter-for-command options)
+  (ensure-watch-command-system options)
+  (load-requested-inputs options)
+  (with-cli-snapshot-settings (options)
+    (execute-command-plan (command-execution-plan options) options)))
+
+#+sbcl
+(defun process-arguments ()
+  (let ((argv (rest sb-ext:*posix-argv*)))
+    (if (and argv (string= (first argv) "--"))
+        (rest argv)
+        argv)))
+
+#-sbcl
+(defun process-arguments ()
+  (error 'cli-error :message "cl-weave CLI currently requires SBCL."))
+
+#+sbcl
+(defun exit-process (code)
+  (sb-ext:exit :code code))
+
+#-sbcl
+(defun exit-process (code)
+  (uiop:quit code))
+
+(defun main (&optional (argv (process-arguments)))
+  (handler-case
+      (let ((options (parse-cli-arguments argv)))
+        (cond
+          ((cli-options-version options)
+           (format *standard-output* "cl-weave ~A~%" (cli-version))
+           (exit-process 0))
+          ((cli-options-help options)
+           (write-string (cli-usage) *standard-output*)
+           (exit-process 0))
+          ((run-command options)
+           (exit-process 0))
+          (t
+           (exit-process 1))))
+    (cli-error (condition)
+      (format *error-output* "cl-weave: ~A~%~%~A" condition (cli-usage))
+      (exit-process 2))))

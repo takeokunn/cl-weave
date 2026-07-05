@@ -9,7 +9,8 @@ run in CI, embed in ASDF projects, and extend from the REPL.
 
 ## Status
 
-Early MVP. The current focus is a solid core:
+Pre-1.0, but already usable for real projects. The current focus is tightening
+contracts, distribution ergonomics, and CI/AI integration around a stable core:
 
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
@@ -28,7 +29,7 @@ Early MVP. The current focus is a solid core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
-- AI-friendly CLI metadata for typed/enumerated options, package exports, matchers, mutations, and aliases
+- AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, package exports, matchers, mutations, and aliases
 - source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
@@ -76,48 +77,102 @@ With Nix:
 
 ```sh
 nix develop
-timeout 600s nix flake check
-timeout 360s nix run . -- run cl-weave-tests --reporter spec
+nix run . -- --help
+nix profile install .
+perl -e 'alarm 600; exec @ARGV' -- nix flake check
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter spec
+```
+
+Without cloning the repository first:
+
+```sh
+nix run github:takeokunn/cl-weave -- --help
+nix profile install github:takeokunn/cl-weave
 ```
 
 The packaged CLI is Vitest-shaped and intended for local use, CI, and AI
 agents:
 
 ```sh
-timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --testTimeout 10000
-timeout 360s nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
-timeout 360s nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
-timeout 120s nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
-timeout 120s nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
-timeout 360s nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
-timeout 360s nix run . -- watch cl-weave-tests --filter parser
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --testTimeout 10000
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave-tests --filter parser
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
 ```
+
+Lisp-side agents can discover the same structured artifact contracts with
+`(cl-weave:reporter-artifact-schemas)` without shelling out to the CLI.
+
+### AI Discovery
+
+Agents and generators should start from runtime metadata instead of scraping
+source files or examples:
+
+```sh
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+```
+
+The metadata payload advertises CLI commands, typed options, finite choices,
+command-specific choices, environment variables, CI quality gates,
+Vitest-shaped aliases, public package exports, matchers, mutation operators, and
+`artifactSchemas`. `artifactSchemas` is the contract for structured artifacts
+such as JSON run results, JSONL run events, JSON test plans, JSONL plan entries,
+and mutation reports. Each entry declares the artifact kind, producing
+commands, supported reporters, artifact-local `schemaVersion`, streaming mode,
+and field map, so agents can plan parsers and CI integrations without
+hard-coding reporter internals. Result artifacts intentionally advertise both
+`run` and `watch`, because `watch --once` emits the same machine-readable shape
+as a normal run. `qualityGates` exposes validation commands as argv vectors
+with explicit timeouts and expected artifacts, so agents can reproduce CI
+without scraping prose. The complete artifact list is intentionally discovered
+from the command output; documentation examples are illustrative.
 
 ## CI
 
 GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
-timeout 600s nix flake check --print-build-logs
-timeout 360s nix run . -- run cl-weave-tests --reporter json --output cl-weave-cli-results.json
-nix develop --command timeout 360s env CL_WEAVE_REPORTER=jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 360s env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 360s env CL_WEAVE_REPORTER=tap sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 360s env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 120s env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 360s env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command timeout 360s env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
+nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
-The workflow uploads `cl-weave-results.json`, `cl-weave-events.jsonl`,
-`cl-weave-cli-results.json`, and `cl-weave-junit.xml` as the
-`cl-weave-test-reports` artifact. JSON result schema v4 is intended for AI
-agents and external automation: the root object identifies itself with
-`kind: "test-results"`, and every event includes both a machine `path` and a
-stable Vitest-style `pathString`. JSONL is intended for streaming automation,
-and JUnit is intended for CI test result ingestion.
+To enable binary cache reuse across developer machines and GitHub Actions,
+create a Cachix cache and add these repository settings:
+
+- variable `CACHIX_CACHE`: public cache name to pull from in CI
+- secret `CACHIX_AUTH_TOKEN`: optional write token to push newly built paths
+
+When `CACHIX_CACHE` is set, the workflow enables `cachix/cachix-action`. If
+`CACHIX_AUTH_TOKEN` is absent, CI stays in pull-only mode so forked pull
+requests and public builds still work. If the token is present, the workflow
+pushes fresh build outputs back to the cache. The workflow also pulls from
+`nix-community` via `extraPullNames` to reduce cold-start latency.
+
+The workflow runs on Linux and macOS, then uploads `cl-weave-results.json`,
+`cl-weave-events.jsonl`, `cl-weave.coverage`, `cl-weave-cli-results.json`,
+`cl-weave-metadata.json`, `cl-weave-plan.json`, `cl-weave-watch-once.json`,
+`cl-weave-tap.txt`, and `cl-weave-junit.xml` as
+`cl-weave-test-reports-${system}` artifacts. JSON result
+schema v4 is intended for AI agents and external automation: the root object
+identifies itself with `kind: "test-results"`, and every event includes both a
+machine `path` and a stable Vitest-style `pathString`. JSONL is intended for
+streaming automation, coverage is intended for SBCL-side inspection, metadata is
+intended for agent discovery, one-shot watch output is intended for automation
+that needs watch resolution without entering a polling loop, TAP is intended for
+portable smoke output, and JUnit is intended for CI test result ingestion.
 
 ## API
 
@@ -784,9 +839,11 @@ failures are reported as `test-timeout` conditions.
 
 CLI and CI runs can set suite-wide defaults with `--retry`,
 `CL_WEAVE_RETRY`, `--test-timeout-ms`, `--test-timeout`, `--testTimeout`,
-`CL_WEAVE_TEST_TIMEOUT_MS`, or `CL_WEAVE_TEST_TIMEOUT`. Per-test options take
-priority over global defaults, so `:retry 0` disables a global retry budget for
-one case and `:timeout-ms` replaces the global per-attempt timeout.
+`CL_WEAVE_TEST_TIMEOUT_MS`, `CL_WEAVE_TEST_TIMEOUT`, `--max-workers`,
+`--maxWorkers`, or `CL_WEAVE_MAX_WORKERS`. Per-test options take priority over
+global defaults, so `:retry 0` disables a global retry budget for one case,
+`:timeout-ms` replaces the global per-attempt timeout, and `--max-workers`
+bounds adjacent concurrent worker batches.
 
 `it-fails` and `test-fails` invert one runnable case: any assertion failure,
 error, or timeout is reported as `:pass`; an unexpectedly passing body is
@@ -832,7 +889,9 @@ to run beside adjacent concurrent cases. `describe-concurrent` /
 `it-sequential` / `it.sequential` opts a single case back out. Report order
 stays deterministic: events are emitted in the selected definition order. When
 `:bail` is enabled, concurrent batching is disabled so fast-fail behavior
-remains exact.
+remains exact. `run-all :max-workers N`, `--max-workers N`, `--maxWorkers N`,
+and `CL_WEAVE_MAX_WORKERS=N` bound the number of worker threads used for each
+adjacent concurrent batch.
 
 ### Filtering
 
@@ -848,7 +907,7 @@ name filter selects matching paths.
 For command-line and CI usage, `CL_WEAVE_TEST_FILTER` provides the same filter:
 
 ```sh
-timeout 120s env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Suites with no selected descendants do not run `before-all` or `after-all`, so
@@ -872,7 +931,7 @@ tests. A test belongs to shard `INDEX` when its ordinal maps to that slot.
 For command-line and CI usage, `CL_WEAVE_SHARD` uses `INDEX/COUNT`:
 
 ```sh
-timeout 120s env CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
@@ -899,7 +958,7 @@ reproduce order-dependent failures.
 For command-line and CI usage:
 
 ```sh
-timeout 360s env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 ### Test Listing
@@ -920,7 +979,7 @@ For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
 and exits with status `0`:
 
 ```sh
-timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `CL_WEAVE_OUTPUT_FILE`
@@ -939,10 +998,43 @@ AI agents can also query plans as plain Lisp facts:
 
 `test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
 `:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
-`logic-where` and `test-plan-where` are macro syntax over `logic-query`, keeping
-facts as data while making clauses read like Prolog goals. Variables are
-symbols whose names start with `?`, clauses are matched left-to-right, and
-`(:limit n)` caps backtracking results.
+`logic-where`, `logic-program`, `logic-run`, and `test-plan-where` keep data and
+logic separate: relations stay plain lists, while query and rule syntax stays in
+macros. Variables are symbols whose names start with `?`, clauses are matched
+left-to-right, and `(:limit n)` caps backtracking results.
+
+Rules use a Prolog-style `(:- head goal...)` form:
+
+```lisp
+(let ((program (cl-weave:logic-program
+                (:parent "grand" "parent")
+                (:parent "parent" "child")
+                (:- (:ancestor ?left ?right)
+                    (:parent ?left ?right))
+                (:- (:ancestor ?left ?right)
+                    (:parent ?left ?middle)
+                    (:ancestor ?middle ?right)))))
+  (cl-weave:logic-run program
+    (:ancestor ?left "child")))
+;; => (((?left . "parent"))
+;;     ((?left . "grand")))
+```
+
+`query-test-plan` and `test-plan-where` accept either collected plan entries or
+an already-expanded logic program, so derived views can be layered on top of
+`test-plan-facts` without a second adapter:
+
+```lisp
+(let* ((plan (cl-weave:collect-test-plan (cl-weave::root-suite)))
+       (program (append
+                 (cl-weave:test-plan-facts plan)
+                 (cl-weave:logic-program
+                  (:- (:selected ?test)
+                      (:status ?test :run)
+                      (:focused ?test))))))
+  (cl-weave:test-plan-where program
+    (:selected ?test)))
+```
 
 ### Bail
 
@@ -959,7 +1051,7 @@ For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `yes`, `on`,
 `t`, `false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
-timeout 120s env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Bail composes with focus and filtering. Reporters emit only the events that were
@@ -1085,7 +1177,8 @@ discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus positive
 `CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
 `CL_WEAVE_BAIL` for fast-fail runs. It also accepts `CL_WEAVE_RETRY=N` for a
 global retry default and `CL_WEAVE_TEST_TIMEOUT_MS=N` or
-`CL_WEAVE_TEST_TIMEOUT=N` for a global per-attempt timeout default. Boolean
+`CL_WEAVE_TEST_TIMEOUT=N` for a global per-attempt timeout default, plus
+`CL_WEAVE_MAX_WORKERS=N` to bound adjacent concurrent worker batches. Boolean
 environment variables treat
 `0`, `false`, `no`, `off`, and `nil` as false. Set
 `CL_WEAVE_PASS_WITH_NO_TESTS=false` to fail CI when filters select no tests.
@@ -1103,8 +1196,8 @@ The CLI keeps kebab-case flags as the canonical Lisp spelling and exposes
 Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
 `--testNamePattern`, `--watchInterval`, `--coverageOutput`,
 `--outputFile`, `--testTimeout`, `--testTimeoutMs`, `--passWithNoTests`,
-`--failWithNoTests`, `--snapshotDir`, `--snapshotFile`, `--update`, and
-`--updateSnapshots`.
+`--failWithNoTests`, `--snapshotDir`, `--snapshotFile`, `--maxWorkers`,
+`--update`, and `--updateSnapshots`.
 
 ### ASDF System Runner and Watch Mode
 
@@ -1116,6 +1209,9 @@ Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
                        :name-filter "parser"
                        :shard '(1 2)
                        :bail 1
+                       :coverage t
+                       :coverage-output "my-project-tests.coverage"
+                       :pass-with-no-tests t
                        :include-dependencies t
                        :interval 0.5)
 ```
@@ -1123,15 +1219,23 @@ Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
 `asdf-system-files` returns the existing source files declared by an ASDF
 system. `run-system` reloads the system with ASDF, then runs the currently
 registered cl-weave tests. `watch-system` uses ASDF dependency information and
-file write dates to rerun only after declared source files change.
+file write dates to rerun only after declared source files change. When every
+changed file is already a registered test-definition file, watch mode narrows
+the rerun to those files only. Changes to non-test files, newly added files, or
+deleted files fall back to a full-suite rerun so implementation edits cannot
+silently skip affected tests.
+Coverage collection and `:pass-with-no-tests` policy are forwarded on every
+watch rerun, so local watch sessions exercise the same success criteria and
+coverage artifact path as an equivalent one-shot `run-all`.
 Reporter output goes to `:stream`; watch status goes to `:status-stream`, which
 defaults to `*error-output*`.
 
 The script runner enables watch mode with environment variables:
 
 ```sh
-timeout 360s env CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
-timeout 360s env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_ONCE=1 sbcl --noinform --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
 ```
 
 CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,

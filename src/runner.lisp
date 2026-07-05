@@ -5,8 +5,28 @@
 (defvar *test-sequence-seed* 0)
 (defvar *default-retry* 0)
 (defvar *default-timeout-ms* nil)
+(defvar *max-workers* nil)
 (defvar *retry-test-restart-marker* (list :retry-test-restart))
 (defvar *runner-default-condition-handler-disabled* nil)
+(defvar *runner-propagate-conditions* t)
+
+(defparameter *runner-dynamic-environment-variables*
+  '(*root-suite*
+    *current-suite*
+    *test-context*
+    *test-name-filter*
+    *test-sequence-order*
+    *test-sequence-seed*
+    *default-retry*
+    *default-timeout-ms*
+    *max-workers*
+    *isolated-timeout-seconds*
+    *snapshot-directory*
+    *snapshot-file-name*
+    *update-snapshots*
+    *property-test-count*
+    *property-seed*
+    *recursive-generator-depth*))
 
 (defconstant +stable-hash-modulus+ 4294967296)
 (defconstant +stable-hash-offset+ 2166136261)
@@ -117,6 +137,13 @@
     (t (error "Timeout must be NIL or a positive integer in milliseconds: ~S"
               timeout-ms))))
 
+(defun normalize-max-workers (max-workers)
+  (cond
+    ((null max-workers) nil)
+    ((and (integerp max-workers) (plusp max-workers)) max-workers)
+    (t (error "Max workers must be NIL or a positive integer: ~S"
+              max-workers))))
+
 (defun retry-count (test)
   (normalize-retry-count
    (if (null (test-case-retry test))
@@ -191,48 +218,55 @@
   (let ((*runner-default-condition-handler-disabled* t))
     (signal condition)))
 
+(defmacro with-runner-condition-propagation ((enabled) &body body)
+  `(let ((*runner-propagate-conditions* ,enabled))
+     ,@body))
+
 (defun run-test-attempt (suite test start)
   (let ((event nil))
     (block attempt
       (setf event
             (handler-bind
-                ((sb-ext:timeout
-                   (lambda (condition)
-                     (unless *runner-default-condition-handler-disabled*
-                       (offer-condition-to-outer-handlers condition)
-                       (let ((timeout (make-condition
-                                       'test-timeout
-                                       :timeout-ms (effective-timeout-ms test))))
-                         (return-from attempt
-                           (setf event
-                                 (make-event :fail
-                                             suite
-                                             test
-                                             start
-                                             :condition timeout)))))))
+                 ((sb-ext:timeout
+                    (lambda (condition)
+                      (when (and *runner-propagate-conditions*
+                                 (not *runner-default-condition-handler-disabled*))
+                        (offer-condition-to-outer-handlers condition))
+                      (let ((timeout (make-condition
+                                      'test-timeout
+                                     :timeout-ms (effective-timeout-ms test))))
+                        (return-from attempt
+                          (setf event
+                                (make-event :fail
+                                            suite
+                                            test
+                                            start
+                                            :condition timeout))))))
                  (assertion-failure
-                   (lambda (condition)
-                     (unless *runner-default-condition-handler-disabled*
-                       (offer-condition-to-outer-handlers condition)
-                       (return-from attempt
-                         (setf event
-                               (make-event :fail
-                                           suite
-                                           test
-                                           start
-                                           :condition condition
-                                           :assertion (failure-detail condition)))))))
+                    (lambda (condition)
+                      (when (and *runner-propagate-conditions*
+                                 (not *runner-default-condition-handler-disabled*))
+                        (offer-condition-to-outer-handlers condition))
+                      (return-from attempt
+                        (setf event
+                              (make-event :fail
+                                          suite
+                                          test
+                                          start
+                                          :condition condition
+                                          :assertion (failure-detail condition))))))
                  (condition
-                   (lambda (condition)
-                     (unless *runner-default-condition-handler-disabled*
-                       (offer-condition-to-outer-handlers condition)
-                       (return-from attempt
-                         (setf event
-                               (make-event :error
-                                           suite
-                                           test
-                                           start
-                                           :condition condition)))))))
+                    (lambda (condition)
+                      (when (and *runner-propagate-conditions*
+                                 (not *runner-default-condition-handler-disabled*))
+                        (offer-condition-to-outer-handlers condition))
+                      (return-from attempt
+                        (setf event
+                              (make-event :error
+                                          suite
+                                          test
+                                          start
+                                          :condition condition))))))
               (call-test-attempt/restarts suite test start))))
     (if (eq event *retry-test-restart-marker*)
         event
@@ -288,13 +322,34 @@
       (= (first shard)
          (1+ (mod (1- ordinal) (second shard))))))
 
-(defun base-selected-test-case-p (suite test focus-enabled ancestor-focused name-filter)
+(defun location-pathname-designator (designator)
+  (etypecase designator
+    (pathname (uiop:ensure-absolute-pathname designator))
+    (string (uiop:ensure-absolute-pathname designator))))
+
+(defun normalize-location-filter (location-filter)
+  (when location-filter
+    (mapcar #'location-pathname-designator location-filter)))
+
+(defun test-location-pathname (test)
+  (let ((file (getf (test-case-location test) :file)))
+    (when file
+      (location-pathname-designator file))))
+
+(defun test-location-matches-filter-p (test location-filter)
+  (or (null location-filter)
+      (let ((pathname (test-location-pathname test)))
+        (and pathname
+             (member pathname location-filter :test #'equal)))))
+
+(defun base-selected-test-case-p (suite test focus-enabled ancestor-focused name-filter location-filter)
   (and (or (not focus-enabled)
            ancestor-focused
            (test-case-focus test))
-       (test-path-matches-filter-p (test-path suite test) name-filter)))
+       (test-path-matches-filter-p (test-path suite test) name-filter)
+       (test-location-matches-filter-p test location-filter)))
 
-(defun collect-shard-paths (suite focus-enabled name-filter shard)
+(defun collect-shard-paths (suite focus-enabled name-filter location-filter shard)
   (when shard
     (let ((paths (make-hash-table :test #'equal))
           (ordinal 0))
@@ -309,7 +364,8 @@
                              child
                              focus-enabled
                              ancestor-focused
-                             name-filter)
+                             name-filter
+                             location-filter)
                         (incf ordinal)
                         (when (shard-includes-ordinal-p ordinal shard)
                           (setf (gethash (test-path current-suite child) paths)
@@ -368,12 +424,12 @@
   (or (null shard-paths)
       (gethash path shard-paths)))
 
-(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter shard-paths)
+(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter location-filter shard-paths)
   (let ((path (test-path suite test)))
-    (and (base-selected-test-case-p suite test focus-enabled ancestor-focused name-filter)
+    (and (base-selected-test-case-p suite test focus-enabled ancestor-focused name-filter location-filter)
          (selected-path-p path shard-paths))))
 
-(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter shard-paths)
+(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter location-filter shard-paths)
   (some (lambda (child)
           (typecase child
             (suite
@@ -386,6 +442,7 @@
                      focus-enabled
                      child-focused
                      name-filter
+                     location-filter
                      shard-paths))))
             (test-case
              (selected-test-case-p
@@ -394,11 +451,34 @@
               focus-enabled
               ancestor-focused
               name-filter
+              location-filter
               shard-paths))
             (t nil)))
         (suite-children suite)))
 
-(defun run-test-case (suite test)
+(defun selected-child-suite-p
+    (child focus-enabled child-focused name-filter location-filter shard-paths)
+  (and (or (not focus-enabled)
+           child-focused
+           (focused-child-p child))
+       (selected-suite-p child
+                         focus-enabled
+                         child-focused
+                         name-filter
+                         location-filter
+                         shard-paths)))
+
+(defun selected-child-test-p
+    (suite child focus-enabled ancestor-focused name-filter location-filter shard-paths)
+  (selected-test-case-p suite
+                        child
+                        focus-enabled
+                        ancestor-focused
+                        name-filter
+                        location-filter
+                        shard-paths))
+
+(defun run-test-case/internal (suite test)
   (let ((start (get-internal-real-time)))
     (cond
       ((test-case-todo-reason test)
@@ -406,7 +486,15 @@
       ((test-case-skip-reason test)
        (make-event :skip suite test start :reason (test-case-skip-reason test)))
       (t
-       (run-test-attempts/k suite test start (retry-count test))))))
+        (run-test-attempts/k suite test start (retry-count test))))))
+
+(defun run-test-case (suite test)
+  (with-runner-condition-propagation (nil)
+    (run-test-case/internal suite test)))
+
+(defun run-test-case/interactively (suite test)
+  (with-runner-condition-propagation (t)
+    (run-test-case/internal suite test)))
 
 (defun suite-suppression (suite inherited-status inherited-reason)
   (cond
@@ -466,7 +554,7 @@
        (null (execution-control-bail-limit control))))
 
 (defun collect-leading-concurrent-tests
-    (suite children focus-enabled ancestor-focused name-filter shard-paths execution-mode)
+    (suite children focus-enabled ancestor-focused name-filter location-filter shard-paths execution-mode)
   (labels ((walk (remaining selected)
              (let ((child (first remaining)))
                (if (and (effective-concurrent-test-case-p child execution-mode)
@@ -476,65 +564,79 @@
                          focus-enabled
                          ancestor-focused
                          name-filter
+                         location-filter
                          shard-paths))
                    (walk (rest remaining) (cons child selected))
                    (values (nreverse selected) remaining)))))
     (walk children '())))
 
+(defun worker-batch-size (tests)
+  (let ((limit (normalize-max-workers *max-workers*)))
+    (if limit
+        (min limit (length tests))
+        (length tests))))
+
+(defun split-worker-batch/k (tests limit continue)
+  (labels ((take/k (remaining remaining-limit collected)
+             (if (or (null remaining) (zerop remaining-limit))
+                 (funcall continue (nreverse collected) remaining)
+                 (take/k (rest remaining)
+                         (1- remaining-limit)
+                         (cons (first remaining) collected)))))
+    (take/k tests limit '())))
+
+(defun run-worker-batches/k (tests batch-size run-batch continue)
+  (if (null tests)
+      (funcall continue '())
+      (split-worker-batch/k
+       tests
+       batch-size
+       (lambda (batch remaining)
+         (let ((events (funcall run-batch batch)))
+           (run-worker-batches/k
+            remaining
+            batch-size
+            run-batch
+            (lambda (tail)
+              (funcall continue (append events tail)))))))))
+
+(defun capture-runner-dynamic-environment ()
+  (mapcar #'symbol-value *runner-dynamic-environment-variables*))
+
+(defmacro with-runner-dynamic-environment (values-form &body body)
+  `(progv *runner-dynamic-environment-variables*
+          ,values-form
+     ,@body))
+
 (defun run-concurrent-test-cases (suite tests)
   #+sb-thread
-  (let ((captured-root-suite *root-suite*)
-        (captured-current-suite *current-suite*)
-        (captured-test-context *test-context*)
-        (captured-test-name-filter *test-name-filter*)
-        (captured-test-sequence-order *test-sequence-order*)
-        (captured-test-sequence-seed *test-sequence-seed*)
-        (captured-default-retry *default-retry*)
-        (captured-default-timeout-ms *default-timeout-ms*)
-        (captured-isolated-timeout-seconds *isolated-timeout-seconds*)
-        (captured-snapshot-directory *snapshot-directory*)
-        (captured-snapshot-file-name *snapshot-file-name*)
-        (captured-update-snapshots *update-snapshots*)
-        (captured-property-test-count *property-test-count*)
-        (captured-property-seed *property-seed*)
-        (captured-recursive-generator-depth *recursive-generator-depth*))
+  (let ((captured-environment
+          (capture-runner-dynamic-environment)))
     (labels ((run-captured-test (test)
-               (let ((*root-suite* captured-root-suite)
-                     (*current-suite* captured-current-suite)
-                     (*test-context* captured-test-context)
-                     (*test-name-filter* captured-test-name-filter)
-                     (*test-sequence-order* captured-test-sequence-order)
-                     (*test-sequence-seed* captured-test-sequence-seed)
-                     (*default-retry* captured-default-retry)
-                     (*default-timeout-ms* captured-default-timeout-ms)
-                     (*isolated-timeout-seconds* captured-isolated-timeout-seconds)
-                     (*snapshot-directory* captured-snapshot-directory)
-                     (*snapshot-file-name* captured-snapshot-file-name)
-                     (*update-snapshots* captured-update-snapshots)
-                     (*property-test-count* captured-property-test-count)
-                     (*property-seed* captured-property-seed)
-                     (*recursive-generator-depth* captured-recursive-generator-depth))
-                 (run-test-case suite test))))
-      (let ((threads
-              (loop for test in tests
-                    collect (let ((worker-test test))
-                              (sb-thread:make-thread
-                               (lambda ()
-                                 (run-captured-test worker-test))
-                               :name (format nil "cl-weave: ~A"
-                                             (test-case-name worker-test)))))))
-        (mapcar #'sb-thread:join-thread threads))))
+               (with-runner-dynamic-environment captured-environment
+                  (run-test-case/internal suite test))))
+      (flet ((run-batch (batch)
+               (let ((threads
+                       (loop for test in batch
+                             collect (let ((worker-test test))
+                                       (sb-thread:make-thread
+                                        (lambda ()
+                                          (run-captured-test worker-test))
+                                        :name (format nil "cl-weave: ~A"
+                                                      (test-case-name worker-test)))))))
+                 (mapcar #'sb-thread:join-thread threads))))
+        (run-worker-batches/k tests (worker-batch-size tests) #'run-batch #'identity))))
   #-sb-thread
   (mapcar (lambda (test)
-            (run-test-case suite test))
+            (run-test-case/internal suite test))
           tests))
 
-(declaim (ftype (function (suite list execution-control function &optional t t t t t t t) *) collect-children/k))
+(declaim (ftype (function (suite list execution-control function &optional t t t t t t t t) *) collect-children/k))
 
 (defun collect-suite-events/k
-    (suite control continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
+    (suite control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
   (if (or (execution-control-stopped control)
-          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter shard-paths)))
+          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths)))
       (funcall continue '())
       (let ((active-execution-mode
               (effective-suite-execution-mode suite inherited-execution-mode)))
@@ -549,6 +651,7 @@
                focus-enabled
                ancestor-focused
                name-filter
+               location-filter
                shard-paths
                active-status
                active-reason
@@ -566,6 +669,7 @@
                        focus-enabled
                        ancestor-focused
                        name-filter
+                       location-filter
                        shard-paths
                        nil
                        nil
@@ -573,174 +677,152 @@
                 (call-hooks/k (reverse (suite-after-all suite)) (lambda () nil))))))))
 
 (defun collect-children/k
-    (suite children control continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason execution-mode)
-  (if (or (null children) (execution-control-stopped control))
-      (funcall continue '())
-      (let ((child (first children)))
-        (typecase child
-          (suite
-           (let* ((child-focused (or ancestor-focused (suite-focus child)))
-                  (selected (and (or (not focus-enabled)
-                                     child-focused
-                                     (focused-child-p child))
-                                 (selected-suite-p
-                                  child
-                                  focus-enabled
-                                  child-focused
-                                  name-filter
-                                  shard-paths))))
-             (if selected
-                 (collect-suite-events/k
-                  child
-                  control
-                  (lambda (events)
-                    (if (execution-control-stopped control)
-                        (funcall continue events)
-                        (collect-children/k
-                         suite
-                         (rest children)
-                         control
-                         (lambda (tail)
-                           (funcall continue (append events tail)))
-                         focus-enabled
-                         ancestor-focused
-                         name-filter
-                         shard-paths
-                         suppressed-status
-                         suppressed-reason
-                         execution-mode)))
-                  focus-enabled
-                  child-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode)
-                 (collect-children/k
-                  suite
-                  (rest children)
-                  control
-                  continue
-                  focus-enabled
-                  ancestor-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode))))
-          (test-case
-           (let ((selected (selected-test-case-p
-                            suite
-                            child
-                            focus-enabled
-                            ancestor-focused
-                             name-filter
-                             shard-paths)))
-             (if selected
-                 (if (and (effective-concurrent-test-case-p child execution-mode)
-                          (concurrent-batching-enabled-p control suppressed-status))
-                     (multiple-value-bind (tests rest-children)
-                         (collect-leading-concurrent-tests
-                          suite
-                          children
-                          focus-enabled
-                          ancestor-focused
-                          name-filter
-                          shard-paths
-                          execution-mode)
-                       (let ((events (mapcar (lambda (event)
-                                               (record-event/control control event))
-                                             (run-concurrent-test-cases suite tests))))
-                         (collect-children/k
-                          suite
-                          rest-children
-                          control
+    (suite children control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (macrolet ((recur (remaining next-continue)
+               `(collect-children/k
+                 suite
+                 ,remaining
+                 control
+                 ,next-continue
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)))
+    (labels ((continue-with-tail (head-events remaining)
+               (recur remaining
+                      (lambda (tail)
+                        (funcall continue (append head-events tail)))))
+             (continue-with-event (event)
+               (if (execution-control-stopped control)
+                   (funcall continue (list event))
+                   (recur (rest children)
                           (lambda (tail)
-                            (funcall continue (append events tail)))
-                          focus-enabled
-                          ancestor-focused
-                          name-filter
-                          shard-paths
-                          suppressed-status
-                          suppressed-reason
-                          execution-mode)))
-                     (let ((event (record-event/control
-                                   control
-                                   (if suppressed-status
-                                       (suppressed-test-event suite child suppressed-status suppressed-reason)
-                                       (run-test-case suite child)))))
-                       (if (execution-control-stopped control)
-                           (funcall continue (list event))
-                           (collect-children/k
+                            (funcall continue (cons event tail)))))))
+      (if (or (null children) (execution-control-stopped control))
+          (funcall continue '())
+          (let ((child (first children)))
+            (typecase child
+              (suite
+               (let ((child-focused (or ancestor-focused (suite-focus child))))
+                 (if (selected-child-suite-p
+                      child
+                      focus-enabled
+                      child-focused
+                      name-filter
+                      location-filter
+                      shard-paths)
+                     (collect-suite-events/k
+                      child
+                      control
+                      (lambda (events)
+                        (if (execution-control-stopped control)
+                            (funcall continue events)
+                            (continue-with-tail events (rest children))))
+                      focus-enabled
+                      child-focused
+                      name-filter
+                      location-filter
+                      shard-paths
+                      suppressed-status
+                      suppressed-reason
+                      execution-mode)
+                     (recur (rest children) continue))))
+              (test-case
+               (if (selected-child-test-p
+                    suite
+                    child
+                    focus-enabled
+                    ancestor-focused
+                    name-filter
+                    location-filter
+                    shard-paths)
+                   (if (and (effective-concurrent-test-case-p child execution-mode)
+                            (concurrent-batching-enabled-p control suppressed-status))
+                       (multiple-value-bind (tests rest-children)
+                           (collect-leading-concurrent-tests
                             suite
-                            (rest children)
-                            control
-                            (lambda (tail)
-                              (funcall continue (cons event tail)))
+                            children
                             focus-enabled
                             ancestor-focused
                             name-filter
+                            location-filter
                             shard-paths
-                            suppressed-status
-                            suppressed-reason
-                            execution-mode))))
-                 (collect-children/k
-                  suite
-                  (rest children)
-                  control
-                  continue
-                  focus-enabled
-                  ancestor-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode))))
-          (t
-           (collect-children/k
-            suite
-            (rest children)
-            control
-            continue
-            focus-enabled
-            ancestor-focused
-            name-filter
-            shard-paths
-            suppressed-status
-            suppressed-reason
-            execution-mode))))))
+                            execution-mode)
+                         (continue-with-tail
+                          (mapcar (lambda (event)
+                                    (record-event/control control event))
+                                  (run-concurrent-test-cases suite tests))
+                          rest-children))
+                       (continue-with-event
+                        (record-event/control
+                         control
+                         (if suppressed-status
+                             (suppressed-test-event suite child suppressed-status suppressed-reason)
+                              (run-test-case/internal suite child)))))
+                   (recur (rest children) continue)))
+              (t
+               (recur (rest children) continue))))))))
 
-(defun collect-events (suite &key name-filter bail shard order seed retry timeout-ms)
+(defun call-with-collection-context
+    (suite name-filter location-filter shard order seed retry timeout-ms max-workers continue)
   (let* ((focus-enabled (focused-suite-p suite))
          (normalized-filter (normalized-test-filter name-filter))
+         (normalized-location-filter (normalize-location-filter location-filter))
          (normalized-shard (normalize-shard shard))
          (normalized-order (normalize-sequence-order order))
          (normalized-seed (normalize-sequence-seed seed))
          (normalized-retry (normalize-retry-count retry))
          (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
+         (normalized-max-workers (normalize-max-workers max-workers))
          (shard-paths (collect-shard-paths
                        suite
                        focus-enabled
                        normalized-filter
+                       normalized-location-filter
                        normalized-shard)))
     (let ((*test-sequence-order* normalized-order)
           (*test-sequence-seed* normalized-seed)
           (*default-retry* normalized-retry)
-          (*default-timeout-ms* normalized-timeout-ms))
-      (collect-suite-events/k
-       suite
-       (make-execution-control :bail-limit (normalize-bail bail))
-       #'identity
-       focus-enabled
-       nil
-       normalized-filter
-       shard-paths))))
+          (*default-timeout-ms* normalized-timeout-ms)
+          (*max-workers* normalized-max-workers))
+      (funcall continue
+               focus-enabled
+               normalized-filter
+               normalized-location-filter
+               shard-paths))))
 
-(declaim (ftype (function (suite list function &optional t t t t t t t) *) collect-children-plan/k))
+(defun collect-events (suite &key name-filter location-filter bail shard order seed retry timeout-ms max-workers)
+  (with-runner-condition-propagation (nil)
+    (call-with-collection-context
+     suite
+     name-filter
+     location-filter
+     shard
+     order
+     seed
+     retry
+     timeout-ms
+     max-workers
+     (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
+       (collect-suite-events/k
+        suite
+        (make-execution-control :bail-limit (normalize-bail bail))
+        #'identity
+        focus-enabled
+        nil
+        normalized-filter
+        normalized-location-filter
+        shard-paths)))))
+
+(declaim (ftype (function (suite list function &optional t t t t t t t t) *) collect-children-plan/k))
 
 (defun collect-suite-plan/k
-    (suite continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
-  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter shard-paths))
+    (suite continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
+  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths))
       (funcall continue '())
       (let ((active-execution-mode
               (effective-suite-execution-mode suite inherited-execution-mode)))
@@ -753,287 +835,101 @@
            focus-enabled
            ancestor-focused
            name-filter
+           location-filter
            shard-paths
            active-status
            active-reason
            active-execution-mode)))))
 
 (defun collect-children-plan/k
-    (suite children continue &optional focus-enabled ancestor-focused name-filter shard-paths suppressed-status suppressed-reason execution-mode)
-  (if (null children)
-      (funcall continue '())
-      (let ((child (first children)))
-        (typecase child
-          (suite
-           (let* ((child-focused (or ancestor-focused (suite-focus child)))
-                  (selected (and (or (not focus-enabled)
-                                     child-focused
-                                     (focused-child-p child))
-                                 (selected-suite-p
+    (suite children continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (macrolet ((recur (remaining next-continue)
+               `(collect-children-plan/k
+                 suite
+                 ,remaining
+                 ,next-continue
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)))
+    (labels ((continue-with-tail (entries)
+               (recur (rest children)
+                      (lambda (tail)
+                        (funcall continue (append entries tail)))))
+             (continue-with-entry (entry)
+               (recur (rest children)
+                      (lambda (tail)
+                        (funcall continue (cons entry tail))))))
+      (if (null children)
+          (funcall continue '())
+          (let ((child (first children)))
+            (typecase child
+              (suite
+               (let ((child-focused (or ancestor-focused (suite-focus child))))
+                 (if (selected-child-suite-p
+                      child
+                      focus-enabled
+                      child-focused
+                      name-filter
+                      location-filter
+                      shard-paths)
+                     (collect-suite-plan/k
+                      child
+                      #'continue-with-tail
+                      focus-enabled
+                      child-focused
+                      name-filter
+                      location-filter
+                      shard-paths
+                      suppressed-status
+                      suppressed-reason
+                      execution-mode)
+                     (recur (rest children) continue))))
+              (test-case
+               (if (selected-child-test-p
+                    suite
+                    child
+                    focus-enabled
+                    ancestor-focused
+                    name-filter
+                    location-filter
+                    shard-paths)
+                   (let* ((status (planned-test-status child suppressed-status))
+                          (reason (planned-test-reason child suppressed-status suppressed-reason status))
+                          (entry (make-plan-entry
+                                  suite
                                   child
+                                  status
+                                  reason
                                   focus-enabled
-                                  child-focused
-                                  name-filter
-                                  shard-paths))))
-             (if selected
-                 (collect-suite-plan/k
-                  child
-                  (lambda (entries)
-                    (collect-children-plan/k
-                     suite
-                     (rest children)
-                     (lambda (tail)
-                       (funcall continue (append entries tail)))
-                     focus-enabled
-                     ancestor-focused
-                     name-filter
-                     shard-paths
-                     suppressed-status
-                     suppressed-reason
-                     execution-mode))
-                  focus-enabled
-                  child-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode)
-                 (collect-children-plan/k
-                  suite
-                  (rest children)
-                  continue
-                  focus-enabled
-                  ancestor-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode))))
-          (test-case
-           (if (selected-test-case-p suite child focus-enabled ancestor-focused name-filter shard-paths)
-               (let* ((status (planned-test-status child suppressed-status))
-                  (reason (planned-test-reason child suppressed-status suppressed-reason status))
-                      (entry (make-plan-entry
-                              suite
-                              child
-                              status
-                              reason
-                              focus-enabled
-                              ancestor-focused
-                              execution-mode)))
-                 (collect-children-plan/k
-                  suite
-                  (rest children)
-                  (lambda (tail)
-                    (funcall continue (cons entry tail)))
-                  focus-enabled
-                  ancestor-focused
-                  name-filter
-                  shard-paths
-                  suppressed-status
-                  suppressed-reason
-                  execution-mode))
-               (collect-children-plan/k
-                suite
-                (rest children)
-                continue
-                focus-enabled
-                ancestor-focused
-                name-filter
-                shard-paths
-                suppressed-status
-                suppressed-reason
-                execution-mode)))
-          (t
-           (collect-children-plan/k
-            suite
-            (rest children)
-            continue
-            focus-enabled
-            ancestor-focused
-            name-filter
-            shard-paths
-            suppressed-status
-            suppressed-reason
-            execution-mode))))))
+                                  ancestor-focused
+                                  execution-mode)))
+                     (continue-with-entry entry))
+                   (recur (rest children) continue)))
+              (t
+               (recur (rest children) continue))))))))
 
-(defun collect-test-plan (suite &key name-filter shard order seed retry timeout-ms)
-  (let* ((focus-enabled (focused-suite-p suite))
-         (normalized-filter (normalized-test-filter name-filter))
-         (normalized-shard (normalize-shard shard))
-         (normalized-order (normalize-sequence-order order))
-         (normalized-seed (normalize-sequence-seed seed))
-         (normalized-retry (normalize-retry-count retry))
-         (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
-         (shard-paths (collect-shard-paths
-                       suite
-                       focus-enabled
-                       normalized-filter
-                       normalized-shard)))
-    (let ((*test-sequence-order* normalized-order)
-          (*test-sequence-seed* normalized-seed)
-          (*default-retry* normalized-retry)
-          (*default-timeout-ms* normalized-timeout-ms))
-      (collect-suite-plan/k
-       suite
-       #'identity
-       focus-enabled
-       nil
-       normalized-filter
-       shard-paths))))
-
-(defun passed-event-p (event)
-  (member (test-event-status event) '(:pass :skip :todo)))
-
-(define-condition coverage-unavailable (error)
-  ((reason :initarg :reason :reader coverage-unavailable-reason))
-  (:report (lambda (condition stream)
-             (format stream "Coverage support is unavailable: ~A"
-                     (coverage-unavailable-reason condition)))))
-
-(defun coverage-fbound-symbol (name &optional required-p)
-  (let ((package (find-package "SB-COVER")))
-    (unless package
-      (when required-p
-        (error 'coverage-unavailable :reason "SB-COVER is not loaded.")))
-    (when package
-      (multiple-value-bind (symbol status)
-          (find-symbol name package)
-        (if (and status (fboundp symbol))
-            symbol
-            (when required-p
-              (error 'coverage-unavailable
-                     :reason (format nil "SB-COVER:~A is not available." name))))))))
-
-(defun require-coverage-support ()
-  #+sbcl
-  (handler-case
-      (progn
-        (require :sb-cover)
-        (coverage-fbound-symbol "RESET-COVERAGE" t)
-        (coverage-fbound-symbol "SAVE-COVERAGE-IN-FILE" t)
-        t)
-    (coverage-unavailable (condition)
-      (error condition))
-    (error (condition)
-      (error 'coverage-unavailable :reason condition)))
-  #-sbcl
-  (error 'coverage-unavailable :reason "Coverage requires SBCL sb-cover."))
-
-(defun coverage-support-available-p ()
-  #+sbcl
-  (handler-case
-      (handler-bind ((warning #'muffle-warning))
-        (require-coverage-support))
-    (condition ()
-      nil))
-  #-sbcl
-  nil)
-
-(defun reset-coverage ()
-  (require-coverage-support)
-  (funcall (coverage-fbound-symbol "RESET-COVERAGE" t))
-  t)
-
-(defun save-coverage (pathname)
-  (require-coverage-support)
-  (funcall (coverage-fbound-symbol "SAVE-COVERAGE-IN-FILE" t) pathname)
-  pathname)
-
-(defun call-with-coverage (coverage coverage-output coverage-reset thunk)
-  (if coverage
-      (progn
-        (require-coverage-support)
-        (when coverage-reset
-          (reset-coverage))
-        (unwind-protect
-             (funcall thunk)
-          (when coverage-output
-            (save-coverage coverage-output))))
-      (funcall thunk)))
-
-(defparameter *reporter-aliases*
-  '((:spec "spec")
-    (:sexp "sexp")
-    (:json "json")
-    (:jsonl "jsonl" "ndjson")
-    (:tap "tap")
-    (:github "github")
-    (:junit "junit")))
-
-(defparameter *run-reporters* (mapcar #'first *reporter-aliases*))
-
-(defparameter *list-reporters* '(:spec :sexp :json :jsonl))
-
-(defun ensure-run-reporter (reporter)
-  (unless (member reporter *run-reporters*)
-    (error "cl-weave: run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))
-  reporter)
-
-(defun ensure-list-reporter (reporter)
-  (unless (member reporter *list-reporters*)
-    (error "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
-  reporter)
-
-(defun run-all (&key (reporter :spec)
-                  (stream *standard-output*)
-                  (name-filter *test-name-filter*)
-                  shard
-                  order
-                  seed
-                  bail
-                  retry
-                  timeout-ms
-                  coverage
-                  coverage-output
-                  (pass-with-no-tests t)
-                  (coverage-reset t))
-  (ensure-run-reporter reporter)
-  (call-with-coverage
-   coverage
-   coverage-output
-   coverage-reset
-   (lambda ()
-     (let ((events (collect-events
-                    (root-suite)
-                    :name-filter name-filter
-                    :shard shard
-                    :order order
-                    :seed seed
-                    :bail bail
-                    :retry retry
-                    :timeout-ms timeout-ms)))
-       (ecase reporter
-         (:spec (report-spec events stream))
-         (:sexp (report-sexp events stream))
-         (:json (report-json events stream))
-         (:jsonl (report-jsonl events stream))
-         (:tap (report-tap events stream))
-         (:github (report-github events stream))
-         (:junit (report-junit events stream)))
-       (and (or pass-with-no-tests events)
-            (every #'passed-event-p events))))))
-
-(defun list-tests (&key (reporter :spec)
-                     (stream *standard-output*)
-                     (name-filter *test-name-filter*)
-                     shard
-                     order
-                     seed
-                     retry
-                     timeout-ms)
-  (ensure-list-reporter reporter)
-  (let ((plan (collect-test-plan
-               (root-suite)
-               :name-filter name-filter
-               :shard shard
-               :order order
-               :seed seed
-               :retry retry
-               :timeout-ms timeout-ms)))
-    (ecase reporter
-      (:spec (report-plan-spec plan stream))
-      (:sexp (report-plan-sexp plan stream))
-      (:json (report-plan-json plan stream))
-      (:jsonl (report-plan-jsonl plan stream)))
-    plan))
+(defun collect-test-plan (suite &key name-filter location-filter shard order seed retry timeout-ms)
+  (call-with-collection-context
+   suite
+   name-filter
+   location-filter
+   shard
+   order
+   seed
+   retry
+   timeout-ms
+   nil
+   (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
+     (collect-suite-plan/k
+      suite
+      #'identity
+      focus-enabled
+      nil
+      normalized-filter
+      normalized-location-filter
+      shard-paths))))

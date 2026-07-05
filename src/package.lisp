@@ -120,7 +120,9 @@
    #:it.todo.each
    #:it-todo-each
    #:list-tests
+   #:logic-program
    #:logic-query
+   #:logic-run
    #:logic-variable-p
    #:logic-where
    #:list-matchers
@@ -162,6 +164,7 @@
    #:reset-all-mocks
    #:reset-mock
    #:restore-all-mocks
+   #:reporter-artifact-schemas
    #:mock-restore
    #:spy-on
    #:vi.clearallmocks
@@ -245,6 +248,7 @@
    #:test-failure
    #:test-timeout
    #:test-timeout-ms
+   #:*max-workers*
    #:watch-system
    #:with-mocked-functions))
 

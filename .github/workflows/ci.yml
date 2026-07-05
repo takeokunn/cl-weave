@@ -11,11 +11,23 @@ permissions:
 
 jobs:
   nix:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    name: nix (${{ matrix.system }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 24
+    env:
+      CACHIX_CACHE: ${{ vars.CACHIX_CACHE }}
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            system: x86_64-linux
+          - os: macos-14
+            system: aarch64-darwin
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Install Nix
         uses: cachix/install-nix-action@v31
@@ -24,43 +36,89 @@ jobs:
           extra_nix_config: |
             experimental-features = nix-command flakes
 
+      - name: Configure Cachix (pull-only)
+        if: ${{ env.CACHIX_CACHE != '' && env.CACHIX_AUTH_TOKEN == '' }}
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ env.CACHIX_CACHE }}
+          extraPullNames: nix-community
+          skipPush: true
+
+      - name: Configure Cachix (push-enabled)
+        if: ${{ env.CACHIX_CACHE != '' && env.CACHIX_AUTH_TOKEN != '' }}
+        uses: cachix/cachix-action@v17
+        with:
+          name: ${{ env.CACHIX_CACHE }}
+          authToken: ${{ env.CACHIX_AUTH_TOKEN }}
+          extraPullNames: nix-community
+
       - name: Run flake checks
         timeout-minutes: 10
-        run: timeout 600s nix flake check --print-build-logs
+        run: perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
 
       - name: Run JSON reporter
         timeout-minutes: 8
         run: |
-          nix develop --command timeout 360s env CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp > cl-weave-results.json
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run JSONL reporter
         timeout-minutes: 8
         run: |
-          nix develop --command timeout 360s env CL_WEAVE_REPORTER=jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp > cl-weave-events.jsonl
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+
+      - name: Run coverage artifact
+        timeout-minutes: 8
+        run: |
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
         run: |
-          timeout 360s nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+
+      - name: Generate AI metadata
+        timeout-minutes: 2
+        run: |
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+
+      - name: Run AI discovery smoke test
+        timeout-minutes: 2
+        run: |
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+
+      - name: Run watch once smoke test
+        timeout-minutes: 2
+        run: |
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+
+      - name: Run TAP reporter smoke test
+        timeout-minutes: 2
+        run: |
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
 
       - name: Run filtered smoke test
         timeout-minutes: 2
         run: |
-          nix develop --command timeout 60s env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run JUnit reporter
         timeout-minutes: 8
         run: |
-          nix develop --command timeout 360s env CL_WEAVE_REPORTER=junit sbcl --noinform --non-interactive --load scripts/run-tests.lisp > cl-weave-junit.xml
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
-          name: cl-weave-test-reports
+          name: cl-weave-test-reports-${{ matrix.system }}
           path: |
             cl-weave-results.json
             cl-weave-events.jsonl
+            cl-weave.coverage
             cl-weave-cli-results.json
+            cl-weave-metadata.json
+            cl-weave-plan.json
+            cl-weave-watch-once.json
+            cl-weave-tap.txt
             cl-weave-junit.xml
           if-no-files-found: error

@@ -73,32 +73,171 @@
           pathnames))
 
 (defun changed-pathnames (old-state new-state)
-  (loop for (pathname . write-date) in new-state
-        for old-write-date = (cdr (assoc pathname old-state :test #'equal))
-        unless (eql write-date old-write-date)
-          collect pathname))
+  (let ((seen (make-hash-table :test #'equal))
+        (changed '()))
+    (labels ((collect-differences (left right)
+               (dolist (entry left)
+                 (destructuring-bind (pathname . write-date) entry
+                   (setf (gethash pathname seen) t)
+                   (unless (eql write-date
+                                (cdr (assoc pathname right :test #'equal)))
+                     (push pathname changed))))))
+      (collect-differences old-state new-state)
+      (dolist (entry new-state)
+        (destructuring-bind (pathname . write-date) entry
+          (declare (ignore write-date))
+          (unless (gethash pathname seen)
+            (push pathname changed))))
+      (nreverse changed))))
 
-(defun run-system (system &key (reporter :spec)
-                         (stream *standard-output*)
-                         (name-filter *test-name-filter*)
-                         shard
-                         order
-                         seed
-                         bail
-                         retry
-                         timeout-ms)
-  "Load SYSTEM through ASDF, then run the currently registered cl-weave tests."
-  (asdf:load-system system :force t)
-  (run-all
+(defun collect-registered-test-files (suite)
+  (let ((files '()))
+    (labels ((visit (current-suite)
+               (dolist (child (suite-children current-suite))
+                 (typecase child
+                   (suite (visit child))
+                   (test-case
+                    (let ((file (getf (test-case-location child) :file)))
+                      (when file
+                        (pushnew (uiop:ensure-absolute-pathname file)
+                                 files
+                                 :test #'equal))))))))
+      (visit suite))
+    files))
+
+(defun selective-watch-location-filter (changed)
+  (let ((registered-files (collect-registered-test-files (root-suite))))
+    (when (and changed
+               registered-files
+               (every (lambda (pathname)
+                        (member pathname registered-files :test #'equal))
+                      changed))
+      changed)))
+
+(defun watch-scope (location-filter)
+  (if location-filter :changed-tests :full-suite))
+
+(defun watch-cycle-plan (state new-state)
+  (let* ((changed (if state
+                      (changed-pathnames state new-state)
+                      (mapcar #'car new-state)))
+         (location-filter (and state (selective-watch-location-filter changed))))
+    (list :changed changed
+          :location-filter location-filter
+          :scope (watch-scope location-filter)
+          :new-state new-state)))
+
+(defun watch-sleep (seconds)
+  (sleep seconds))
+
+(defun run-system-argument-pairs (&key reporter stream name-filter location-filter
+                                    shard order seed bail coverage
+                                    coverage-output pass-with-no-tests retry
+                                    timeout-ms max-workers)
+  (list :reporter reporter
+        :stream stream
+        :name-filter name-filter
+        :location-filter location-filter
+        :shard shard
+        :order order
+        :seed seed
+        :bail bail
+        :coverage coverage
+        :coverage-output coverage-output
+        :pass-with-no-tests pass-with-no-tests
+        :retry retry
+        :timeout-ms timeout-ms
+        :max-workers max-workers))
+
+(defun watch-cycle-run-arguments (&key reporter stream name-filter location-filter
+                                    shard order seed bail coverage
+                                    coverage-output pass-with-no-tests retry
+                                    timeout-ms max-workers)
+  (run-system-argument-pairs
    :reporter reporter
    :stream stream
    :name-filter name-filter
+   :location-filter location-filter
    :shard shard
    :order order
    :seed seed
    :bail bail
+   :coverage coverage
+   :coverage-output coverage-output
+   :pass-with-no-tests pass-with-no-tests
    :retry retry
-   :timeout-ms timeout-ms))
+   :timeout-ms timeout-ms
+   :max-workers max-workers))
+
+(defun run-system (system &key (reporter :spec)
+                         (stream *standard-output*)
+                         (name-filter *test-name-filter*)
+                         location-filter
+                         shard
+                         order
+                         seed
+                         bail
+                         coverage
+                         coverage-output
+                         pass-with-no-tests
+                         retry
+                         timeout-ms
+                         max-workers)
+  "Load SYSTEM through ASDF, then run the currently registered cl-weave tests."
+  (asdf:load-system system :force t)
+  (apply #'run-all
+         (run-system-argument-pairs
+          :reporter reporter
+          :stream stream
+          :name-filter name-filter
+          :location-filter location-filter
+          :shard shard
+          :order order
+          :seed seed
+          :bail bail
+          :coverage coverage
+          :coverage-output coverage-output
+          :pass-with-no-tests pass-with-no-tests
+          :retry retry
+          :timeout-ms timeout-ms
+          :max-workers max-workers)))
+
+(defun run-watch-cycle (system plan &key reporter stream status-stream
+                                  name-filter shard order seed bail
+                                  coverage coverage-output
+                                  pass-with-no-tests retry timeout-ms
+                                  max-workers once)
+  (let ((changed (getf plan :changed))
+        (location-filter (getf plan :location-filter))
+        (scope (getf plan :scope)))
+    (if (null changed)
+        (values nil t)
+        (progn
+          (format status-stream "~&; cl-weave watch: ~D changed file~:P for ~A (~A)~%"
+                  (length changed)
+                  system
+                  scope)
+          (finish-output status-stream)
+          (if (or (apply #'run-system
+                         system
+                         (watch-cycle-run-arguments
+                          :reporter reporter
+                          :stream stream
+                          :name-filter name-filter
+                          :location-filter location-filter
+                          :shard shard
+                          :order order
+                          :seed seed
+                          :bail bail
+                          :coverage coverage
+                          :coverage-output coverage-output
+                          :pass-with-no-tests pass-with-no-tests
+                          :retry retry
+                          :timeout-ms timeout-ms
+                          :max-workers max-workers))
+                  (not once))
+              (values (getf plan :new-state) t)
+              (values nil nil))))))
 
 (defun watch-system (system &key (reporter :spec)
                             (stream *standard-output*)
@@ -108,8 +247,12 @@
                             order
                             seed
                             bail
+                            coverage
+                            coverage-output
+                            pass-with-no-tests
                             retry
                             timeout-ms
+                            max-workers
                             include-dependencies
                             (interval 0.5)
                             once)
@@ -118,27 +261,30 @@
     (loop
       for files = (asdf-system-files system :include-dependencies include-dependencies)
       for new-state = (file-state files)
-      for changed = (if state
-                        (changed-pathnames state new-state)
-                        files)
-      when changed
-        do (format status-stream "~&; cl-weave watch: ~D changed file~:P for ~A~%"
-                   (length changed)
-                   system)
-           (finish-output status-stream)
-           (unless (run-system system
-                               :reporter reporter
-                               :stream stream
-                               :name-filter name-filter
-                               :shard shard
-                               :order order
-                               :seed seed
-                               :bail bail
-                               :retry retry
-                               :timeout-ms timeout-ms)
-             (when once
-               (return nil)))
-           (setf state new-state)
+      for plan = (watch-cycle-plan state new-state)
+      do (multiple-value-bind (next-state continuep)
+             (run-watch-cycle
+              system
+              plan
+              :reporter reporter
+              :stream stream
+              :status-stream status-stream
+              :name-filter name-filter
+              :shard shard
+              :order order
+              :seed seed
+              :bail bail
+              :coverage coverage
+              :coverage-output coverage-output
+              :pass-with-no-tests pass-with-no-tests
+              :retry retry
+              :timeout-ms timeout-ms
+              :max-workers max-workers
+              :once once)
+           (unless continuep
+             (return nil))
+           (when next-state
+             (setf state next-state)))
       when once
         return t
-      do (sleep interval))))
+      do (watch-sleep interval))))

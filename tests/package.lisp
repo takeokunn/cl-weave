@@ -110,7 +110,9 @@
    #:isolated-result-stderr
    #:isolated-result-timed-out-p
    #:list-mutation-operators
+   #:logic-program
    #:logic-query
+   #:logic-run
    #:logic-variable-p
    #:logic-where
    #:make-mock-function

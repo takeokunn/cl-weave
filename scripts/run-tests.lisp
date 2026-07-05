@@ -4,20 +4,8 @@
   (pushnew root asdf:*central-registry* :test #'equal)
   (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
   (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
-  (dolist (path '("src/package.lisp"
-                  "src/model.lisp"
-                  "src/isolation.lisp"
-                  "src/matchers.lisp"
-                  "src/property.lisp"
-                  "src/mutation.lisp"
-                  "src/dsl.lisp"
-                  "src/reporters.lisp"
-                  "src/runner.lisp"
-                  "src/watch.lisp"
-                  "src/cli.lisp"
-                  "tests/package.lisp"
-                  "tests/core.lisp"))
-    (load (merge-pathnames path root))))
+  (asdf:load-system "cl-weave")
+  (asdf:load-system "cl-weave-tests"))
 
 (defun requested-reporter ()
   (let ((reporter #+sbcl (sb-ext:posix-getenv "CL_WEAVE_REPORTER")
@@ -221,6 +209,9 @@
 (defun requested-watch-p ()
   (requested-truthy-environment-p "CL_WEAVE_WATCH"))
 
+(defun requested-watch-once-p ()
+  (requested-truthy-environment-p "CL_WEAVE_WATCH_ONCE"))
+
 (defun requested-snapshot-directory ()
   #+sbcl
   (let ((path (sb-ext:posix-getenv "CL_WEAVE_SNAPSHOT_DIR")))
@@ -327,6 +318,7 @@
                                 :timeout-ms test-timeout-ms
                                 :bail (requested-bail)
                                 :include-dependencies t
+                                :once (requested-watch-once-p)
                                 :interval (requested-watch-interval)))
         (t
          (sb-ext:exit

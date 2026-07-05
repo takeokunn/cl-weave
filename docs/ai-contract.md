@@ -10,19 +10,67 @@ before generating tests or interpreting project-specific matcher failures. The
 command loads the requested ASDF system and then emits JSON by default:
 
 ```sh
-timeout 120s nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
 ```
 
-The JSON root is stable:
+Agents embedded in a Lisp process can call `(cl-weave:reporter-artifact-schemas)`
+to read the same artifact schema contracts without invoking the CLI.
+
+The `mutations` artifact schema is also exposed there. Its JSON fields are
+`schemaVersion`, `kind`, `total`, `killed`, `survived`, `errored`, `score`,
+and `results`. Registered mutation operators are advertised separately through
+`list-mutation-operators` and `mutation-operator-metadata`.
+
+The JSON root is stable. The example below is abridged: agents should treat the
+runtime `artifactSchemas` value as authoritative because it includes every
+structured artifact kind currently advertised by the loaded version.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 5,
   "kind": "cl-weave-metadata",
   "version": "0.1.0",
   "commands": ["run", "list", "watch", "metadata", "version", "help"],
   "reporters": ["spec", "sexp", "json", "jsonl", "tap", "github", "junit"],
   "listReporters": ["spec", "sexp", "json", "jsonl"],
+  "artifactSchemas": [
+    {
+      "kind": "test-results",
+      "commands": ["run", "watch"],
+      "reporters": ["json", "sexp"],
+      "schemaVersion": 4,
+      "streaming": false,
+      "fields": [
+        {
+          "name": "events",
+          "kind": "array",
+          "required": true,
+          "description": "Ordered test events."
+        },
+        {
+          "name": "summary",
+          "kind": "object",
+          "required": true,
+          "description": "Aggregated run counts and failure paths."
+        }
+      ]
+    },
+    {
+      "kind": "test-event",
+      "commands": ["run", "watch"],
+      "reporters": ["jsonl"],
+      "schemaVersion": 1,
+      "streaming": true,
+      "fields": [
+        {
+          "name": "event",
+          "kind": "object",
+          "required": true,
+          "description": "Single test event payload."
+        }
+      ]
+    }
+  ],
   "capabilities": ["describe-it-dsl"],
   "environment": ["CL_WEAVE_REPORTER"],
   "options": [
@@ -33,8 +81,19 @@ The JSON root is stable:
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
       "choices": [],
+      "commandChoices": [],
       "environment": ["CL_WEAVE_TEST_FILTER"],
       "description": "Run or list tests whose Vitest-style path contains TEXT"
+    }
+  ],
+  "qualityGates": [
+    {
+      "name": "flake-check",
+      "kind": "nix",
+      "command": ["nix", "flake", "check", "--print-build-logs"],
+      "timeoutSeconds": 600,
+      "artifacts": [],
+      "description": "Run the complete Nix flake validation suite."
     }
   ],
   "vitestAliases": [{"alias": "it.each", "canonical": "it-each"}],
@@ -52,6 +111,25 @@ when constructing commands. `options[].choices` lists finite accepted values for
 enumerated options, for example `--reporter` and `--sequence`; non-enumerated
 options use an empty array. Boolean flags use `"boolean"` and keep
 `argument: null`.
+`options[].commandChoices` lists command-specific finite values for options
+whose accepted values differ by command, such as `--reporter`; each listed
+choice is a subset of `options[].choices`.
+`artifactSchemas` lists every structured reporter artifact kind that agents can
+request or observe. `commands` lists every CLI command that can emit the shape;
+library-only artifacts use an empty array. `reporters` names the reporter
+values that can emit the kind, `schemaVersion` is scoped to that artifact
+shape, and `streaming` tells agents whether to parse one complete payload or
+newline-delimited events. `fields` is a compact field map for planning parsers
+and validating generated CI integrations without hard-coding reporter
+internals. `watch --once` shares the run-result artifact contracts, so result
+schemas advertise both `run` and `watch`. Agents must not infer the complete
+artifact list from this document's shortened example; call `cl-weave metadata` and read
+`artifactSchemas` directly.
+`qualityGates` lists CI-grade commands as argv vectors with explicit
+`timeoutSeconds` values and expected artifact paths. Agents should prefer these
+runtime gates over scraping README examples when deciding how to validate a
+change. One gate exercises `watch --once` explicitly so automation can verify
+watch-mode resolution without entering a long-lived polling loop.
 `packageExports` lists public external symbols by package in lower-case CL reader
 spelling so agents can discover the supported DSL and runtime API without
 scraping `package.lisp`.
@@ -317,7 +395,7 @@ For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
 same reporter payload directly to an artifact file:
 
 ```sh
-timeout 360s env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 `CL_WEAVE_OUTPUT_FILE` affects only reporter output. The process still exits
@@ -330,8 +408,8 @@ External snapshots are sidecar artifacts controlled by dynamic bindings or
 CLI/environment settings:
 
 ```sh
-CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAPSHOT_DIR=tests/__snapshots__/ CL_WEAVE_SNAPSHOT_FILE=snapshots.sexp \
-  timeout 360s sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAPSHOT_DIR=tests/__snapshots__/ CL_WEAVE_SNAPSHOT_FILE=snapshots.sexp \
+  sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
@@ -362,7 +440,7 @@ For mismatches, both sides include `:reason :snapshot-mismatch` and matching
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-timeout 360s env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The coverage artifact is SBCL `sb-cover` state written with
@@ -471,7 +549,7 @@ Skipped and todo events use TAP directives:
 
 ```tap
 ok 1 - parser > waits for fixture # SKIP fixture unavailable
-ok 2 - parser > handles unicode # TODO pending implementation
+ok 2 - parser > handles unicode # TODO pending normalization pass
 ```
 
 TAP is intentionally a stream format. Agents that need stable field names,
@@ -779,7 +857,8 @@ agent-generated commands: `--testNamePattern` maps to `--filter`,
 `--testTimeout` and `--testTimeoutMs` map to `--test-timeout-ms`,
 `--passWithNoTests` maps to `--pass-with-no-tests`, `--failWithNoTests` maps
 to `--fail-with-no-tests`, `--snapshotDir` maps to `--snapshot-dir`,
-`--snapshotFile` maps to `--snapshot-file`, and both `--update` and
+`--snapshotFile` maps to `--snapshot-file`, `--maxWorkers` maps to
+`--max-workers`, and both `--update` and
 `--updateSnapshots` map to `--update-snapshots`.
 
 Filtering changes which events are emitted; it does not change the event shape
@@ -885,7 +964,7 @@ Agents can discover selected tests without executing hooks or test bodies:
 The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
 
 ```sh
-timeout 120s env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 The JSON test plan reporter prints one object:
@@ -970,12 +1049,30 @@ the Lisp-native logic layer:
 ;; => (((?test . ("suite" "case"))))
 ```
 
-Logic variables are symbols whose names start with `?`. Facts and clauses are
-plain lists, matched left-to-right by `logic-query`. `logic-where` and
-`test-plan-where` are macro syntax over that data contract; use `(:limit n)` as
-the first form to cap backtracking results. The stable public relation names are
-`:test`, `:status`, `:reason`, `:focused`, `:retry`, `:timeout-ms`,
-`:concurrent`, and `:location`.
+Logic variables are symbols whose names start with `?`. Facts, rules, and query
+clauses stay as plain lists; `logic-program`, `logic-run`, `logic-where`, and
+`test-plan-where` are macro syntax over that data contract. Rules use Prolog
+shape `(:- head goal...)`, `logic-query` resolves them with recursive
+backtracking, and `(:limit n)` as the first query form caps result count. The
+stable public relation names are `:test`, `:status`, `:reason`, `:focused`,
+`:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+
+Agents can derive higher-level plan views by appending rules to
+`test-plan-facts` and querying the combined program directly:
+
+```lisp
+(let* ((plan (cl-weave:collect-test-plan (cl-weave::root-suite)))
+       (program (append
+                 (cl-weave:test-plan-facts plan)
+                 (cl-weave:logic-program
+                  (:- (:selected ?test)
+                      (:status ?test :run)
+                      (:focused ?test)
+                      (:concurrent ?test))))))
+  (cl-weave:test-plan-where program
+    (:selected ?test)))
+;; => (((?test . ("suite" "case"))))
+```
 
 ## Bail Contract
 
@@ -1035,6 +1132,10 @@ Command runners can set a global timeout default with `--test-timeout-ms N`,
 `:timeout-ms` wins over the global default. List mode and structured test-plan
 reporters expose the effective retry and timeout values after applying these
 defaults.
+
+Command runners can bound adjacent concurrent batches with `--max-workers N`,
+`--maxWorkers N`, or `CL_WEAVE_MAX_WORKERS=N`. List mode remains
+discovery-only and does not consume the worker setting.
 
 `:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
 parallel execution with adjacent concurrent cases. `describe-concurrent` /
@@ -1113,13 +1214,17 @@ Agents can discover declared source files before choosing a focused run:
 `run-all` after ASDF loading:
 
 ```lisp
-(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :order :random :seed 12345 :bail 1)
-(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :order :random :seed 12345 :bail 1 :once t)
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :pass-with-no-tests t)
+(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :pass-with-no-tests t :once t)
 ```
 
 `watch-system` writes status lines to `:status-stream`, which defaults to
-`*error-output*`, and writes reporter payloads to `:stream`. CI should keep
-`CL_WEAVE_WATCH` unset; watch mode is for local agents and REPL sessions.
+`*error-output*`, and writes reporter payloads to `:stream`. Watch reruns keep
+the same coverage destination and zero-test acceptance policy as the initial
+invocation. CI should keep `CL_WEAVE_WATCH` unset; watch mode is for local
+agents and REPL sessions. The CLI and script runner expose the same one-shot
+contract through `--once` and `CL_WEAVE_WATCH_ONCE=1`, which execute the
+initial watch run and exit without entering the polling loop.
 
 ## Property Failure Contract
 
@@ -1195,6 +1300,8 @@ the parent runner while still receiving parseable failure data.
 ## Stability
 
 - `:schema-version` and `schemaVersion` change only when the shape changes.
+- `metadata.schemaVersion` is the discovery payload shape. Individual entries in
+  `artifactSchemas` carry their own artifact-level `schemaVersion` values.
 - JSON result artifacts use `kind: "test-results"` so agents can classify
   artifacts without filename or command context.
 - `:path` is a list of suite names followed by the case name.

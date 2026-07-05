@@ -60,6 +60,155 @@
 (defun write-json-string (value stream)
   (format stream "\"~A\"" (json-escaped-string value)))
 
+(defparameter *result-summary-field-specs*
+  '((:status :pass :plist-key :passed :json-key "passed")
+    (:status :skip :plist-key :skipped :json-key "skipped")
+    (:status :todo :plist-key :todos :json-key "todos")
+    (:status :fail :plist-key :failed :json-key "failed")
+    (:status :error :plist-key :errored :json-key "errored")))
+
+(defparameter *plan-summary-field-specs*
+  '((:status :run :plist-key :runnable :json-key "runnable")
+    (:status :skip :plist-key :skipped :json-key "skipped")
+    (:status :todo :plist-key :todos :json-key "todos")))
+
+(defparameter *reporter-artifact-schemas*
+  '((:kind "test-results"
+     :commands ("run" "watch")
+     :reporters ("json" "sexp")
+     :schema-version 4
+     :streaming nil
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "events" :kind "array" :required t
+               :description "Ordered test events.")
+              (:name "summary" :kind "object" :required t
+               :description "Aggregated run counts and failure paths.")))
+    (:kind "test-results-start"
+     :commands ("run" "watch")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "total" :kind "integer" :required t
+               :description "Number of planned tests.")))
+    (:kind "test-event"
+     :commands ("run" "watch")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "event" :kind "object" :required t
+               :description "Single test event payload.")))
+    (:kind "test-results-summary"
+     :commands ("run" "watch")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "passed" :kind "integer" :required t
+               :description "Passed test count.")
+              (:name "skipped" :kind "integer" :required t
+               :description "Skipped test count.")
+              (:name "todos" :kind "integer" :required t
+               :description "Todo test count.")
+              (:name "failed" :kind "integer" :required t
+               :description "Failed assertion count.")
+              (:name "errored" :kind "integer" :required t
+               :description "Errored test count.")
+              (:name "failedPaths" :kind "array" :required t
+               :description "Vitest-style paths with failed assertions.")
+              (:name "erroredPaths" :kind "array" :required t
+               :description "Vitest-style paths with unexpected errors.")))
+    (:kind "test-plan"
+     :commands ("list")
+     :reporters ("json" "sexp")
+     :schema-version 2
+     :streaming nil
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "tests" :kind "array" :required t
+               :description "Discovered test plan entries.")
+              (:name "summary" :kind "object" :required t
+               :description "Aggregated discovery counts.")))
+    (:kind "test-plan-start"
+     :commands ("list")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "total" :kind "integer" :required t
+               :description "Number of discovered tests.")))
+    (:kind "test-plan-entry"
+     :commands ("list")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "test" :kind "object" :required t
+               :description "Single test plan entry.")))
+    (:kind "test-plan-summary"
+     :commands ("list")
+     :reporters ("jsonl")
+     :schema-version 1
+     :streaming t
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "total" :kind "integer" :required t
+               :description "Total discovered tests.")
+              (:name "runnable" :kind "integer" :required t
+               :description "Runnable discovered tests.")
+              (:name "skipped" :kind "integer" :required t
+               :description "Skipped discovered tests.")
+              (:name "todos" :kind "integer" :required t
+               :description "Todo discovered tests.")))
+    (:kind "mutations"
+     :commands ()
+     :reporters ("json" "sexp")
+     :schema-version 1
+     :streaming nil
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "total" :kind "integer" :required t
+               :description "Total generated mutations.")
+              (:name "killed" :kind "integer" :required t
+               :description "Mutations rejected by the test predicate.")
+              (:name "survived" :kind "integer" :required t
+               :description "Mutations accepted by the test predicate.")
+              (:name "errored" :kind "integer" :required t
+               :description "Mutations that raised unexpected conditions.")
+              (:name "score" :kind "number" :required t
+               :description "Killed-to-total mutation score.")
+              (:name "results" :kind "array" :required t
+               :description "Per-mutation execution results.")))))
+
+(defun reporter-artifact-schemas ()
+  "Return structured reporter artifact schema metadata."
+  *reporter-artifact-schemas*)
+
 (defun json-status-string (status)
   (string-downcase (symbol-name status)))
 
@@ -87,6 +236,32 @@
   (loop for event in events
         when (eq (test-event-status event) status)
           collect (path-string (test-event-path event))))
+
+(defun summary-count (items status accessor)
+  (count status items :key accessor))
+
+(defun collect-summary-fields (items accessor field-specs)
+  (loop for spec in field-specs
+        append (list (getf spec :plist-key)
+                     (summary-count items (getf spec :status) accessor))))
+
+(defun result-summary (events)
+  (append (list :total (length events))
+          (collect-summary-fields events #'test-event-status
+                                  *result-summary-field-specs*)
+          (list :failed-paths (event-path-strings-with-status events :fail)
+                :errored-paths (event-path-strings-with-status events :error))))
+
+(defun plan-summary (plan)
+  (append (list :total (length plan))
+          (collect-summary-fields plan #'test-plan-entry-status
+                                  *plan-summary-field-specs*)))
+
+(defun json-write-summary-count-fields (summary field-specs stream)
+  (loop for spec in field-specs
+        do (format stream ",\"~A\":~D"
+                   (getf spec :json-key)
+                   (getf summary (getf spec :plist-key)))))
 
 (defun json-write-nullable-string (value stream)
   (if value
@@ -157,18 +332,8 @@
       (format stream "~&    negated: ~S" (assertion-detail-negated detail)))))
 
 (defun report-spec (events stream)
-  (let ((passed 0)
-        (skipped 0)
-        (todos 0)
-        (failed 0)
-        (errored 0))
+  (let ((summary (result-summary events)))
     (dolist (event events)
-      (ecase (test-event-status event)
-        (:pass (incf passed))
-        (:skip (incf skipped))
-        (:todo (incf todos))
-        (:fail (incf failed))
-        (:error (incf errored)))
       (format stream "~&[~A] ~A (~,3Fs)"
               (status-marker (test-event-status event))
               (path-string (test-event-path event))
@@ -179,7 +344,12 @@
         (format stream "~&    condition: ~A" (test-event-condition event))
         (report-assertion-detail (test-event-assertion event) stream)))
     (format stream "~&~%~D passed, ~D skipped, ~D todo, ~D failed, ~D errored, ~D total~%"
-            passed skipped todos failed errored (length events))
+            (getf summary :passed)
+            (getf summary :skipped)
+            (getf summary :todos)
+            (getf summary :failed)
+            (getf summary :errored)
+            (getf summary :total))
     (values)))
 
 (defun serializable-event (event)
@@ -202,36 +372,28 @@
                               :pass (assertion-detail-pass detail))))))
 
 (defun report-sexp (events stream)
-  (prin1 (list :cl-weave/results
-                :schema-version 3
-                :passed (count :pass events :key #'test-event-status)
-                :skipped (count :skip events :key #'test-event-status)
-                :todos (count :todo events :key #'test-event-status)
-                :failed (count :fail events :key #'test-event-status)
-                :errored (count :error events :key #'test-event-status)
-                :failed-paths (event-path-strings-with-status events :fail)
-                :errored-paths (event-path-strings-with-status events :error)
-                :events (mapcar #'serializable-event events))
-         stream)
+  (let ((summary (result-summary events)))
+    (prin1 (append (list :cl-weave/results
+                         :schema-version 3)
+                   summary
+                   (list :events (mapcar #'serializable-event events)))
+           stream))
   (terpri stream)
   (values))
 
-(defun json-write-results-summary-fields (events stream)
-  (format stream ",\"passed\":~D" (count :pass events :key #'test-event-status))
-  (format stream ",\"skipped\":~D" (count :skip events :key #'test-event-status))
-  (format stream ",\"todos\":~D" (count :todo events :key #'test-event-status))
-  (format stream ",\"failed\":~D" (count :fail events :key #'test-event-status))
-  (format stream ",\"errored\":~D" (count :error events :key #'test-event-status))
+(defun json-write-results-summary-fields (summary stream)
+  (json-write-summary-count-fields summary *result-summary-field-specs* stream)
   (write-string ",\"failedPaths\":" stream)
-  (json-write-string-list (event-path-strings-with-status events :fail) stream)
+  (json-write-string-list (getf summary :failed-paths) stream)
   (write-string ",\"erroredPaths\":" stream)
-  (json-write-string-list (event-path-strings-with-status events :error) stream))
+  (json-write-string-list (getf summary :errored-paths) stream))
 
 (defun report-json (events stream)
+  (let ((summary (result-summary events)))
   (write-string "{" stream)
   (write-string "\"schemaVersion\":4" stream)
   (write-string ",\"kind\":\"test-results\"" stream)
-  (json-write-results-summary-fields events stream)
+  (json-write-results-summary-fields summary stream)
   (write-string ",\"events\":[" stream)
   (loop for event in events
         for first = t then nil
@@ -241,11 +403,12 @@
              (json-write-event event stream)))
   (write-string "]}" stream)
   (terpri stream)
-  (values))
+  (values)))
 
 (defun report-jsonl (events stream)
+  (let ((summary (result-summary events)))
   (write-string "{\"schemaVersion\":1,\"kind\":\"test-results-start\",\"total\":" stream)
-  (princ (length events) stream)
+  (princ (getf summary :total) stream)
   (write-string "}" stream)
   (terpri stream)
   (dolist (event events)
@@ -254,10 +417,10 @@
     (write-string "}" stream)
     (terpri stream))
   (write-string "{\"schemaVersion\":1,\"kind\":\"test-results-summary\"" stream)
-  (json-write-results-summary-fields events stream)
+  (json-write-results-summary-fields summary stream)
   (write-string "}" stream)
   (terpri stream)
-  (values))
+  (values)))
 
 (defun tap-line-string (value)
   (with-output-to-string (stream)
@@ -368,17 +531,18 @@
   (format stream "::~A~%" (github-escaped-data (github-event-message event))))
 
 (defun report-github (events stream)
-  (dolist (event events)
-    (when (github-annotatable-event-p event)
-      (report-github-event event stream)))
-  (format stream "cl-weave: ~D passed, ~D skipped, ~D todo, ~D failed, ~D errored, ~D total~%"
-          (count :pass events :key #'test-event-status)
-          (count :skip events :key #'test-event-status)
-          (count :todo events :key #'test-event-status)
-          (count :fail events :key #'test-event-status)
-          (count :error events :key #'test-event-status)
-          (length events))
-  (values))
+  (let ((summary (result-summary events)))
+    (dolist (event events)
+      (when (github-annotatable-event-p event)
+        (report-github-event event stream)))
+    (format stream "cl-weave: ~D passed, ~D skipped, ~D todo, ~D failed, ~D errored, ~D total~%"
+            (getf summary :passed)
+            (getf summary :skipped)
+            (getf summary :todos)
+            (getf summary :failed)
+            (getf summary :errored)
+            (getf summary :total))
+    (values)))
 
 (defun plan-status-marker (status)
   (ecase status
@@ -407,6 +571,7 @@
         :concurrent (test-plan-entry-concurrent entry)))
 
 (defun report-plan-spec (plan stream)
+  (let ((summary (plan-summary plan)))
   (dolist (entry plan)
     (format stream "~&[~A] ~A"
             (plan-status-marker (test-plan-entry-status entry))
@@ -416,21 +581,19 @@
     (when (test-plan-entry-reason entry)
       (format stream "~&    reason: ~A" (test-plan-entry-reason entry))))
   (format stream "~&~%~D runnable, ~D skipped, ~D todo, ~D total~%"
-          (count-if #'runnable-plan-entry-p plan)
-          (count-if #'skipped-plan-entry-p plan)
-          (count-if #'todo-plan-entry-p plan)
-          (length plan))
-  (values))
+          (getf summary :runnable)
+          (getf summary :skipped)
+          (getf summary :todos)
+          (getf summary :total))
+  (values)))
 
 (defun report-plan-sexp (plan stream)
-  (prin1 (list :cl-weave/test-plan
-               :schema-version 2
-               :total (length plan)
-               :runnable (count-if #'runnable-plan-entry-p plan)
-               :skipped (count-if #'skipped-plan-entry-p plan)
-               :todos (count-if #'todo-plan-entry-p plan)
-               :tests (mapcar #'serializable-plan-entry plan))
-         stream)
+  (let ((summary (plan-summary plan)))
+    (prin1 (append (list :cl-weave/test-plan
+                         :schema-version 2)
+                   summary
+                   (list :tests (mapcar #'serializable-plan-entry plan)))
+           stream))
   (terpri stream)
   (values))
 
@@ -459,13 +622,12 @@
   (write-string "}" stream))
 
 (defun report-plan-json (plan stream)
+  (let ((summary (plan-summary plan)))
   (write-string "{" stream)
   (write-string "\"schemaVersion\":2" stream)
   (write-string ",\"kind\":\"test-plan\"" stream)
-  (format stream ",\"total\":~D" (length plan))
-  (format stream ",\"runnable\":~D" (count-if #'runnable-plan-entry-p plan))
-  (format stream ",\"skipped\":~D" (count-if #'skipped-plan-entry-p plan))
-  (format stream ",\"todos\":~D" (count-if #'todo-plan-entry-p plan))
+  (format stream ",\"total\":~D" (getf summary :total))
+  (json-write-summary-count-fields summary *plan-summary-field-specs* stream)
   (write-string ",\"tests\":[" stream)
   (loop for entry in plan
         for first = t then nil
@@ -475,11 +637,12 @@
              (json-write-plan-entry entry stream)))
   (write-string "]}" stream)
   (terpri stream)
-  (values))
+  (values)))
 
 (defun report-plan-jsonl (plan stream)
+  (let ((summary (plan-summary plan)))
   (write-string "{\"schemaVersion\":1,\"kind\":\"test-plan-start\",\"total\":" stream)
-  (princ (length plan) stream)
+  (princ (getf summary :total) stream)
   (write-string "}" stream)
   (terpri stream)
   (dolist (entry plan)
@@ -488,13 +651,11 @@
     (write-string "}" stream)
     (terpri stream))
   (write-string "{\"schemaVersion\":1,\"kind\":\"test-plan-summary\"" stream)
-  (format stream ",\"total\":~D" (length plan))
-  (format stream ",\"runnable\":~D" (count-if #'runnable-plan-entry-p plan))
-  (format stream ",\"skipped\":~D" (count-if #'skipped-plan-entry-p plan))
-  (format stream ",\"todos\":~D" (count-if #'todo-plan-entry-p plan))
+  (format stream ",\"total\":~D" (getf summary :total))
+  (json-write-summary-count-fields summary *plan-summary-field-specs* stream)
   (write-string "}" stream)
   (terpri stream)
-  (values))
+  (values)))
 
 (defun serializable-mutation (mutation)
   (list :id (mutation-id mutation)
@@ -609,13 +770,14 @@
     (format stream "  </testcase>~%")))
 
 (defun report-junit (events stream)
-  (let ((skipped (+ (count :skip events :key #'test-event-status)
-                    (count :todo events :key #'test-event-status))))
+  (let* ((summary (result-summary events))
+         (skipped (+ (getf summary :skipped)
+                     (getf summary :todos))))
     (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?>~%")
     (format stream "<testsuite name=\"cl-weave\" tests=\"~D\" failures=\"~D\" errors=\"~D\" skipped=\"~D\" time=\"~,3F\">~%"
-            (length events)
-            (count :fail events :key #'test-event-status)
-            (count :error events :key #'test-event-status)
+            (getf summary :total)
+            (getf summary :failed)
+            (getf summary :errored)
             skipped
             (reduce #'+ events :key #'event-duration-seconds :initial-value 0))
     (dolist (event events)
