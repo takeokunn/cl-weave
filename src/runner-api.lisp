@@ -9,6 +9,12 @@
              (format stream "Coverage support is unavailable: ~A"
                      (coverage-unavailable-reason condition)))))
 
+(define-condition coverage-cleanup-failure (error)
+  ((failures :initarg :failures :reader coverage-cleanup-failures))
+  (:report (lambda (condition stream)
+             (format stream "Coverage cleanup failed: ~{~A~^; ~}"
+                     (mapcar #'cdr (coverage-cleanup-failures condition))))))
+
 (defun coverage-fbound-symbol (name &optional required-p)
   (let ((package (find-package "SB-COVER")))
     (unless package
@@ -80,30 +86,52 @@
       (error "Coverage report at ~A did not capture any coverage data." index-path))
     directory))
 
+(defun collect-coverage-cleanup-failures (coverage-report-directory coverage-output)
+  (loop for (kind pathname saver)
+          in `((:report ,coverage-report-directory ,#'save-coverage-report)
+               (:data ,coverage-output ,#'save-coverage))
+        when pathname
+          append (handler-case
+                     (progn
+                       (funcall saver pathname)
+                       nil)
+                   (error (condition)
+                     (list (cons kind condition))))))
+
+(defun handle-coverage-cleanup-failures (failures preserve-control-transfer-p)
+  (when failures
+    (let ((condition (make-condition 'coverage-cleanup-failure
+                                     :failures failures)))
+      (restart-case
+          (if preserve-control-transfer-p
+              (signal condition)
+              (error condition))
+        (ignore-coverage-cleanup-failure ()
+          :report "Ignore failures while saving coverage artifacts.")))))
+
 (defun call-with-coverage (coverage coverage-output coverage-report-directory coverage-reset thunk)
   (if coverage
       (progn
         (require-coverage-support)
         (when coverage-reset
           (reset-coverage))
-        (unwind-protect
-             (funcall thunk)
-          (when coverage-report-directory
-            (save-coverage-report coverage-report-directory))
-          (when coverage-output
-            (save-coverage coverage-output))))
+        (let ((completed-p nil)
+              (primary-error nil))
+          (unwind-protect
+               (handler-case
+                   (multiple-value-prog1 (funcall thunk)
+                     (setf completed-p t))
+                 (error (condition)
+                   (setf primary-error condition)
+                   (error condition)))
+            (handle-coverage-cleanup-failures
+             (collect-coverage-cleanup-failures coverage-report-directory
+                                                coverage-output)
+             (or primary-error (not completed-p))))))
       (funcall thunk)))
 
-(defparameter *reporter-aliases*
-  '((:spec "spec")
-    (:sexp "sexp")
-    (:json "json")
-    (:jsonl "jsonl" "ndjson")
-    (:tap "tap")
-    (:github "github")
-    (:junit "junit")))
-
-(defparameter *run-reporters* (mapcar #'first *reporter-aliases*))
+(defparameter *run-reporters*
+  '(:spec :sexp :json :jsonl :tap :github :junit))
 
 (defparameter *list-reporters* '(:spec :sexp :json :jsonl))
 

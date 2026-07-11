@@ -4,6 +4,17 @@
 (defvar *property-seed* 8675309)
 (defvar *recursive-generator-depth* nil)
 
+(defparameter *property-shrink-max-steps* 1000)
+
+(define-condition property-shrink-limit (error)
+  ((values :initarg :values :reader property-shrink-limit-values)
+   (steps :initarg :steps :reader property-shrink-limit-steps)
+   (max-steps :initarg :max-steps :reader property-shrink-limit-max-steps))
+  (:report (lambda (condition stream)
+             (format stream "Property shrinking exceeded the ~D step limit at ~S."
+                     (property-shrink-limit-max-steps condition)
+                     (property-shrink-limit-values condition)))))
+
 (defstruct property-rng
   state)
 
@@ -11,6 +22,9 @@
   name
   produce
   shrink)
+
+;; Shrink functions must return a finite list. The shrink budget bounds candidate
+;; evaluation, but cannot interrupt construction or traversal of an infinite list.
 
 (defun ensure-property-generator (value label)
   (unless (property-generator-p value)
@@ -29,6 +43,23 @@
       (funcall (property-generator-shrink generator) value)
     (error ()
       nil)))
+
+(defun ensure-property-shrink-max-steps (max-steps)
+  (unless (and (integerp max-steps) (not (minusp max-steps)))
+    (error 'type-error
+           :datum max-steps
+           :expected-type '(integer 0 *)))
+  max-steps)
+
+(defun consume-property-shrink-budget (values steps max-steps)
+  (if (< steps max-steps)
+      (1+ steps)
+      (restart-case
+          (error 'property-shrink-limit
+                 :values values
+                 :steps steps
+                 :max-steps max-steps)
+        (accept-current () nil))))
 
 (defun parse-environment-integer (name value)
   (handler-case
@@ -435,26 +466,38 @@
   nil)
 
 (defun shrink-property-values (generators values function &optional original-condition)
-  (loop with original = (or original-condition
+  (loop with max-steps = (ensure-property-shrink-max-steps
+                          *property-shrink-max-steps*)
+        with original = (or original-condition
                             (property-failure-condition function values))
         with current = values
+        with visited = (list values)
+        with steps = 0
         for changed = nil
         do (loop for generator in generators
                  for index from 0
                  for value in current
                  do (loop for candidate in
-                          (funcall (property-generator-shrink generator) value)
+                          (property-shrink-candidates generator value)
                           for next = (copy-list current)
                           do (setf (nth index next) candidate)
+                          do (let ((next-steps
+                                    (consume-property-shrink-budget
+                                     current steps max-steps)))
+                               (unless next-steps
+                                 (return-from shrink-property-values current))
+                               (setf steps next-steps))
                           do (let ((candidate-condition
                                     (property-failure-condition function next)))
                                (when (and (not (equal next current))
+                                          (not (member next visited :test #'equal))
                                           candidate-condition
                                           (same-property-failure-p
                                            original candidate-condition))
                                  (setf current next
                                        changed t)
-                                 (return))))
+                                 (push next visited)
+                                 (return)))))
         while changed
         finally (return current)))
 

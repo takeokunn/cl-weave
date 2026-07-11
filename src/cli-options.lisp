@@ -23,7 +23,7 @@
   test-timeout-ms
   max-workers
   shard
-  (order :defined :type keyword)
+  (order nil :type (or null keyword))
   seed
   coverage
   coverage-output
@@ -181,20 +181,17 @@
 
 (defun parse-reporter (value)
   (let ((normalized (string-downcase value)))
-    (or (loop for (reporter . aliases) in cl-weave::*reporter-aliases*
-              when (member normalized aliases :test #'string=)
+    (or (loop for reporter in cl-weave::*run-reporters*
+              when (string= normalized (string-downcase (symbol-name reporter)))
                 return reporter)
         (error 'cli-error
                :message (format nil "cl-weave: unknown reporter: ~A" value)))))
 
 (defun parse-sequence-order (value)
-  (let ((normalized (string-downcase value)))
-    (cond
-      ((string= normalized "defined") :defined)
-      ((string= normalized "random") :random)
-      ((string= normalized "shuffle") :shuffle)
-      (t (error 'cli-error
-                :message (format nil "Unknown sequence order: ~A" value))))))
+  (if (string-equal value "random")
+      :random
+      (error 'cli-error
+             :message (format nil "Unknown sequence order: ~A" value))))
 
 (defun parse-bail (value)
   (let ((normalized (string-downcase value)))

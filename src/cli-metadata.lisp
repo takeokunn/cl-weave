@@ -7,7 +7,6 @@
           *metadata-quality-gates*
           *metadata-capabilities*
           *metadata-capability-matrix*
-          *metadata-vitest-aliases*
           *metadata-policy-documents*
           *metadata-reference-documents*
           *metadata-citation*
@@ -180,9 +179,6 @@
    :runtime-support (metadata-runtime-support)
    :release-process (metadata-release-process)
    :continuous-integration (metadata-continuous-integration)
-   :vitest-aliases
-   (loop for (alias . canonical) in *metadata-vitest-aliases*
-         collect (list :alias alias :canonical canonical))
    :package-exports (list (package-export-metadata :cl-weave)
                           (package-export-metadata :cl-weave/cli))
    :matchers (cl-weave:list-matchers)
@@ -385,13 +381,6 @@
   (if value
       (cl-weave::write-json-string value stream)
       (write-string "null" stream)))
-
-(defparameter *json-alias-fields*
-  '((:alias "alias" write-json-string-value)
-    (:canonical "canonical" write-json-string-value)))
-
-(defun write-json-aliases (aliases stream)
-  (write-json-plist-array aliases *json-alias-fields* stream))
 
 (defun write-json-command-choices (command-choices stream)
   (write-json-array
@@ -697,7 +686,6 @@
     (:release-process "releaseProcess" write-json-release-process)
     (:continuous-integration "continuousIntegration"
      write-json-continuous-integration)
-    (:vitest-aliases "vitestAliases" write-json-aliases)
     (:package-exports "packageExports" write-json-package-exports)
     (:matchers "matchers" write-json-named-metadata)
     (:mutation-operators "mutationOperators" write-json-named-metadata)))

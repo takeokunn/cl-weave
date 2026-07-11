@@ -94,9 +94,9 @@
   (let ((files '()))
     (labels ((visit (current-suite)
                (dolist (child (suite-children current-suite))
-                 (typecase child
-                   (suite (visit child))
-                   (test-case
+                 (cond
+                   ((suite-p child) (visit child))
+                   ((test-case-p child)
                     (let ((file (getf (test-case-location child) :file)))
                       (when file
                         (pushnew (uiop:ensure-absolute-pathname file)
@@ -149,26 +149,6 @@
         :timeout-ms timeout-ms
         :max-workers max-workers))
 
-(defun watch-cycle-run-arguments (&key reporter stream name-filter location-filter
-                                    shard order seed bail coverage
-                                    coverage-output pass-with-no-tests retry
-                                    timeout-ms max-workers)
-  (run-system-argument-pairs
-   :reporter reporter
-   :stream stream
-   :name-filter name-filter
-   :location-filter location-filter
-   :shard shard
-   :order order
-   :seed seed
-   :bail bail
-   :coverage coverage
-   :coverage-output coverage-output
-   :pass-with-no-tests pass-with-no-tests
-   :retry retry
-   :timeout-ms timeout-ms
-   :max-workers max-workers))
-
 (defun run-system (system &key (reporter :spec)
                          (stream *standard-output*)
                          (name-filter *test-name-filter*)
@@ -185,7 +165,7 @@
                          max-workers)
   "Load SYSTEM directly when it is part of the local project, then run the currently registered cl-weave tests."
   (if (cl-weave::local-project-system-p system)
-      (cl-weave::load-local-system system)
+      (cl-weave::load-local-system system (make-hash-table :test #'equal))
       (asdf:load-system system :force t))
   (apply #'run-all
          (run-system-argument-pairs
@@ -204,6 +184,11 @@
           :timeout-ms timeout-ms
           :max-workers max-workers)))
 
+(defun run-watched-system (system &rest arguments)
+  "Replace registered tests before reloading SYSTEM for a watch cycle."
+  (clear-tests)
+  (apply #'run-system system arguments))
+
 (defun run-watch-cycle (system plan &key reporter stream status-stream
                                   name-filter shard order seed bail
                                   coverage coverage-output
@@ -220,9 +205,9 @@
                   system
                   scope)
           (finish-output status-stream)
-          (if (or (apply #'run-system
+          (if (or (apply #'run-watched-system
                          system
-                         (watch-cycle-run-arguments
+                         (run-system-argument-pairs
                           :reporter reporter
                           :stream stream
                           :name-filter name-filter

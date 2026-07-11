@@ -10,152 +10,93 @@
 (defvar *has-assertions-required* nil)
 (defvar *has-assertions-form* nil)
 
-(defun make-suite-record
-    (name parent focus execution-mode skip-reason todo-reason)
-  (vector 'suite name parent focus execution-mode skip-reason todo-reason
-          '() nil '() nil '() nil '() nil '() nil '() nil))
+(defmacro define-record-class (name slots)
+  "Define a CLOS data record and its public constructor and predicate."
+  (let ((constructor (intern (format nil "MAKE-~A" name)))
+        (predicate (intern (format nil "~A-P" name))))
+    `(progn
+       (defclass ,name ()
+         ,(loop for slot in slots
+                for initarg = (intern (symbol-name slot) :keyword)
+                for accessor = (intern (format nil "~A-~A" name slot))
+                collect `(,slot
+                          :initarg ,initarg
+                          :initform nil
+                          :accessor ,accessor)))
+       (defun ,constructor (&rest initargs)
+         (apply #'make-instance ',name initargs))
+       (defun ,predicate (value)
+         (typep value ',name)))))
 
-(defun make-test-case-record
-    (name function focus skip-reason todo-reason retry timeout-ms concurrent
-     tags depends-on execution-mode expected-failure-reason location)
-  (vector 'test-case name function focus skip-reason todo-reason retry timeout-ms
-          concurrent tags depends-on execution-mode expected-failure-reason
-          location))
+(define-record-class suite
+  (name parent focus execution-mode skip-reason todo-reason
+   children children-tail
+   before-all before-all-tail
+   after-all after-all-tail
+   before-each before-each-tail
+   around-each around-each-tail
+   after-each after-each-tail))
 
-(defun make-assertion-detail-record (form matcher actual expected negated pass)
-  (vector 'assertion-detail form matcher actual expected negated pass))
+(defmacro suite-hook (suite hook)
+  (ecase hook
+    (before-all `(suite-before-all ,suite))
+    (after-all `(suite-after-all ,suite))
+    (before-each `(suite-before-each ,suite))
+    (around-each `(suite-around-each ,suite))
+    (after-each `(suite-after-each ,suite))))
 
-(defun record-tag-p (value tag size)
-  (and (simple-vector-p value)
-       (= (length value) size)
-       (eq (svref value 0) tag)))
+(define-record-class test-case
+  (name function focus skip-reason todo-reason retry timeout-ms concurrent
+   tags depends-on execution-mode expected-failure-reason location))
 
-(defun make-suite (&key name parent focus execution-mode skip-reason todo-reason
-                     (children nil) children-tail
-                     (before-all nil) before-all-tail
-                     (after-all nil) after-all-tail
-                     (before-each nil) before-each-tail
-                     (around-each nil) around-each-tail
-                     (after-each nil) after-each-tail)
-  (vector 'suite name parent focus execution-mode skip-reason todo-reason
-          children children-tail before-all before-all-tail after-all after-all-tail
-          before-each before-each-tail around-each around-each-tail after-each
-          after-each-tail))
+(define-record-class assertion-detail
+  (form matcher actual expected negated pass))
 
-(defun suite-p (value) (record-tag-p value 'suite 19))
-(deftype suite () '(satisfies suite-p))
-(defun suite-name (record) (svref record 1))
-(defun suite-parent (record) (svref record 2))
-(defun suite-focus (record) (svref record 3))
-(defun suite-execution-mode (record) (svref record 4))
-(defun suite-skip-reason (record) (svref record 5))
-(defun suite-todo-reason (record) (svref record 6))
-(defun suite-children (record) (svref record 7))
-(defun suite-children-tail (record) (svref record 8))
-(defun suite-before-all (record) (svref record 9))
-(defun suite-before-all-tail (record) (svref record 10))
-(defun suite-after-all (record) (svref record 11))
-(defun suite-after-all-tail (record) (svref record 12))
-(defun suite-before-each (record) (svref record 13))
-(defun suite-before-each-tail (record) (svref record 14))
-(defun suite-around-each (record) (svref record 15))
-(defun suite-around-each-tail (record) (svref record 16))
-(defun suite-after-each (record) (svref record 17))
-(defun suite-after-each-tail (record) (svref record 18))
+(defun make-assertion-detail-record
+    (form matcher actual expected negated pass)
+  (make-assertion-detail
+   :form form
+   :matcher matcher
+   :actual actual
+   :expected expected
+   :negated negated
+   :pass pass))
 
-(defun (setf suite-children) (value record) (setf (svref record 7) value))
-(defun (setf suite-children-tail) (value record) (setf (svref record 8) value))
-(defun (setf suite-before-all) (value record) (setf (svref record 9) value))
-(defun (setf suite-before-all-tail) (value record) (setf (svref record 10) value))
-(defun (setf suite-after-all) (value record) (setf (svref record 11) value))
-(defun (setf suite-after-all-tail) (value record) (setf (svref record 12) value))
-(defun (setf suite-before-each) (value record) (setf (svref record 13) value))
-(defun (setf suite-before-each-tail) (value record) (setf (svref record 14) value))
-(defun (setf suite-around-each) (value record) (setf (svref record 15) value))
-(defun (setf suite-around-each-tail) (value record) (setf (svref record 16) value))
-(defun (setf suite-after-each) (value record) (setf (svref record 17) value))
-(defun (setf suite-after-each-tail) (value record) (setf (svref record 18) value))
+(define-record-class test-event
+  (status path condition assertion reason location elapsed-internal-time))
 
-(defun make-test-case (&key name function focus skip-reason todo-reason retry
-                         timeout-ms concurrent tags depends-on execution-mode
-                         expected-failure-reason location)
-  (vector 'test-case name function focus skip-reason todo-reason retry timeout-ms
-          concurrent tags depends-on execution-mode expected-failure-reason
-          location))
-
-(defun test-case-p (value) (record-tag-p value 'test-case 14))
-(deftype test-case () '(satisfies test-case-p))
-(defun test-case-name (record) (svref record 1))
-(defun test-case-function (record) (svref record 2))
-(defun test-case-focus (record) (svref record 3))
-(defun test-case-skip-reason (record) (svref record 4))
-(defun test-case-todo-reason (record) (svref record 5))
-(defun test-case-retry (record) (svref record 6))
-(defun test-case-timeout-ms (record) (svref record 7))
-(defun test-case-concurrent (record) (svref record 8))
-(defun test-case-tags (record) (svref record 9))
-(defun test-case-depends-on (record) (svref record 10))
-(defun test-case-execution-mode (record) (svref record 11))
-(defun test-case-expected-failure-reason (record) (svref record 12))
-(defun test-case-location (record) (svref record 13))
-
-(defun make-assertion-detail (&key form matcher actual expected negated pass)
-  (vector 'assertion-detail form matcher actual expected negated pass))
-
-(defun assertion-detail-p (value) (record-tag-p value 'assertion-detail 7))
-(defun assertion-detail-form (record) (svref record 1))
-(defun assertion-detail-matcher (record) (svref record 2))
-(defun assertion-detail-actual (record) (svref record 3))
-(defun assertion-detail-expected (record) (svref record 4))
-(defun assertion-detail-negated (record) (svref record 5))
-(defun assertion-detail-pass (record) (svref record 6))
-
-(defun make-test-event (&key status path condition assertion reason location
-                          elapsed-internal-time)
-  (vector 'test-event status path condition assertion reason location
-          elapsed-internal-time))
-
-(defun test-event-p (value) (record-tag-p value 'test-event 8))
-(defun test-event-status (record) (svref record 1))
-(defun test-event-path (record) (svref record 2))
-(defun test-event-condition (record) (svref record 3))
-(defun test-event-assertion (record) (svref record 4))
-(defun test-event-reason (record) (svref record 5))
-(defun test-event-location (record) (svref record 6))
-(defun test-event-elapsed-internal-time (record) (svref record 7))
-
-(defun make-test-plan-entry (&key path status reason focused retry timeout-ms
-                               concurrent tags depends-on location)
-  (vector 'test-plan-entry path status reason focused retry timeout-ms concurrent
-          tags depends-on location))
-
-(defun test-plan-entry-p (value) (record-tag-p value 'test-plan-entry 11))
-(defun test-plan-entry-path (record) (svref record 1))
-(defun test-plan-entry-status (record) (svref record 2))
-(defun test-plan-entry-reason (record) (svref record 3))
-(defun test-plan-entry-focused (record) (svref record 4))
-(defun test-plan-entry-retry (record) (svref record 5))
-(defun test-plan-entry-timeout-ms (record) (svref record 6))
-(defun test-plan-entry-concurrent (record) (svref record 7))
-(defun test-plan-entry-tags (record) (svref record 8))
-(defun test-plan-entry-depends-on (record) (svref record 9))
-(defun test-plan-entry-location (record) (svref record 10))
+(define-record-class test-plan-entry
+  (path status reason focused retry timeout-ms concurrent tags depends-on
+   location))
 
 (define-condition test-failure (error)
-  ((detail :initarg :detail :reader failure-detail)))
+  ((detail :initarg :detail :reader failure-detail))
+  (:report
+   (lambda (condition stream)
+     (let ((detail (failure-detail condition)))
+       (format stream "Test assertion failed: ~S"
+               (and detail (assertion-detail-form detail)))))))
 
 (define-condition assertion-failure (test-failure) ())
 
 (define-condition test-timeout (error)
-  ((timeout-ms :initarg :timeout-ms :reader test-timeout-ms)))
+  ((timeout-ms :initarg :timeout-ms :reader test-timeout-ms))
+  (:report
+   (lambda (condition stream)
+     (format stream "Test exceeded its ~D ms timeout."
+             (test-timeout-ms condition)))))
 
 (define-condition expected-failure-missed (error)
-  ((reason :initarg :reason :reader expected-failure-missed-reason)))
+  ((reason :initarg :reason :reader expected-failure-missed-reason))
+  (:report
+   (lambda (condition stream)
+     (format stream "Test unexpectedly passed; expected failure: ~A"
+             (expected-failure-missed-reason condition)))))
 
 (defun root-suite ()
   (or *root-suite*
       (setf *root-suite*
-            (make-suite-record "root" nil nil nil nil nil))))
+            (make-suite :name "root"))))
 
 (defun clear-tests ()
   (setf *root-suite* nil
@@ -184,33 +125,18 @@
     (string (string-upcase name))
     (t name)))
 
-(defun ensure-suite (name &key parent focus execution-mode skip-reason todo-reason)
-  (or (gethash (named-suite-key name) *named-suites*)
-      (let* ((suite-parent (or parent (root-suite)))
-             (suite (add-child suite-parent
-                               (make-suite-record
-                                name suite-parent focus
-                                (normalize-execution-mode execution-mode)
-                                skip-reason todo-reason))))
-        (setf (gethash (named-suite-key name) *named-suites*) suite)
-        suite)))
-
-(defun register-named-suite (name &key parent focus execution-mode skip-reason todo-reason)
-  (apply #'ensure-suite
-         (list name
-               :parent (when parent (apply #'ensure-suite (list parent)))
-               :focus focus
-               :execution-mode execution-mode
-               :skip-reason skip-reason
-               :todo-reason todo-reason)))
-
 (defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
   (let* ((parent (or *current-suite* (root-suite)))
          (suite (add-child parent
-                           (make-suite-record
-                            name parent focus
-                            (normalize-execution-mode execution-mode)
-                            skip-reason todo-reason))))
+                           (apply #'make-suite
+                                  (list
+                                   :name name
+                                   :parent parent
+                                   :focus focus
+                                   :execution-mode
+                                   (normalize-execution-mode execution-mode)
+                                   :skip-reason skip-reason
+                                   :todo-reason todo-reason)))))
     (let ((*current-suite* suite))
       (funcall thunk))
     suite))
@@ -220,31 +146,24 @@
        tags depends-on execution-mode expected-failure-reason location)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite
-               (make-test-case-record
-                name function focus skip-reason todo-reason retry timeout-ms
-                concurrent tags depends-on
-                (normalize-execution-mode
-                 (or execution-mode
-                     (when concurrent :concurrent)))
-                expected-failure-reason location))))
-
-(defun register-test-in-suite
-    (suite-name name function &key focus skip-reason todo-reason retry timeout-ms concurrent
-       tags depends-on execution-mode expected-failure-reason location)
-  (let ((*current-suite* (apply #'ensure-suite (list suite-name))))
-    (apply #'register-test
-           (list name function
-                 :focus focus
-                 :skip-reason skip-reason
-                 :todo-reason todo-reason
-                 :retry retry
-                 :timeout-ms timeout-ms
-                 :concurrent concurrent
-                 :tags tags
-                 :depends-on depends-on
-                 :execution-mode execution-mode
-                 :expected-failure-reason expected-failure-reason
-                 :location location))))
+               (apply #'make-test-case
+                      (list
+                       :name name
+                       :function function
+                       :focus focus
+                       :skip-reason skip-reason
+                       :todo-reason todo-reason
+                       :retry retry
+                       :timeout-ms timeout-ms
+                       :concurrent concurrent
+                       :tags tags
+                       :depends-on depends-on
+                       :execution-mode
+                       (normalize-execution-mode
+                        (or execution-mode
+                            (when concurrent :concurrent)))
+                       :expected-failure-reason expected-failure-reason
+                       :location location)))))
 
 (defun register-before-all (function)
   (let* ((suite (or *current-suite* (root-suite)))
@@ -314,7 +233,7 @@
 (defun set-expected-assertion-count (count form)
   (require-assertion-counting form)
   (unless (and (integerp count) (not (minusp count)))
-    (error "cl-weave: expect.assertions count must be a non-negative integer, got ~S."
+    (error "cl-weave: EXPECT-ASSERTIONS count must be a non-negative integer, got ~S."
            count))
   (setf *expected-assertion-count* count
         *expected-assertion-count-form* form)

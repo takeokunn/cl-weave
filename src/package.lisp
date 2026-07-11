@@ -41,49 +41,29 @@
    #:coverage-unavailable-reason
    #:defmutation-operator
    #:describe
-   #:describe.concurrent
    #:describe-concurrent
-   #:describe.concurrent.each
    #:describe-concurrent-each
-   #:describe.each
    #:describe-each
-   #:describe.only
    #:describe-only
-   #:describe.only.each
    #:describe-only-each
-   #:describe.run-if
    #:describe-run-if
-   #:describe.sequential
    #:describe-sequential
-   #:describe.sequential.each
    #:describe-sequential-each
-   #:describe.skip
    #:describe-skip
-   #:describe.skip.each
    #:describe-skip-each
-   #:describe.skip-if
    #:describe-skip-if
-   #:describe.todo
    #:describe-todo
-   #:describe.todo.each
    #:describe-todo-each
    #:defmatcher
    #:extend-expect
    #:explain!
    #:expect
-   #:expect.assertions
    #:expect-assertions
-   #:expect.extend
    #:expect-extend
-   #:expect.hasassertions
    #:expect-has-assertions
-   #:expect.not
    #:expect-not
-   #:expect.poll
    #:expect-poll
-   #:expect.rejects
    #:expect-rejects
-   #:expect.resolves
    #:expect-resolves
    #:expected-failure-missed
    #:expected-failure-missed-reason
@@ -152,43 +132,33 @@
    #:is-record
    #:is-zero
    #:it
-   #:it.concurrent
    #:it-concurrent
-   #:it.concurrent.each
    #:it-concurrent-each
-   #:it.each
    #:it-each
-   #:it.fails
    #:it-fails
-   #:it.fails.each
    #:it-fails-each
-   #:it.isolated
    #:it-isolated
-   #:it.property
    #:it-property
-   #:it.only
    #:it-only
-   #:it.only.each
    #:it-only-each
-   #:it.run-if
    #:it-run-if
-   #:it.sequential
    #:it-sequential
-   #:it.sequential.each
    #:it-sequential-each
-   #:it.skip
    #:it-skip
-   #:it.skip.each
    #:it-skip-each
-   #:it.skip-if
    #:it-skip-if
-   #:it.todo
    #:it-todo
-   #:it.todo.each
    #:it-todo-each
    #:list-tests
    #:logic-program
    #:logic-query
+   #:logic-search-exhausted
+   #:logic-search-exhausted-limit
+   #:logic-search-exhausted-partial-results
+   #:logic-search-exhausted-pending
+   #:logic-search-exhausted-steps
+   #:increase-limit
+   #:return-partial-results
    #:logic-run
    #:logic-variable-p
    #:logic-where
@@ -218,7 +188,12 @@
    #:mutation-score-passes-p
    #:mutation-summary
    #:*property-seed*
+   #:*property-shrink-max-steps*
    #:*property-test-count*
+   #:property-shrink-limit
+   #:property-shrink-limit-max-steps
+   #:property-shrink-limit-steps
+   #:property-shrink-limit-values
    #:same-property-failure-p
    #:*snapshot-directory*
    #:*snapshot-file-name*
@@ -244,19 +219,6 @@
    #:skip
    #:mock-restore
    #:spy-on
-   #:vi.clearallmocks
-   #:vi.fn
-   #:vi.ismockfunction
-   #:vi.mocked
-   #:vi.mockclear
-   #:vi.mockimplementation
-   #:vi.mockreset
-   #:vi.mockrestore
-   #:vi.mockreturnvalue
-   #:vi.mockreturnvalues
-   #:vi.resetallmocks
-   #:vi.restoreallmocks
-   #:vi.spyon
    #:mock-calls
    #:mock-results
    #:*test-sequence-order*
@@ -292,41 +254,6 @@
    #:test-plan-entry-depends-on
    #:test-plan-facts
    #:test-plan-where
-   #:test
-   #:test.concurrent
-   #:test-concurrent
-   #:test.concurrent.each
-   #:test-concurrent-each
-   #:test.each
-   #:test-each
-   #:test.fails
-   #:test-fails
-   #:test.fails.each
-   #:test-fails-each
-   #:test.isolated
-   #:test-isolated
-   #:test.only
-   #:test-only
-   #:test.only.each
-   #:test-only-each
-   #:test.property
-   #:test-property
-   #:test.run-if
-   #:test-run-if
-   #:test.sequential
-   #:test-sequential
-   #:test.sequential.each
-   #:test-sequential-each
-   #:test.skip
-   #:test-skip
-   #:test.skip.each
-   #:test-skip-each
-   #:test.skip-if
-   #:test-skip-if
-   #:test.todo
-   #:test-todo
-   #:test.todo.each
-   #:test-todo-each
    #:test-failure
    #:test-timeout
    #:test-timeout-ms
@@ -340,11 +267,14 @@
 
 (in-package #:cl-weave)
 
-(defvar *runtime-source-directory*
-  #.(make-pathname :name nil
-                   :type nil
-                   :defaults (or *compile-file-truename*
-                                 *load-truename*)))
+(defun runtime-source-directory ()
+  (or (ignore-errors
+        (asdf:system-relative-pathname "cl-weave" "src/"))
+      (make-pathname :name nil
+                     :type nil
+                     :defaults *load-truename*)))
+
+(defvar *runtime-source-directory* (runtime-source-directory))
 
 (defparameter *local-project-system-source-files*
   '(("cl-weave"
@@ -357,9 +287,24 @@
      "matchers.lisp"
      "property.lisp"
      "mutation.lisp"
-     "dsl.lisp"
-     "reporters.lisp"
-     "runner.lisp"
+     "registration.lisp"
+     "fixtures.lisp"
+     "continuations.lisp"
+     "expect-runtime.lisp"
+     "expect.lisp"
+     "reporter-schema.lisp"
+     "reporter-json.lisp"
+     "reporter-results.lisp"
+     "reporter-tap.lisp"
+     "reporter-github.lisp"
+     "reporter-plan.lisp"
+     "reporter-mutation.lisp"
+     "reporter-junit.lisp"
+     "runner-execution.lisp"
+     "runner-selection.lisp"
+     "runner-planning.lisp"
+     "runner-concurrency.lisp"
+     "runner-collection.lisp"
      "runner-api.lisp"
      "watch.lisp"
      "cli-options.lisp"

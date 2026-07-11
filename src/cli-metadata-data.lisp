@@ -283,14 +283,12 @@
     (:name "coverage-artifact"
      :kind "script"
      :command ("nix" "develop" "--command" "perl" "-e"
-               "alarm 360; exec @ARGV" "--" "env" "CL_WEAVE_COVERAGE=1"
-               "CL_WEAVE_COVERAGE_FILE=cl-weave.coverage"
-               "CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/"
-               "sbcl" "--noinform" "--non-interactive" "--load"
-               "scripts/run-tests.lisp")
+               "alarm 360; exec @ARGV" "--" "sh"
+               "scripts/run-coverage-gate.sh")
      :timeout-seconds 360
-     :artifacts ("cl-weave.coverage" "cl-weave-coverage-report/")
-     :description "Verify populated SBCL coverage HTML report and sidecar generation for CI artifacts.")
+     :artifacts ("cl-weave.coverage" "cl-weave-coverage-report/"
+                 "cl-weave-coverage-summary.json")
+     :description "Require measured product-source expression and branch coverage to reach 100%, then publish SBCL coverage artifacts.")
     (:name "plan-artifact"
      :kind "cli"
      :command ("nix" "run" "." "--" "list" "cl-weave-tests"
@@ -458,9 +456,9 @@
      :commands ("run" "list" "watch")
      :argument "ORDER"
      :value-kind :sequence-order
-     :choices ("defined" "random" "shuffle")
+     :choices ("random")
      :environment ("CL_WEAVE_SEQUENCE")
-     :description "Execution order: defined, random, or shuffle")
+     :description "Randomize execution order")
     (:name "--seed"
      :aliases nil
      :commands ("run" "list" "watch")
@@ -545,7 +543,6 @@
 (defparameter *metadata-capabilities*
   '("vitest-dsl"
     "describe-it-dsl"
-    "vitest-dot-aliases"
     "expect-matchers"
     "smart-s-expression-assertions"
     "fixtures-and-restarts"
@@ -577,24 +574,16 @@
 (defparameter *metadata-capability-matrix*
   '((:name "vitest-dsl"
      :status "implemented"
-     :summary "Vitest-style describe/it/test DSL with only, skip, todo, each, fails, conditional, concurrent, sequential, property, and isolated variants."
-     :public-apis ("describe" "it" "test" "describe-each" "it-each"
+     :summary "Vitest-style describe/it DSL with only, skip, todo, each, fails, conditional, concurrent, sequential, property, and isolated variants."
+     :public-apis ("describe" "it" "describe-each" "it-each"
                    "it-concurrent" "it-property" "it-isolated")
      :quality-gates ("flake-check" "filtered-smoke" "plan-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "describe-it-dsl"
      :status "implemented"
-     :summary "Core describe/it/test forms and each-style variants define the primary suite authoring surface."
-     :public-apis ("describe" "it" "test" "describe-each" "it-each"
-                   "test-each")
+     :summary "Core describe/it forms and each-style variants define the primary suite authoring surface."
+     :public-apis ("describe" "it" "describe-each" "it-each")
      :quality-gates ("flake-check" "filtered-smoke" "plan-artifact")
-     :documentation ("README.md" "docs/ai-contract.md"))
-    (:name "vitest-dot-aliases"
-     :status "implemented"
-     :summary "Vitest-compatible dotted aliases expose familiar each, only, skip, concurrent, and polling entrypoints."
-     :public-apis ("describe.each" "it.concurrent" "test.skip" "test.only"
-                   "expect.poll")
-     :quality-gates ("flake-check" "filtered-smoke" "ai-metadata-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "expect-matchers"
      :status "implemented"
@@ -632,8 +621,8 @@
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "mocks-and-spies"
      :status "implemented"
-     :summary "vi-style mock functions and spies with call/result metadata and restoration helpers."
-     :public-apis ("vi-fn" "vi-spy-on" "vi-mocked" "vi-clear-all-mocks"
+     :summary "Mock functions and spies with call/result metadata and restoration helpers."
+     :public-apis ("make-mock-function" "spy-on" "clear-all-mocks"
                    "mock-calls" "mock-results")
      :quality-gates ("flake-check" "cli-json-results")
      :documentation ("README.md" "docs/ai-contract.md"))
@@ -654,14 +643,14 @@
     (:name "property-and-mutation"
      :status "implemented"
      :summary "Property checks and mutation testing metadata for stronger behavioral confidence than example tests alone."
-     :public-apis ("property" "it-property" "gen-integer" "gen-string"
+     :public-apis ("it-property" "gen-integer" "gen-string"
                    "run-mutations" "list-mutation-operators")
      :quality-gates ("flake-check" "json-results-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "property-tests"
      :status "implemented"
      :summary "Property-test APIs expose generators and quantified assertions for broader input coverage than example-based suites."
-     :public-apis ("property" "it-property" "gen-integer" "gen-string"
+     :public-apis ("it-property" "gen-integer" "gen-string"
                    "gen-list" "gen-map" "gen-vector"
                    "gen-state-machine")
      :quality-gates ("flake-check" "json-results-artifact")
@@ -676,7 +665,7 @@
     (:name "structured-reporting"
      :status "implemented"
      :summary "Spec, SEXP, JSON, JSONL, TAP, GitHub annotation, JUnit, plan, and coverage artifacts with machine-readable schemas."
-     :public-apis ("run-tests" "list-tests" "reporter-artifact-schemas"
+     :public-apis ("run" "list-tests" "reporter-artifact-schemas"
                    "framework-metadata")
      :quality-gates ("json-results-artifact" "jsonl-events-artifact"
                      "tap-artifact" "junit-artifact" "plan-artifact"
@@ -685,7 +674,7 @@
     (:name "subprocess-isolation"
      :status "implemented"
      :summary "Subprocess isolation APIs protect the main runner from crashes, FFI failures, and process-boundary hazards."
-     :public-apis ("it-isolated" "test-isolated" "run-isolated"
+     :public-apis ("it-isolated" "run-isolated"
                    "assert-isolated-success")
      :quality-gates ("flake-check" "json-results-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
@@ -699,7 +688,7 @@
     (:name "watch-and-parallelism"
      :status "implemented"
      :summary "Watch-once automation, filtering, sharding, deterministic sequence controls, and bounded adjacent concurrent batches."
-     :public-apis ("run-tests" "list-tests")
+     :public-apis ("run" "run-all" "list-tests")
      :quality-gates ("watch-once-artifact" "filtered-smoke" "flake-check")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "watch"
@@ -718,7 +707,7 @@
     (:name "isolation-and-cps"
      :status "implemented"
      :summary "Subprocess isolation for crash/FFI boundaries and thunk-based CPS helpers for async-style test flows."
-     :public-apis ("it-isolated" "test-isolated" "expect-poll"
+     :public-apis ("it-isolated" "expect-poll"
                    "expect-eventually")
      :quality-gates ("flake-check" "json-results-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
@@ -782,71 +771,3 @@
                    "expect-poll" "expect-eventually")
      :quality-gates ("flake-check" "json-results-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))))
-
-(defparameter *metadata-vitest-aliases*
-  '(("describe.each" . "describe-each")
-    ("describe.skip" . "describe-skip")
-    ("describe.skip.each" . "describe-skip-each")
-    ("describe.todo" . "describe-todo")
-    ("describe.todo.each" . "describe-todo-each")
-    ("describe.only" . "describe-only")
-    ("describe.only.each" . "describe-only-each")
-    ("describe.concurrent" . "describe-concurrent")
-    ("describe.concurrent.each" . "describe-concurrent-each")
-    ("describe.sequential" . "describe-sequential")
-    ("describe.sequential.each" . "describe-sequential-each")
-    ("describe.run-if" . "describe-run-if")
-    ("describe.skip-if" . "describe-skip-if")
-    ("it.each" . "it-each")
-    ("it.skip" . "it-skip")
-    ("it.skip.each" . "it-skip-each")
-    ("it.todo" . "it-todo")
-    ("it.todo.each" . "it-todo-each")
-    ("it.concurrent" . "it-concurrent")
-    ("it.concurrent.each" . "it-concurrent-each")
-    ("it.sequential" . "it-sequential")
-    ("it.sequential.each" . "it-sequential-each")
-    ("it.fails" . "it-fails")
-    ("it.fails.each" . "it-fails-each")
-    ("it.only" . "it-only")
-    ("it.only.each" . "it-only-each")
-    ("it.run-if" . "it-run-if")
-    ("it.skip-if" . "it-skip-if")
-    ("it.property" . "it-property")
-    ("it.isolated" . "it-isolated")
-    ("test.each" . "test-each")
-    ("test.skip" . "test-skip")
-    ("test.skip.each" . "test-skip-each")
-    ("test.todo" . "test-todo")
-    ("test.todo.each" . "test-todo-each")
-    ("test.concurrent" . "test-concurrent")
-    ("test.concurrent.each" . "test-concurrent-each")
-    ("test.sequential" . "test-sequential")
-    ("test.sequential.each" . "test-sequential-each")
-    ("test.fails" . "test-fails")
-    ("test.fails.each" . "test-fails-each")
-    ("test.only" . "test-only")
-    ("test.only.each" . "test-only-each")
-    ("test.run-if" . "test-run-if")
-    ("test.skip-if" . "test-skip-if")
-    ("test.property" . "test-property")
-    ("test.isolated" . "test-isolated")
-    ("expect.not" . "expect-not")
-    ("expect.resolves" . "expect-resolves")
-    ("expect.rejects" . "expect-rejects")
-    ("expect.assertions" . "expect-assertions")
-    ("expect.hasassertions" . "expect-has-assertions")
-    ("expect.extend" . "expect-extend")
-    ("vi.fn" . "make-mock-function")
-    ("vi.spyon" . "spy-on")
-    ("vi.mocked" . "mock-function-p")
-    ("vi.ismockfunction" . "mock-function-p")
-    ("vi.mockimplementation" . "mock-implementation")
-    ("vi.mockreturnvalue" . "mock-return-value")
-    ("vi.mockreturnvalues" . "mock-return-values")
-    ("vi.mockclear" . "clear-mock")
-    ("vi.mockreset" . "reset-mock")
-    ("vi.mockrestore" . "mock-restore")
-    ("vi.clearallmocks" . "clear-all-mocks")
-    ("vi.resetallmocks" . "reset-all-mocks")
-    ("vi.restoreallmocks" . "restore-all-mocks")))

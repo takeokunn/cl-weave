@@ -1,0 +1,266 @@
+(in-package #:cl-weave)
+
+(defun collect-suite-events/k
+    (suite control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
+  (if (or (execution-control-stopped control)
+          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths)))
+      (funcall continue '())
+      (let ((active-execution-mode
+              (effective-suite-execution-mode suite inherited-execution-mode)))
+        (multiple-value-bind (active-status active-reason)
+            (suite-suppression suite suppressed-status suppressed-reason)
+          (if active-status
+              (collect-children/k
+               suite
+               (ordered-children suite (suite-children suite))
+               control
+               continue
+               focus-enabled
+               ancestor-focused
+               name-filter
+               location-filter
+               shard-paths
+               active-status
+               active-reason
+               active-execution-mode)
+              (unwind-protect
+                   (call-hooks/k
+                    (suite-hook suite before-all)
+                    (lambda ()
+                      (collect-children/k
+                       suite
+                       (ordered-children suite (suite-children suite))
+                       control
+                       continue
+                       focus-enabled
+                       ancestor-focused
+                       name-filter
+                       location-filter
+                       shard-paths
+                       nil
+                       nil
+                       active-execution-mode)))
+                (call-hooks/k (reverse (suite-hook suite after-all)) (lambda () nil))))))))
+
+(defun collect-children/k
+    (suite children control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (macrolet ((recur (remaining next-continue)
+               `(collect-children/k
+                 suite
+                 ,remaining
+                 control
+                 ,next-continue
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)))
+    (labels ((continue-with-tail (head-events remaining)
+               (recur remaining
+                      (lambda (tail)
+                       (funcall continue (append head-events tail)))))
+             (continue-with-event (event)
+               (if (execution-control-stopped control)
+                   (funcall continue (list event))
+                   (recur (rest children)
+                          (lambda (tail)
+                            (funcall continue (cons event tail)))))))
+      (if (or (null children) (execution-control-stopped control))
+          (funcall continue '())
+          (let ((child (first children)))
+            (multiple-value-bind (step payload rest-children)
+                (describe-event-collection-step
+                 suite
+                 child
+                 children
+                 control
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)
+              (ecase step
+                (:skip
+                 (recur (rest children) continue))
+                (:collect-suite
+                 (collect-suite-events/k
+                  child
+                  control
+                  (lambda (events)
+                    (if (execution-control-stopped control)
+                        (funcall continue events)
+                        (continue-with-tail events (rest children))))
+                  focus-enabled
+                  payload
+                  name-filter
+                  location-filter
+                  shard-paths
+                  suppressed-status
+                  suppressed-reason
+                  execution-mode))
+                (:collect-concurrent
+                 (continue-with-tail
+                  (mapcar (lambda (event)
+                            (record-event/control control event))
+                          (run-concurrent-test-cases suite payload))
+                  rest-children))
+                (:collect-test
+                 (continue-with-event payload)))))))))
+
+(defun call-with-collection-context
+    (suite name-filter location-filter shard order seed retry timeout-ms max-workers continue)
+  (let* ((focus-enabled (focused-suite-p suite))
+         (normalized-filter (normalized-test-filter name-filter))
+         (normalized-location-filter (normalize-location-filter location-filter))
+         (normalized-shard (normalize-shard shard))
+         (normalized-order (normalize-sequence-order order))
+         (normalized-seed (normalize-sequence-seed seed))
+         (normalized-retry (normalize-retry-count retry))
+         (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
+         (normalized-max-workers (normalize-max-workers max-workers))
+         (shard-paths (collect-shard-paths
+                       suite
+                       focus-enabled
+                       normalized-filter
+                       normalized-location-filter
+                       normalized-shard)))
+    (let ((*test-sequence-order* normalized-order)
+          (*test-sequence-seed* normalized-seed)
+          (*default-retry* normalized-retry)
+          (*default-timeout-ms* normalized-timeout-ms)
+          (*max-workers* normalized-max-workers))
+      (funcall continue
+               focus-enabled
+               normalized-filter
+               normalized-location-filter
+               shard-paths))))
+
+(defun collect-events (suite &key name-filter location-filter bail shard order seed retry timeout-ms max-workers)
+  (with-runner-condition-propagation (nil)
+    (call-with-collection-context
+     suite
+     name-filter
+     location-filter
+     shard
+     order
+     seed
+     retry
+     timeout-ms
+     max-workers
+     (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
+       (collect-suite-events/k
+        suite
+        (make-execution-control :bail-limit (normalize-bail bail))
+        #'identity
+        focus-enabled
+        nil
+        normalized-filter
+        normalized-location-filter
+        shard-paths)))))
+
+(declaim (ftype (function (suite list function &optional t t t t t t t t) *) collect-children-plan/k))
+
+(defun collect-suite-plan/k
+    (suite continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
+  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths))
+      (funcall continue '())
+      (let ((active-execution-mode
+              (effective-suite-execution-mode suite inherited-execution-mode)))
+        (multiple-value-bind (active-status active-reason)
+            (suite-suppression suite suppressed-status suppressed-reason)
+          (collect-children-plan/k
+           suite
+           (ordered-children suite (suite-children suite))
+           continue
+           focus-enabled
+           ancestor-focused
+           name-filter
+           location-filter
+           shard-paths
+           active-status
+           active-reason
+           active-execution-mode)))))
+
+(defun collect-children-plan/k
+    (suite children continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (macrolet ((recur (remaining next-continue)
+               `(collect-children-plan/k
+                 suite
+                 ,remaining
+                 ,next-continue
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)))
+    (labels ((continue-with-tail (entries)
+               (recur (rest children)
+                      (lambda (tail)
+                        (funcall continue (append entries tail)))))
+             (continue-with-entry (entry)
+               (recur (rest children)
+                      (lambda (tail)
+                       (funcall continue (cons entry tail))))))
+      (if (null children)
+          (funcall continue '())
+          (let ((child (first children)))
+            (multiple-value-bind (step payload)
+                (describe-plan-collection-step
+                 suite
+                 child
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)
+              (ecase step
+                (:skip
+                 (recur (rest children) continue))
+                (:collect-suite
+                 (collect-suite-plan/k
+                  child
+                  #'continue-with-tail
+                  focus-enabled
+                  payload
+                  name-filter
+                  location-filter
+                  shard-paths
+                  suppressed-status
+                  suppressed-reason
+                  execution-mode))
+                (:collect-test
+                 (continue-with-entry payload)))))))))
+
+(defun collect-test-plan (suite &key name-filter location-filter shard order seed retry timeout-ms)
+  (call-with-collection-context
+   suite
+   name-filter
+   location-filter
+   shard
+   order
+   seed
+   retry
+   timeout-ms
+   nil
+   (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
+     (collect-suite-plan/k
+      suite
+      #'identity
+      focus-enabled
+      nil
+      normalized-filter
+      normalized-location-filter
+      shard-paths))))
+

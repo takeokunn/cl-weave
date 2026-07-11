@@ -25,12 +25,14 @@
         (values (cdr binding) t)
         (values nil nil))))
 
-(defun logic-walk (value bindings)
+(defun logic-walk (value bindings &optional seen)
   (if (logic-variable-p value)
-      (multiple-value-bind (bound found-p) (logic-binding-value value bindings)
-        (if found-p
-            (logic-walk bound bindings)
-            value))
+      (if (member value seen :test #'eq)
+          value
+          (multiple-value-bind (bound found-p) (logic-binding-value value bindings)
+            (if found-p
+                (logic-walk bound bindings (cons value seen))
+                value)))
       value))
 
 (defun extend-logic-binding (variable value bindings)
@@ -171,18 +173,53 @@
 (defun logic-search-frame-bindings (frame)
   (second frame))
 
-(defun logic-query (program clauses &key limit)
+(define-condition logic-search-exhausted (error)
+  ((steps :initarg :steps :reader logic-search-exhausted-steps)
+   (limit :initarg :limit :reader logic-search-exhausted-limit)
+   (pending :initarg :pending :reader logic-search-exhausted-pending)
+   (partial-results :initarg :partial-results
+                    :reader logic-search-exhausted-partial-results))
+  (:report (lambda (condition stream)
+             (format stream
+                     "cl-weave: logic query exhausted its ~D step limit with ~D frames pending."
+                     (logic-search-exhausted-limit condition)
+                     (logic-search-exhausted-pending condition)))))
+
+(defun logic-query (program clauses &key limit max-steps)
   (unless (or (null limit) (and (integerp limit) (plusp limit)))
     (error "cl-weave: logic-query limit must be NIL or a positive integer, got ~S."
            limit))
+  (unless (or (null max-steps)
+              (and (integerp max-steps) (plusp max-steps)))
+    (error "cl-weave: logic-query max-steps must be NIL or a positive integer, got ~S."
+           max-steps))
   (let ((normalized-program (normalize-logic-program program))
         (query-variables
           (remove-duplicate-logic-variables (collect-logic-variables clauses)))
         (frames (list (make-logic-search-frame clauses nil)))
         (results nil)
+        (steps 0)
         (next-rule-id 0))
-    (loop while (and frames (logic-below-limit-p results limit))
-          do (let* ((frame (pop frames))
+    (block search
+      (loop while (and frames (logic-below-limit-p results limit))
+          do (when (and max-steps (>= steps max-steps))
+               (restart-case
+                   (error 'logic-search-exhausted
+                          :steps steps
+                          :limit max-steps
+                          :pending (length frames)
+                          :partial-results (reverse results))
+                 (return-partial-results ()
+                   :report "Return the results found before the step budget was exhausted."
+                   (return-from search (nreverse results)))
+                 (increase-limit (new-limit)
+                   :report "Continue the logic query with a larger step limit."
+                   (unless (and (integerp new-limit) (> new-limit steps))
+                     (error "cl-weave: increased logic step limit must exceed ~D, got ~S."
+                            steps new-limit))
+                   (setf max-steps new-limit))))
+             (incf steps)
+             (let* ((frame (pop frames))
                     (pending (logic-search-frame-pending frame))
                     (bindings (logic-search-frame-bindings frame)))
                (if (null pending)
@@ -208,46 +245,63 @@
                                    new-frames)))))
                      (dolist (new-frame new-frames)
                        (push new-frame frames))))))
-    (nreverse results)))
+      (nreverse results))))
 
 (defun split-logic-where-forms (forms)
   (let ((limit nil)
         (limit-present-p nil)
+        (max-steps nil)
+        (max-steps-present-p nil)
         (clauses forms))
-    (when (and clauses
-               (consp (first clauses))
-               (eq (first (first clauses)) :limit))
-      (unless (= 2 (length (first clauses)))
-        (error "cl-weave: :limit expects exactly one value, got ~S."
-               (first clauses)))
-      (setf limit (second (first clauses))
-            limit-present-p t
-            clauses (rest clauses)))
+    (loop while (and clauses
+                     (consp (first clauses))
+                     (member (first (first clauses)) '(:limit :max-steps)))
+          for option = (pop clauses)
+          do (unless (= 2 (length option))
+               (error "cl-weave: ~S expects exactly one value, got ~S."
+                      (first option) option))
+             (ecase (first option)
+               (:limit
+                (when limit-present-p
+                  (error "cl-weave: duplicate :limit logic option."))
+                (setf limit (second option)
+                      limit-present-p t))
+               (:max-steps
+                (when max-steps-present-p
+                  (error "cl-weave: duplicate :max-steps logic option."))
+                (setf max-steps (second option)
+                      max-steps-present-p t))))
     (unless clauses
       (error "cl-weave: logic where macros require at least one relation clause."))
     (dolist (clause clauses)
       (unless (and (consp clause) (keywordp (first clause)))
         (error "cl-weave: logic clauses must be non-empty keyword relation lists, got ~S."
                clause)))
-    (values clauses limit limit-present-p)))
+    (values clauses limit limit-present-p max-steps max-steps-present-p)))
 
 (defmacro logic-where (facts &body forms)
-  (multiple-value-bind (clauses limit limit-present-p)
+  (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
       (split-logic-where-forms forms)
-    `(logic-query ,facts ',clauses ,@(when limit-present-p `(:limit ,limit)))))
+    `(logic-query ,facts ',clauses
+                  ,@(when limit-present-p `(:limit ,limit))
+                  ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
 
 (defmacro logic-program (&body entries)
   `(list ,@(mapcar (lambda (entry) `',entry) entries)))
 
 (defmacro logic-run (program &body forms)
-  (multiple-value-bind (clauses limit limit-present-p)
+  (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
       (split-logic-where-forms forms)
-    `(logic-query ,program ',clauses ,@(when limit-present-p `(:limit ,limit)))))
+    `(logic-query ,program ',clauses
+                  ,@(when limit-present-p `(:limit ,limit))
+                  ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
 
 (defmacro test-plan-where (plan &body forms)
-  (multiple-value-bind (clauses limit limit-present-p)
+  (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
       (split-logic-where-forms forms)
-    `(query-test-plan ,plan ',clauses ,@(when limit-present-p `(:limit ,limit)))))
+    `(query-test-plan ,plan ',clauses
+                      ,@(when limit-present-p `(:limit ,limit))
+                      ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
 
 (defun test-plan-entry-facts (entry)
   (let ((path (test-plan-entry-path entry)))
@@ -279,7 +333,8 @@
       (test-plan-facts value)
       value))
 
-(defun query-test-plan (plan-or-program clauses &key limit)
+(defun query-test-plan (plan-or-program clauses &key limit max-steps)
   (logic-query (normalize-test-plan-query-input plan-or-program)
                clauses
-               :limit limit))
+               :limit limit
+               :max-steps max-steps))

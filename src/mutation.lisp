@@ -3,11 +3,6 @@
 (defun make-mutation (&key id operator path original replacement form)
   (vector :mutation id operator path original replacement form))
 
-(defun mutation-p (value)
-  (and (simple-vector-p value)
-       (= (length value) 7)
-       (eq (aref value 0) :mutation)))
-
 (defun mutation-id (mutation)
   (aref mutation 1))
 
@@ -28,11 +23,6 @@
 
 (defun make-mutation-result (&key mutation status condition)
   (vector :mutation-result mutation status condition))
-
-(defun mutation-result-p (value)
-  (and (simple-vector-p value)
-       (= (length value) 4)
-       (eq (aref value 0) :mutation-result)))
 
 (defun mutation-result-mutation (result)
   (aref result 1))
@@ -185,12 +175,150 @@
        (list `(if ,test ,else-form ,then-form)))))
  :description "Swaps IF then/else branches while preserving the test form.")
 
-(defun walk-mutation-form (form function &optional path)
-  (funcall function form path)
-  (when (consp form)
-    (loop for element in form
-          for index from 0
-          do (walk-mutation-form element function (append path (list index))))))
+(defstruct (mutation-walk-context
+             (:constructor make-mutation-walk-context (visitor path)))
+  (visitor nil :type function :read-only t)
+  (path nil :type list :read-only t))
+
+(defun mutation-child-context (context &rest indexes)
+  (make-mutation-walk-context
+   (mutation-walk-context-visitor context)
+   (append (mutation-walk-context-path context) indexes)))
+
+(defun walk-mutation-form (form visitor &optional path)
+  (labels ((declaration-form-p (candidate)
+             (and (consp candidate) (eq (first candidate) 'declare)))
+           (walk-child (node context &rest indexes)
+             (walk node (apply #'mutation-child-context context indexes)))
+           (walk-body (body context start &key docstring-p)
+             (loop for element in body
+                   for index from start
+                   for first-p = t then nil
+                   unless (or (declaration-form-p element)
+                              (and docstring-p first-p (stringp element)))
+                     do (walk-child element context index)))
+           (walk-binding-value (binding context binding-index value-index)
+             (when (consp (nthcdr value-index binding))
+               (walk-child (nth value-index binding)
+                           context 1 binding-index value-index)))
+           (walk-bindings (bindings context)
+             (loop for binding in bindings
+                   for binding-index from 0
+                   do (walk-binding-value binding context binding-index 1)))
+           (walk-local-definitions (definitions context)
+             (loop for definition in definitions
+                   for definition-index from 0
+                   when (and (consp definition) (consp (rest definition)))
+                     do (walk-body (cddr definition)
+                                   (mutation-child-context context 1 definition-index)
+                                   2
+                                   :docstring-p t)))
+           (walk-value-pairs (elements context start)
+             (loop for element in elements
+                   for index from start
+                   when (evenp index)
+                     do (walk-child element context index)))
+           (walk-clauses (clauses context start body-offset)
+             (loop for clause in clauses
+                   for clause-index from start
+                   when (and (consp clause)
+                             (or (zerop body-offset) (consp (rest clause))))
+                     do (walk-body (nthcdr body-offset clause)
+                                   (mutation-child-context context clause-index)
+                                   body-offset)))
+           (walk-do (node context)
+             (walk-bindings (second node) context)
+             (loop for binding in (second node)
+                   for binding-index from 0
+                   do (walk-binding-value binding context binding-index 2))
+             (let ((end-clause (third node)))
+               (when (consp end-clause)
+                 (walk-body end-clause (mutation-child-context context 2) 0)))
+             (walk-body (cdddr node) context 3))
+           (walk-application-subforms (node context)
+             ;; Function names and special-form operators are syntax, not
+             ;; evaluated subforms. Keywords retain their data-list use.
+             (loop for element in node
+                   for index from 0
+                   when (or (plusp index)
+                            (keywordp (first node))
+                            (and (zerop index) (consp element)))
+                     do (walk-child element context index)))
+           (walk (node context)
+             (funcall (mutation-walk-context-visitor context)
+                      node
+                      (mutation-walk-context-path context))
+             (when (consp node)
+               (case (first node)
+                  ((quote declare) nil)
+                  (function
+                   (let ((function-form (second node)))
+                     (when (and (consp function-form)
+                                (eq (first function-form) 'lambda))
+                       (walk-body (cddr function-form)
+                                  (mutation-child-context context 1)
+                                  2
+                                  :docstring-p t))))
+                 (lambda
+                  (walk-body (cddr node) context 2 :docstring-p t))
+                 ((defun defmacro)
+                  (walk-body (cdddr node) context 3 :docstring-p t))
+                 ((let let*)
+                  (walk-bindings (second node) context)
+                  (walk-body (cddr node) context 2))
+                 ((flet labels)
+                  (walk-local-definitions (second node) context)
+                  (walk-body (cddr node) context 2))
+                 (macrolet
+                  (walk-local-definitions (second node) context)
+                  (walk-body (cddr node) context 2))
+                 (symbol-macrolet
+                  (walk-bindings (second node) context)
+                  (walk-body (cddr node) context 2))
+                 ((multiple-value-bind destructuring-bind)
+                  (when (consp (cddr node))
+                    (walk-child (third node) context 2))
+                  (walk-body (cdddr node) context 3))
+                 ((dolist dotimes)
+                  (let ((binding (second node)))
+                    (when (consp (rest binding))
+                      (walk-child (second binding) context 1 1))
+                    (when (consp (cddr binding))
+                      (walk-child (third binding) context 1 2)))
+                  (walk-body (cddr node) context 2))
+                 ((do do*)
+                  (walk-do node context))
+                 ((setq psetq)
+                  (walk-value-pairs (rest node) context 1))
+                 (cond
+                  (walk-clauses (rest node) context 1 0))
+                 ((handler-case restart-case)
+                  (when (consp (rest node))
+                    (walk-child (second node) context 1))
+                  (walk-clauses (cddr node) context 2 2))
+                 (handler-bind
+                  (walk-bindings (second node) context)
+                  (walk-body (cddr node) context 2))
+                 ((block return-from)
+                  (walk-body (cddr node) context 2))
+                 (go nil)
+                 (the
+                  (when (consp (cddr node))
+                    (walk-child (third node) context 2)))
+                 (eval-when
+                  (walk-body (cddr node) context 2))
+                 ((locally unwind-protect multiple-value-prog1)
+                  (walk-body (rest node) context 1))
+                 ((multiple-value-call progv)
+                  (walk-body (rest node) context 1))
+                 (tagbody
+                  (loop for element in (rest node)
+                        for index from 1
+                        unless (or (symbolp element) (numberp element))
+                          do (walk-child element context index)))
+                 (otherwise
+                  (walk-application-subforms node context))))))
+    (walk form (make-mutation-walk-context visitor path))))
 
 (defun replace-mutation-path (form path replacement)
   (if (null path)
@@ -223,27 +351,47 @@
                    mutations))))))
     (nreverse mutations)))
 
-(defun run-mutation (mutation test)
+(defun normalized-mutation-timeout-ms (timeout-ms)
+  (cond
+    ((null timeout-ms) nil)
+    ((and (integerp timeout-ms) (plusp timeout-ms)) timeout-ms)
+    (t (error "Mutation timeout must be NIL or a positive integer in milliseconds: ~S"
+              timeout-ms))))
+
+(defun call-mutation-test (mutation test timeout-ms)
+  (if timeout-ms
+      (sb-ext:with-timeout (/ timeout-ms 1000.0)
+        (funcall test (mutation-form mutation) mutation))
+      (funcall test (mutation-form mutation) mutation)))
+
+(defun run-mutation (mutation test timeout-ms)
   (handler-case
       (make-mutation-result
        :mutation mutation
-       :status (if (funcall test (mutation-form mutation) mutation)
-                   :survived
-                   :killed))
+       :status (if (call-mutation-test mutation test timeout-ms)
+                    :survived
+                    :killed))
     (assertion-failure (condition)
       (make-mutation-result :mutation mutation
                             :status :killed
                             :condition condition))
+    (sb-ext:timeout ()
+      (make-mutation-result :mutation mutation
+                            :status :errored
+                            :condition (make-condition 'test-timeout
+                                                       :timeout-ms timeout-ms)))
     (error (condition)
       (make-mutation-result :mutation mutation
                             :status :errored
                             :condition condition))))
 
-(defun run-mutations (form test &key (operators *default-mutation-operators*))
+(defun run-mutations (form test &key (operators *default-mutation-operators*)
+                                     timeout-ms)
   (check-type test function)
-  (mapcar (lambda (mutation)
-            (run-mutation mutation test))
-          (collect-mutations form :operators operators)))
+  (let ((timeout-ms (normalized-mutation-timeout-ms timeout-ms)))
+    (mapcar (lambda (mutation)
+              (run-mutation mutation test timeout-ms))
+            (collect-mutations form :operators operators))))
 
 (defun mutation-summary (results)
   (let* ((total (length results))
@@ -267,8 +415,7 @@
 (defun mutation-score-passes-p (results min-score)
   (let* ((min-score (normalized-mutation-score-threshold min-score))
          (summary (mutation-summary results)))
-    (values (and (zerop (getf summary :survived))
-                 (zerop (getf summary :errored))
+    (values (and (zerop (getf summary :errored))
                  (>= (getf summary :score) min-score))
             summary)))
 

@@ -93,9 +93,6 @@
                         :description
                         ,description)))))))
 
-(defmacro expect.extend (&body definitions)
-  `(expect-extend ,@definitions))
-
 (defun matcher-named (name)
   (or (gethash name *matchers*)
       (error "Unknown cl-weave matcher: ~S" name)))
@@ -475,15 +472,6 @@
         :difference difference
         :threshold threshold))
 
-(defun thunk-throws-p (thunk)
-  (and (functionp thunk)
-       (handler-case
-           (progn
-             (funcall thunk)
-             nil)
-         (condition ()
-           t))))
-
 (defun thrown-condition (thunk matcher)
   (unless (functionp thunk)
     (error "Matcher ~S expects a function thunk, got ~S." matcher thunk))
@@ -491,7 +479,7 @@
       (progn
         (funcall thunk)
         nil)
-    (condition (condition)
+    (error (condition)
       condition)))
 
 (defun condition-class-designator-p (value)

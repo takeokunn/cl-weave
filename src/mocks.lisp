@@ -4,9 +4,15 @@
   implementation
   calls
   results
-  restore)
+  restore
+  #+sb-thread
+  (lock (sb-thread:make-mutex :name "cl-weave mock state")))
 
 (defvar *mock-states* (make-hash-table :test #'eq))
+
+#+sb-thread
+(defvar *mock-registry-lock*
+  (sb-thread:make-mutex :name "cl-weave mock registry"))
 
 (defun default-mock-implementation (&rest arguments)
   (declare (ignore arguments))
@@ -18,16 +24,44 @@
            implementation))
   implementation)
 
-(defun register-mock-call (state arguments)
-  (setf (mock-state-calls state)
-        (append (mock-state-calls state) (list arguments))))
+(defmacro with-mock-state-lock ((state) &body body)
+  #+sb-thread
+  `(sb-thread:with-mutex ((mock-state-lock ,state))
+     ,@body)
+  #-sb-thread
+  `(progn ,@body))
 
-(defun register-mock-result (state result)
-  (setf (mock-state-results state)
-        (append (mock-state-results state) (list result))))
+(defmacro with-mock-registry-lock (&body body)
+  #+sb-thread
+  `(sb-thread:with-mutex (*mock-registry-lock*)
+     ,@body)
+  #-sb-thread
+  `(progn ,@body))
+
+(defun mock-registry-entries ()
+  ;; Never acquire a mock-state lock while holding the registry lock.  Bulk
+  ;; operations work from this snapshot so their lock order cannot cycle.
+  (with-mock-registry-lock
+    (loop for mock being the hash-keys of *mock-states*
+            using (hash-value state)
+          collect (cons mock state))))
+
+(defun register-mock-call (state arguments)
+  (with-mock-state-lock (state)
+    (let ((index (length (mock-state-calls state))))
+      (setf (mock-state-calls state)
+            (append (mock-state-calls state) (list arguments))
+            (mock-state-results state)
+            (append (mock-state-results state) (list '(:type :incomplete))))
+      index)))
+
+(defun register-mock-result (state index result)
+  (with-mock-state-lock (state)
+    (setf (nth index (mock-state-results state)) result)))
 
 (defun mock-state-for (mock)
-  (or (gethash mock *mock-states*)
+  (or (with-mock-registry-lock
+        (gethash mock *mock-states*))
       (error "Value is not a cl-weave mock function: ~S" mock)))
 
 (defun mock-thrown-result (condition)
@@ -40,42 +74,56 @@
                                  :calls nil
                                  :results nil
                                  :restore nil))
-         (mock (lambda (&rest arguments)
-                 (register-mock-call state arguments)
-                 (handler-case
-                     (let ((values (multiple-value-list
-                                    (apply (mock-state-implementation state) arguments))))
-                       (register-mock-result state
-                                             (list :type :return
-                                                   :value (first values)
-                                                   :values values))
-                       (values-list values))
-                   (condition (condition)
-                     (register-mock-result state (mock-thrown-result condition))
-                     (error condition))))))
-    (setf (gethash mock *mock-states*) state)
+          (mock (lambda (&rest arguments)
+                  (let ((index (register-mock-call state arguments))
+                        (completed nil)
+                        (signaled-error nil))
+                    (unwind-protect
+                        (handler-bind
+                            ((error
+                               (lambda (condition)
+                                 (setf signaled-error condition))))
+                          (let* ((implementation
+                                   (with-mock-state-lock (state)
+                                     (mock-state-implementation state)))
+                                 (values (multiple-value-list
+                                          (apply implementation arguments))))
+                            (register-mock-result state index
+                                                  (list :type :return
+                                                        :value (first values)
+                                                        :values values))
+                            (setf completed t)
+                            (values-list values)))
+                     (unless completed
+                       (register-mock-result
+                        state
+                        index
+                        (if signaled-error
+                            (mock-thrown-result signaled-error)
+                            '(:type :non-local-exit)))))))))
+    (with-mock-registry-lock
+      (setf (gethash mock *mock-states*) state))
     mock))
 
-(defmacro define-vitest-mock-aliases (&body definitions)
-  `(progn
-     ,@(mapcar (lambda (definition)
-                 (destructuring-bind (name lambda-list &body body) definition
-                   `(defun ,name ,lambda-list
-                      ,@body)))
-               definitions)))
-
 (defun mock-function-p (value)
-  (nth-value 1 (gethash value *mock-states*)))
+  (with-mock-registry-lock
+    (nth-value 1 (gethash value *mock-states*))))
 
 (defun mock-calls (mock)
-  (copy-tree (mock-state-calls (mock-state-for mock))))
+  (let ((state (mock-state-for mock)))
+    (with-mock-state-lock (state)
+      (copy-tree (mock-state-calls state)))))
 
 (defun mock-results (mock)
-  (copy-tree (mock-state-results (mock-state-for mock))))
+  (let ((state (mock-state-for mock)))
+    (with-mock-state-lock (state)
+      (copy-tree (mock-state-results state)))))
 
 (defun mock-implementation (mock implementation)
-  (setf (mock-state-implementation (mock-state-for mock))
-        (ensure-mock-implementation implementation))
+  (let ((state (mock-state-for mock))
+        (implementation (ensure-mock-implementation implementation)))
+    (with-mock-state-lock (state)
+      (setf (mock-state-implementation state) implementation)))
   mock)
 
 (defun mock-return-values (mock &rest values)
@@ -104,8 +152,9 @@
 
 (defun clear-mock (mock)
   (let ((state (mock-state-for mock)))
-    (setf (mock-state-calls state) nil
-          (mock-state-results state) nil))
+    (with-mock-state-lock (state)
+      (setf (mock-state-calls state) nil
+            (mock-state-results state) nil)))
   mock)
 
 (defun reset-mock (mock)
@@ -123,9 +172,8 @@
     mock))
 
 (defun map-mocks (function)
-  (maphash (lambda (mock state)
-             (funcall function mock state))
-           *mock-states*)
+  (dolist (entry (mock-registry-entries))
+    (funcall function (car entry) (cdr entry)))
   t)
 
 (defun clear-all-mocks ()
@@ -142,34 +190,6 @@
   (map-mocks (lambda (mock state)
                (when (mock-state-restore state)
                  (mock-restore mock)))))
-
-(define-vitest-mock-aliases
-  (vi.fn (&optional (implementation #'default-mock-implementation))
-    (make-mock-function implementation))
-  (vi.ismockfunction (value)
-    (mock-function-p value))
-  (vi.mocked (value)
-    (mock-function-p value))
-  (vi.mockimplementation (mock implementation)
-    (mock-implementation mock implementation))
-  (vi.mockreturnvalues (mock &rest values)
-    (apply #'mock-return-values mock values))
-  (vi.mockreturnvalue (mock value)
-    (mock-return-value mock value))
-  (vi.spyon (symbol)
-    (spy-on symbol))
-  (vi.mockclear (mock)
-    (clear-mock mock))
-  (vi.mockreset (mock)
-    (reset-mock mock))
-  (vi.mockrestore (mock)
-    (mock-restore mock))
-  (vi.clearallmocks ()
-    (clear-all-mocks))
-  (vi.resetallmocks ()
-    (reset-all-mocks))
-  (vi.restoreallmocks ()
-    (restore-all-mocks)))
 
 (defun mock-called-with-p (mock expected-arguments)
   (some (lambda (actual-arguments)
