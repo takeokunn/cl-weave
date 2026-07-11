@@ -4,6 +4,8 @@
   :description "A modern Common Lisp testing framework inspired by Vitest."
   :author "takeokunn"
   :license "MIT"
+  :homepage "https://github.com/takeokunn/cl-weave"
+  :bug-tracker "https://github.com/takeokunn/cl-weave/issues"
   :version "0.1.0"
   :serial t
   :components

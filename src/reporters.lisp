@@ -134,16 +134,16 @@
     (:kind "test-plan"
      :commands ("list")
      :reporters ("json" "sexp")
-     :schema-version 2
+     :schema-version 3
      :streaming nil
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
-              (:name "kind" :kind "string" :required t
-               :description "Artifact discriminator.")
-              (:name "tests" :kind "array" :required t
-               :description "Discovered test plan entries.")
-              (:name "summary" :kind "object" :required t
-               :description "Aggregated discovery counts.")))
+               (:name "kind" :kind "string" :required t
+                :description "Artifact discriminator.")
+               (:name "tests" :kind "array" :required t
+                :description "Discovered entries using the test-plan-entry test field shape.")
+               (:name "summary" :kind "object" :required t
+                :description "Aggregated discovery counts.")))
     (:kind "test-plan-start"
      :commands ("list")
      :reporters ("jsonl")
@@ -158,14 +158,36 @@
     (:kind "test-plan-entry"
      :commands ("list")
      :reporters ("jsonl")
-     :schema-version 1
+     :schema-version 2
      :streaming t
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
-              (:name "kind" :kind "string" :required t
-               :description "Artifact discriminator.")
-              (:name "test" :kind "object" :required t
-               :description "Single test plan entry.")))
+               (:name "kind" :kind "string" :required t
+                :description "Artifact discriminator.")
+               (:name "test" :kind "object" :required t
+                :description "Single test plan entry.")
+               (:name "test.status" :kind "string" :required t
+                :description "Planned execution status: run, skip, or todo.")
+               (:name "test.path" :kind "array" :required t
+                :description "Vitest-style hierarchical test path.")
+               (:name "test.pathString" :kind "string" :required t
+                :description "Human-readable test path joined with >.")
+               (:name "test.location" :kind "object" :required t
+                :description "Source location object.")
+               (:name "test.reason" :kind "string" :required t
+                :description "Nullable skip, todo, or expected-failure reason.")
+               (:name "test.focused" :kind "boolean" :required t
+                :description "Whether the entry was focused.")
+               (:name "test.retry" :kind "integer" :required t
+                :description "Retry count for the entry.")
+               (:name "test.timeoutMs" :kind "integer" :required t
+                :description "Nullable per-entry timeout in milliseconds.")
+               (:name "test.concurrent" :kind "boolean" :required t
+                :description "Whether the entry requested concurrent execution.")
+               (:name "test.tags" :kind "array" :required t
+                :description "Compatibility declaration tags preserved as metadata.")
+               (:name "test.dependsOn" :kind "array" :required t
+                :description "Compatibility declaration dependencies preserved as metadata only.")))
     (:kind "test-plan-summary"
      :commands ("list")
      :reporters ("jsonl")
@@ -183,6 +205,23 @@
                :description "Skipped discovered tests.")
               (:name "todos" :kind "integer" :required t
                :description "Todo discovered tests.")))
+    (:kind "doctor-report"
+     :commands ("doctor")
+     :reporters ("json" "sexp")
+     :schema-version 1
+     :streaming nil
+     :fields ((:name "schemaVersion" :kind "integer" :required t
+               :description "Artifact-local schema version.")
+              (:name "kind" :kind "string" :required t
+               :description "Artifact discriminator.")
+              (:name "status" :kind "string" :required t
+               :description "Overall diagnostic status.")
+              (:name "version" :kind "string" :required t
+               :description "Resolved cl-weave CLI version.")
+              (:name "runtime" :kind "object" :required t
+               :description "Current Lisp and host runtime details.")
+              (:name "checks" :kind "array" :required t
+               :description "Ordered self-diagnostic checks.")))
     (:kind "mutations"
      :commands ()
      :reporters ("json" "sexp")
@@ -208,6 +247,10 @@
 (defun reporter-artifact-schemas ()
   "Return structured reporter artifact schema metadata."
   *reporter-artifact-schemas*)
+
+(defun framework-metadata ()
+  "Return the structured framework metadata root for embedded Lisp tooling."
+  (cl-weave/cli::framework-metadata))
 
 (defun json-status-string (status)
   (string-downcase (symbol-name status)))
@@ -675,7 +718,9 @@
         :focused (test-plan-entry-focused entry)
         :retry (test-plan-entry-retry entry)
         :timeout-ms (test-plan-entry-timeout-ms entry)
-        :concurrent (test-plan-entry-concurrent entry)))
+        :concurrent (test-plan-entry-concurrent entry)
+        :tags (test-plan-entry-tags entry)
+        :depends-on (test-plan-entry-depends-on entry)))
 
 (defun report-plan-spec (plan stream)
   (let ((summary (plan-summary plan)))
@@ -697,12 +742,15 @@
 (defun report-plan-sexp (plan stream)
   (let ((summary (plan-summary plan)))
     (prin1 (append (list :cl-weave/test-plan
-                         :schema-version 2)
+                         :schema-version 3)
                    summary
                    (list :tests (mapcar #'serializable-plan-entry plan)))
            stream))
   (terpri stream)
   (values))
+
+(defun json-write-plan-metadata-list (values stream)
+  (json-write-array values stream))
 
 (defun json-write-plan-entry (entry stream)
   (write-string "{" stream)
@@ -726,12 +774,16 @@
         (write-string "null" stream)))
   (write-string ",\"concurrent\":" stream)
   (write-string (if (test-plan-entry-concurrent entry) "true" "false") stream)
+  (write-string ",\"tags\":" stream)
+  (json-write-plan-metadata-list (test-plan-entry-tags entry) stream)
+  (write-string ",\"dependsOn\":" stream)
+  (json-write-plan-metadata-list (test-plan-entry-depends-on entry) stream)
   (write-string "}" stream))
 
 (defun report-plan-json (plan stream)
   (let ((summary (plan-summary plan)))
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":2" stream)
+  (write-string "\"schemaVersion\":3" stream)
   (write-string ",\"kind\":\"test-plan\"" stream)
   (format stream ",\"total\":~D" (getf summary :total))
   (json-write-summary-count-fields summary *plan-summary-field-specs* stream)
@@ -753,7 +805,7 @@
   (write-string "}" stream)
   (terpri stream)
   (dolist (entry plan)
-    (write-string "{\"schemaVersion\":1,\"kind\":\"test-plan-entry\",\"test\":" stream)
+    (write-string "{\"schemaVersion\":2,\"kind\":\"test-plan-entry\",\"test\":" stream)
     (json-write-plan-entry entry stream)
     (write-string "}" stream)
     (terpri stream))

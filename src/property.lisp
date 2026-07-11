@@ -89,6 +89,22 @@
    :shrink (lambda (value)
              (if value (list nil) nil))))
 
+(defun ensure-non-empty-sequence (value label)
+  (unless (and (typep value 'sequence) (plusp (length value)))
+    (error "cl-weave: ~A requires a non-empty sequence, got ~S." label value))
+  value)
+
+(defun gen-character (&key (alphabet "abcdefghijklmnopqrstuvwxyz"))
+  (let ((choices (ensure-non-empty-sequence alphabet "gen-character ALPHABET")))
+    (make-property-generator
+     :name :character
+     :produce (lambda (rng)
+                (elt choices (property-random-below rng (length choices))))
+     :shrink (lambda (value)
+               (let ((first-character (elt choices 0)))
+                 (unless (char= value first-character)
+                   (list first-character)))))))
+
 (defun gen-member (values)
   (when (null values)
     (error "cl-weave: gen-member requires at least one value."))
@@ -147,6 +163,118 @@
                         (<= min-length (length candidate) max-length)))
                  (append structural-candidates element-candidates))
                 :test #'equal)))))
+
+(defun gen-string (&key (min-length 0)
+                        (max-length 16)
+                        (alphabet "abcdefghijklmnopqrstuvwxyz"))
+  (when (> min-length max-length)
+    (error "cl-weave: gen-string requires MIN-LENGTH <= MAX-LENGTH, got ~S and ~S."
+           min-length max-length))
+  (let ((character-generator (gen-character :alphabet alphabet)))
+    (make-property-generator
+     :name :string
+     :produce (lambda (rng)
+                (let* ((length (+ min-length
+                                  (property-random-below
+                                   rng
+                                   (1+ (- max-length min-length)))))
+                       (value (make-string length)))
+                  (loop for index from 0 below length
+                        do (setf (char value index)
+                                 (funcall (property-generator-produce
+                                           character-generator)
+                                          rng)))
+                  value))
+     :shrink (lambda (value)
+               (let ((structural-candidates
+                       (list "" (subseq value 0 (truncate (length value) 2))))
+                     (character-candidates
+                       (loop for index from 0 below (length value)
+                             append
+                             (loop for shrunk in
+                                   (funcall (property-generator-shrink
+                                             character-generator)
+                                            (char value index))
+                                   collect (let ((next (copy-seq value)))
+                                             (setf (char next index) shrunk)
+                                             next)))))
+                 (remove-duplicates
+                  (remove-if-not
+                   (lambda (candidate)
+                     (and (stringp candidate)
+                          (<= min-length (length candidate) max-length)))
+                   (append structural-candidates character-candidates))
+                  :test #'string=))))))
+
+(defun gen-vector (element-generator &key (min-length 0) (max-length 8))
+  (ensure-property-generator element-generator "gen-vector")
+  (when (> min-length max-length)
+    (error "cl-weave: gen-vector requires MIN-LENGTH <= MAX-LENGTH, got ~S and ~S."
+           min-length max-length))
+  (make-property-generator
+   :name :vector
+   :produce (lambda (rng)
+              (coerce
+               (loop repeat (+ min-length
+                               (property-random-below rng
+                                                      (1+ (- max-length min-length))))
+                     collect (funcall (property-generator-produce element-generator)
+                                      rng))
+               'vector))
+   :shrink (lambda (value)
+             (let ((structural-candidates
+                     (list #() (subseq value 0 (truncate (length value) 2))))
+                   (element-candidates
+                     (loop for index from 0 below (length value)
+                           append
+                           (loop for shrunk in
+                                 (funcall (property-generator-shrink element-generator)
+                                          (aref value index))
+                                 collect (let ((next (copy-seq value)))
+                                           (setf (aref next index) shrunk)
+                                           next)))))
+               (remove-duplicates
+                (remove-if-not
+                 (lambda (candidate)
+                   (and (vectorp candidate)
+                        (<= min-length (length candidate) max-length)))
+                 (append structural-candidates element-candidates))
+                :test #'equalp)))))
+
+(defun state-machine-trace (initial-state transition events)
+  (let ((state initial-state)
+        (states (list initial-state)))
+    (dolist (event events)
+      (setf state (funcall transition state event))
+      (push state states))
+    (let ((ordered-states (nreverse states)))
+      (list :initial initial-state
+            :events events
+            :states ordered-states
+            :final (car (last ordered-states))))))
+
+(defun gen-state-machine (initial-state transition event-generator
+                          &key (min-length 0) (max-length 16))
+  (unless (functionp transition)
+    (error "cl-weave: gen-state-machine requires TRANSITION to be a function, got ~S."
+           transition))
+  (let ((events-generator (gen-list event-generator
+                                    :min-length min-length
+                                    :max-length max-length)))
+    (make-property-generator
+     :name :state-machine
+     :produce (lambda (rng)
+                (state-machine-trace
+                 initial-state
+                 transition
+                 (funcall (property-generator-produce events-generator) rng)))
+     :shrink (lambda (trace)
+               (loop for events in
+                     (property-shrink-candidates events-generator
+                                                 (getf trace :events))
+                     collect (state-machine-trace initial-state
+                                                  transition
+                                                  events))))))
 
 (defun gen-one-of (&rest generators)
   (let ((choices (ensure-property-generators generators "gen-one-of")))

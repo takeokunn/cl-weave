@@ -58,7 +58,29 @@
   (funcall (coverage-fbound-symbol "SAVE-COVERAGE-IN-FILE" t) pathname)
   pathname)
 
-(defun call-with-coverage (coverage coverage-output coverage-reset thunk)
+(defun coverage-report-empty-p (pathname)
+  (with-open-file (stream pathname :direction :input)
+    (loop for line = (read-line stream nil nil)
+          while line
+          thereis (search "No code coverage data found." line))))
+
+(defparameter *coverage-report-finder* #'coverage-fbound-symbol)
+
+(defun save-coverage-report (pathname)
+  (let* ((directory (pathname pathname))
+         (index-path (merge-pathnames #P"cover-index.html" directory)))
+    (ensure-directories-exist index-path)
+    (let ((report (funcall *coverage-report-finder* "REPORT")))
+      (unless report
+        (error 'coverage-unavailable :reason "SB-COVER:REPORT is not available."))
+      (funcall report directory))
+    (unless (probe-file index-path)
+      (error "Coverage report at ~A did not produce ~A." directory index-path))
+    (when (coverage-report-empty-p index-path)
+      (error "Coverage report at ~A did not capture any coverage data." index-path))
+    directory))
+
+(defun call-with-coverage (coverage coverage-output coverage-report-directory coverage-reset thunk)
   (if coverage
       (progn
         (require-coverage-support)
@@ -66,6 +88,8 @@
           (reset-coverage))
         (unwind-protect
              (funcall thunk)
+          (when coverage-report-directory
+            (save-coverage-report coverage-report-directory))
           (when coverage-output
             (save-coverage coverage-output))))
       (funcall thunk)))
@@ -93,6 +117,87 @@
     (error "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
   reporter)
 
+(defun emit-run-report (reporter events stream)
+  (when reporter
+    (ensure-run-reporter reporter)
+    (ecase reporter
+      (:spec (report-spec events stream))
+      (:sexp (report-sexp events stream))
+      (:json (report-json events stream))
+      (:jsonl (report-jsonl events stream))
+      (:tap (report-tap events stream))
+      (:github (report-github events stream))
+      (:junit (report-junit events stream)))))
+
+(defun find-suite-by-designator (suite-designator &optional (suite (root-suite)))
+  (let ((target (named-suite-key suite-designator)))
+    (labels ((walk (node)
+               (when (suite-p node)
+                 (or (and (equal (named-suite-key (suite-name node)) target)
+                          node)
+                     (loop for child in (suite-children node)
+                           thereis (and (suite-p child)
+                                        (walk child)))))))
+      (walk suite))))
+
+(defun resolve-suite-designator (suite-designator)
+  (cond
+    ((null suite-designator) (root-suite))
+    ((suite-p suite-designator) suite-designator)
+    (t
+     (let* ((key (named-suite-key suite-designator))
+            (suite (or (gethash key *named-suites*)
+                       (find-suite-by-designator suite-designator))))
+       (when suite
+         (setf (gethash key *named-suites*) suite))
+       (or suite
+           (error "cl-weave: unknown suite designator ~S." suite-designator))))))
+
+(defun normalize-run-results (results)
+  (labels ((collect (value acc)
+             (cond
+               ((null value) acc)
+               ((test-event-p value) (cons value acc))
+               ((consp value) (collect (car value)
+                                       (collect (cdr value) acc)))
+               (t
+                (error "cl-weave: expected test events or nested event lists, got ~S."
+                       value)))))
+    (nreverse (collect results '()))))
+
+(defun run (suite-designator
+            &key reporter
+              (stream *standard-output*)
+              (name-filter *test-name-filter*)
+              location-filter
+              shard
+              order
+              seed
+              bail
+              retry
+              timeout-ms
+              max-workers)
+  (let ((events (collect-events
+                 (resolve-suite-designator suite-designator)
+                 :name-filter name-filter
+                 :location-filter location-filter
+                 :shard shard
+                 :order order
+                 :seed seed
+                 :bail bail
+                 :retry retry
+                 :timeout-ms timeout-ms
+                 :max-workers max-workers)))
+    (emit-run-report reporter events stream)
+    events))
+
+(defun explain! (results &optional (stream *standard-output*))
+  (report-spec (normalize-run-results results) stream)
+  (values))
+
+(defun results-status (results)
+  (every #'passed-event-p (normalize-run-results results)))
+
 (defun run-all (&key (reporter :spec)
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
@@ -106,12 +211,14 @@
                   max-workers
                   coverage
                   coverage-output
+                  coverage-report-directory
                   (pass-with-no-tests t)
                   (coverage-reset t))
   (ensure-run-reporter reporter)
   (call-with-coverage
    coverage
    coverage-output
+   coverage-report-directory
    coverage-reset
    (lambda ()
      (let ((events (collect-events
@@ -125,14 +232,7 @@
                     :retry retry
                     :timeout-ms timeout-ms
                     :max-workers max-workers)))
-       (ecase reporter
-         (:spec (report-spec events stream))
-         (:sexp (report-sexp events stream))
-         (:json (report-json events stream))
-         (:jsonl (report-jsonl events stream))
-         (:tap (report-tap events stream))
-         (:github (report-github events stream))
-         (:junit (report-junit events stream)))
+       (emit-run-report reporter events stream)
        (and (or pass-with-no-tests events)
             (every #'passed-event-p events))))))
 

@@ -1,11 +1,17 @@
 (require :asdf)
+#.(progn
+    (load (merge-pathnames "src/package.lisp" (truename ".")))
+    nil)
 
-(let ((root (truename ".")))
-  (pushnew root asdf:*central-registry* :test #'equal)
-  (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
-  (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
-  (asdf:load-system "cl-weave")
-  (asdf:load-system "cl-weave-tests"))
+(defun project-root ()
+  (truename "."))
+
+(defun register-project-systems ()
+  (let ((root (project-root)))
+    (pushnew root asdf:*central-registry* :test #'equal)
+    (load (merge-pathnames "cl-weave.asd" root))
+    (load (merge-pathnames "cl-weave-tests.asd" root))
+    root))
 
 (defun requested-reporter ()
   (let ((reporter #+sbcl (sb-ext:posix-getenv "CL_WEAVE_REPORTER")
@@ -203,6 +209,14 @@
   #-sbcl
   nil)
 
+(defun requested-coverage-report-directory ()
+  #+sbcl
+  (let ((path (sb-ext:posix-getenv "CL_WEAVE_COVERAGE_REPORT_DIR")))
+    (when (and path (not (string= path "")))
+      path))
+  #-sbcl
+  nil)
+
 (defun requested-list-p ()
   (requested-truthy-environment-p "CL_WEAVE_LIST"))
 
@@ -267,11 +281,40 @@
   #-sbcl
   0.5)
 
+(defun enable-coverage-compilation ()
+  #+sbcl
+  (progn
+    (require :sb-cover)
+    (let* ((package (or (find-package :sb-cover)
+                        (error "SB-COVER package is unavailable after REQUIRE.")))
+           (quality (or (find-symbol "STORE-COVERAGE-DATA" package)
+                        (error "SB-COVER:STORE-COVERAGE-DATA is unavailable."))))
+      (proclaim (list 'optimize (list quality 3))))
+    t)
+  #-sbcl
+  nil)
+
+(defun load-project-systems (&key coverage)
+  (register-project-systems)
+  (when coverage
+    (enable-coverage-compilation))
+  (let ((loaded-local-systems (make-hash-table :test #'equal)))
+    (dolist (system '("cl-weave" "cl-weave-tests"))
+      (unless (gethash system loaded-local-systems)
+        (setf (gethash system loaded-local-systems) t)
+        (dolist (source-file (cl-weave::local-project-system-source-files system))
+          (let* ((source-path (merge-pathnames source-file (cl-weave::local-project-system-root system)))
+                 (fasl-path (compile-file source-path)))
+            (load fasl-path)))))))
+
+(load-project-systems :coverage (requested-coverage-p))
+
 #+sbcl
 (let ((reporter (requested-reporter))
       (output-file (requested-output-file))
       (coverage (requested-coverage-p))
       (coverage-output (requested-coverage-output))
+      (coverage-report-directory (requested-coverage-report-directory))
       (snapshot-directory (requested-snapshot-directory))
       (snapshot-file (requested-snapshot-file))
       (update-snapshots (requested-update-snapshots-p))
@@ -335,6 +378,7 @@
                          :bail (requested-bail)
                          :coverage coverage
                          :coverage-output coverage-output
+                         :coverage-report-directory coverage-report-directory
                          :pass-with-no-tests (requested-pass-with-no-tests)
                          :stream stream)))
                     0

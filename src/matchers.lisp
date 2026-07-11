@@ -758,15 +758,17 @@
             measurement
             (list :max-ms max-ms))))
 
-(defmatcher :to-cons-less-than (actual expected)
-  (let* ((max-bytes (non-negative-real-expected expected :to-cons-less-than "byte threshold"))
-         (measurement (measure-thunk actual :to-cons-less-than))
-         (bytes (measured-bytes-consed measurement :to-cons-less-than)))
+(defmatcher :to-allocate-under (actual expected)
+  "Passes when ACTUAL thunk allocates fewer bytes than EXPECTED."
+  (let* ((max-bytes (non-negative-real-expected expected :to-allocate-under "byte threshold"))
+         (measurement (measure-thunk actual :to-allocate-under))
+         (bytes (measured-bytes-consed measurement :to-allocate-under)))
     (values (< bytes max-bytes)
             measurement
             (list :max-bytes max-bytes))))
 
 (defmatcher :to-have-slot (actual expected)
+  "Passes when ACTUAL names a class that defines the EXPECTED slot."
   (let* ((slot-name (expected-one expected :to-have-slot))
          (class (class-designator-class actual :to-have-slot))
          (slots (class-slot-names class :to-have-slot)))
@@ -776,6 +778,7 @@
             (list :slot slot-name))))
 
 (defmatcher :to-have-method-specialized-on (actual expected)
+  "Passes when ACTUAL names a generic function with a method specialized on the EXPECTED specializers."
   (let* ((expected-specializers (expected-one expected :to-have-method-specialized-on))
          (generic-function
            (generic-function-designator-function actual :to-have-method-specialized-on))
@@ -787,8 +790,11 @@
             (list :specializers expected-specializers))))
 
 (defmatcher :to-expand-to (actual expected)
-  (equal (expand-once actual)
-         (expected-one expected :to-expand-to)))
+  (let ((expanded-form (expand-once actual))
+        (expected-form (expected-one expected :to-expand-to)))
+    (values (equal expanded-form expected-form)
+            expanded-form
+            expected-form)))
 
 (defmatcher :to-match-inline-snapshot (actual expected)
   (string= (snapshot-string actual)
@@ -796,6 +802,10 @@
 
 (defmatcher :to-match-snapshot (actual expected)
   (snapshot-match-or-update-p actual expected))
+
+(defmatcher :to-match-snapshot-sequence (actual expected)
+  "Matches a list or vector of states against external snapshots named prefix[0], prefix[1], ..."
+  (snapshot-sequence-match-or-update-p actual expected))
 
 (defmatcher :to-have-been-called (actual expected)
   (declare (ignore expected))
@@ -894,18 +904,20 @@
            (raw-pass nil)
            (reported-actual nil)
            (reported-expected nil)
-           (pass nil))
+           (pass nil)
+           (detail nil))
       (multiple-value-setq (raw-pass reported-actual reported-expected)
         (matcher-result-values matcher actual expected))
       (setf pass
             (if negated (not raw-pass) raw-pass))
+      (setf detail
+            (make-assertion-detail
+             :form form
+             :matcher matcher-name
+             :actual reported-actual
+             :expected reported-expected
+             :negated negated
+             :pass raw-pass))
       (unless pass
-        (signal-assertion-failure
-         (make-assertion-detail
-          :form form
-          :matcher matcher-name
-          :actual reported-actual
-          :expected reported-expected
-          :negated negated
-          :pass raw-pass)))
-      pass)))
+        (signal-assertion-failure detail))
+      (values pass detail))))

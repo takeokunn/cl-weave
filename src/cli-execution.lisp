@@ -12,6 +12,7 @@
 
 (defun command-dispatch-kind (options)
   (cond
+    ((eq (cli-options-command options) :doctor) :doctor)
     ((eq (cli-options-command options) :metadata) :metadata)
     ((cli-options-list options) :list)
     ((cli-options-watch options) :watch)
@@ -19,6 +20,9 @@
 
 (defun ensure-valid-reporter-for-command (options)
   (case (command-dispatch-kind options)
+    (:doctor
+     (doctor-reporter options)
+     t)
     (:metadata
      (metadata-reporter options)
      t)
@@ -37,10 +41,14 @@
          (error 'cli-error :message (princ-to-string condition)))))))
 
 (defun ensure-watch-command-system (options)
-  (when (and (eq (command-dispatch-kind options) :watch)
-             (null (cli-options-systems options)))
-    (error 'cli-error
-           :message "Watch mode requires SYSTEM as a positional argument or --system SYSTEM.")))
+  (when (eq (command-dispatch-kind options) :watch)
+    (cond
+      ((null (cli-options-systems options))
+       (error 'cli-error
+              :message "Watch mode requires SYSTEM as a positional argument or --system SYSTEM."))
+      ((rest (cli-options-systems options))
+       (error 'cli-error
+              :message "Watch mode accepts exactly one SYSTEM target.")))))
 
 (defun pathname-asd-file-p (pathname)
   (let ((type (pathname-type pathname)))
@@ -71,7 +79,7 @@
 (defun bootstrap-local-asd-definitions (options)
   (dolist (directory (system-bootstrap-directories options))
     (dolist (pathname (directory-asd-files directory))
-      (asdf:load-asd pathname))))
+      (load pathname))))
 
 (defun ensure-requested-system-visible (system options)
   (unless (asdf:find-system system nil)
@@ -84,11 +92,15 @@
                    system))))
 
 (defun load-requested-inputs (options)
-  (dolist (system (cli-options-systems options))
-    (ensure-requested-system-visible system options)
-    (asdf:load-system system))
-  (dolist (file (cli-options-load-files options))
-    (load file)))
+  (let ((loaded-local-systems (make-hash-table :test #'equal)))
+    (dolist (system (cli-options-systems options))
+      (if (cl-weave::local-project-system-p system)
+          (cl-weave::load-local-system system loaded-local-systems)
+          (progn
+            (ensure-requested-system-visible system options)
+            (asdf:load-system system))))
+    (dolist (file (cli-options-load-files options))
+      (load file))))
 
 (defun call-with-output-stream (options callback)
   (let ((output-file (cli-options-output-file options)))
@@ -139,6 +151,8 @@
 
 (defun command-execution-plan (options)
   (case (command-dispatch-kind options)
+    (:doctor
+     (list :kind :doctor))
     (:metadata
      (list :kind :metadata))
     (:list
@@ -154,6 +168,9 @@
 
 (defun command-plan-stream-callback (plan options)
   (case (getf plan :kind)
+    (:doctor
+     (lambda (stream)
+       (report-doctor options stream)))
     (:metadata
      (lambda (stream)
        (report-framework-metadata options stream)))
@@ -174,7 +191,7 @@
        (call-run-command options stream)))))
 
 (defun command-plan-success-kind-p (plan)
-  (member (getf plan :kind) '(:metadata :list) :test #'eq))
+  (member (getf plan :kind) '(:doctor :metadata :list) :test #'eq))
 
 (defun execute-command-plan (plan options)
   (let ((result
@@ -188,7 +205,8 @@
 (defun run-command (options)
   (ensure-valid-reporter-for-command options)
   (ensure-watch-command-system options)
-  (load-requested-inputs options)
+  (unless (eq (command-dispatch-kind options) :doctor)
+    (load-requested-inputs options))
   (with-cli-snapshot-settings (options)
     (execute-command-plan (command-execution-plan options) options)))
 

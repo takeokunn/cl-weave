@@ -1,8 +1,18 @@
 (in-package #:cl-weave)
 
-(defstruct logic-rule
-  head
-  (body '()))
+(defun make-logic-rule (&key head (body nil))
+  (vector 'logic-rule head body))
+
+(defun logic-rule-p (value)
+  (and (simple-vector-p value)
+       (= (length value) 3)
+       (eq (svref value 0) 'logic-rule)))
+
+(defun logic-rule-head (rule)
+  (svref rule 1))
+
+(defun logic-rule-body (rule)
+  (svref rule 2))
 
 (defun logic-variable-p (value)
   (and (symbolp value)
@@ -59,13 +69,17 @@
 (defun resolve-logic-value (value bindings)
   (let ((value (logic-walk value bindings)))
     (if (consp value)
-        (mapcar (lambda (part) (resolve-logic-value part bindings)) value)
+        (let ((resolved '()))
+          (dolist (part value (nreverse resolved))
+            (push (resolve-logic-value part bindings) resolved)))
         value)))
 
 (defun normalize-logic-bindings (bindings)
-  (mapcar (lambda (binding)
-            (cons (car binding) (resolve-logic-value (cdr binding) bindings)))
-          (reverse bindings)))
+  (let ((normalized '()))
+    (dolist (binding bindings normalized)
+      (push (cons (car binding)
+                  (resolve-logic-value (cdr binding) bindings))
+            normalized))))
 
 (defun collect-logic-variables (value)
   (cond
@@ -77,16 +91,13 @@
 
 (defun project-logic-bindings (bindings variables)
   (let ((normalized (normalize-logic-bindings bindings)))
-    (remove nil
-            (mapcar (lambda (variable)
-                      (assoc variable normalized))
-                    variables))))
+    (loop for variable in variables
+          for binding = (assoc variable normalized)
+          when binding
+            collect binding)))
 
 (defun logic-rule-indicator-p (value)
-  (and (symbolp value)
-       (or (string= (symbol-name value) ":-")
-           (and (keywordp value)
-                (string= (symbol-name value) "-")))))
+  (eq value :-))
 
 (defun logic-rule-form-p (form)
   (and (consp form)
@@ -98,13 +109,13 @@
   (make-logic-rule :head (second form)
                    :body (cddr form)))
 
-(defun normalize-logic-program-entry (entry)
-  (if (logic-rule-form-p entry)
-      (normalize-logic-rule-form entry)
-      entry))
-
 (defun normalize-logic-program (program)
-  (mapcar #'normalize-logic-program-entry program))
+  (let ((normalized '()))
+    (dolist (entry program (nreverse normalized))
+      (push (if (logic-rule-form-p entry)
+                (normalize-logic-rule-form entry)
+                entry)
+            normalized))))
 
 (defun fresh-logic-variable (variable rule-id)
   (make-symbol (format nil "~A/~D" (symbol-name variable) rule-id)))
@@ -127,9 +138,10 @@
   (let ((mapping (make-hash-table :test #'eq)))
     (make-logic-rule
      :head (instantiate-logic-term (logic-rule-head rule) mapping rule-id)
-     :body (mapcar (lambda (goal)
-                     (instantiate-logic-term goal mapping rule-id))
-                   (logic-rule-body rule)))))
+     :body (let ((instantiated '()))
+             (dolist (goal (logic-rule-body rule) (nreverse instantiated))
+               (push (instantiate-logic-term goal mapping rule-id)
+                     instantiated))))))
 
 (defun logic-entry-head (entry)
   (if (logic-rule-p entry)
@@ -141,75 +153,62 @@
       (logic-rule-body entry)
       '()))
 
+(defun logic-below-limit-p (results limit)
+  (or (null limit) (< (length results) limit)))
+
+(defun remove-duplicate-logic-variables (variables)
+  (let ((unique '()))
+    (dolist (variable variables (nreverse unique))
+      (unless (member variable unique :test #'eq)
+        (push variable unique)))))
+
+(defun make-logic-search-frame (pending bindings)
+  (list pending bindings))
+
+(defun logic-search-frame-pending (frame)
+  (first frame))
+
+(defun logic-search-frame-bindings (frame)
+  (second frame))
+
 (defun logic-query (program clauses &key limit)
   (unless (or (null limit) (and (integerp limit) (plusp limit)))
     (error "cl-weave: logic-query limit must be NIL or a positive integer, got ~S."
            limit))
   (let ((normalized-program (normalize-logic-program program))
-        (query-variables (remove-duplicates (collect-logic-variables clauses)
-                                            :test #'eq)))
-    (labels ((below-limit-p (results)
-               (or (null limit) (< (length results) limit)))
-             (solve-goals/k (pending bindings results next-rule-id continue)
-               (cond
-                 ((not (below-limit-p results))
-                  (funcall continue results next-rule-id))
-                 ((null pending)
-                  (funcall continue
-                           (cons (project-logic-bindings bindings query-variables)
-                                 results)
-                           next-rule-id))
-                 (t
-                  (solve-program-entry/k
-                   normalized-program
-                   (first pending)
-                   (rest pending)
-                   bindings
-                   results
-                   next-rule-id
-                   continue))))
-             (solve-program-entry/k (entries goal rest-goals bindings results
-                                     next-rule-id continue)
-               (if (or (null entries) (not (below-limit-p results)))
-                   (funcall continue results next-rule-id)
-                   (let* ((candidate (first entries))
-                          (instantiated (if (logic-rule-p candidate)
-                                            (instantiate-logic-rule candidate next-rule-id)
-                                            candidate))
-                          (head (logic-entry-head instantiated))
-                          (body (logic-entry-body instantiated))
-                          (advanced-rule-id (if (logic-rule-p candidate)
-                                                (1+ next-rule-id)
-                                                next-rule-id)))
-                     (multiple-value-bind (next-bindings matched-p)
-                         (unify-logic-values goal head bindings)
-                       (if matched-p
-                           (solve-goals/k
-                            (append body rest-goals)
-                            next-bindings
-                            results
-                            advanced-rule-id
-                            (lambda (next-results final-rule-id)
-                              (solve-program-entry/k (rest entries)
-                                                     goal
-                                                     rest-goals
-                                                     bindings
-                                                     next-results
-                                                     final-rule-id
-                                                     continue)))
-                           (solve-program-entry/k (rest entries)
-                                                  goal
-                                                  rest-goals
-                                                  bindings
-                                                  results
-                                                  advanced-rule-id
-                                                  continue)))))))
-      (nreverse
-       (nth-value 0
-         (solve-goals/k clauses nil nil 0
-                        (lambda (results final-rule-id)
-                          (declare (ignore final-rule-id))
-                          (values results 0))))))))
+        (query-variables
+          (remove-duplicate-logic-variables (collect-logic-variables clauses)))
+        (frames (list (make-logic-search-frame clauses nil)))
+        (results nil)
+        (next-rule-id 0))
+    (loop while (and frames (logic-below-limit-p results limit))
+          do (let* ((frame (pop frames))
+                    (pending (logic-search-frame-pending frame))
+                    (bindings (logic-search-frame-bindings frame)))
+               (if (null pending)
+                   (push (project-logic-bindings bindings query-variables) results)
+                   (let ((goal (first pending))
+                         (rest-goals (rest pending))
+                         (new-frames nil))
+                     (dolist (candidate normalized-program)
+                       (let* ((rule-p (logic-rule-p candidate))
+                              (rule-id next-rule-id)
+                              (instantiated (if rule-p
+                                                (instantiate-logic-rule candidate rule-id)
+                                                candidate))
+                              (head (logic-entry-head instantiated))
+                              (body (logic-entry-body instantiated)))
+                         (when rule-p
+                           (incf next-rule-id))
+                         (multiple-value-bind (next-bindings matched-p)
+                             (unify-logic-values goal head bindings)
+                           (when matched-p
+                             (push (make-logic-search-frame (append body rest-goals)
+                                                            next-bindings)
+                                   new-frames)))))
+                     (dolist (new-frame new-frames)
+                       (push new-frame frames))))))
+    (nreverse results)))
 
 (defun split-logic-where-forms (forms)
   (let ((limit nil)
@@ -264,6 +263,10 @@
        (list (list :timeout-ms path (test-plan-entry-timeout-ms entry))))
      (when (test-plan-entry-concurrent entry)
        (list (list :concurrent path)))
+     (loop for tag in (test-plan-entry-tags entry)
+           collect (list :tag path tag))
+     (loop for dependency in (test-plan-entry-depends-on entry)
+           collect (list :depends-on path dependency))
      (when (test-plan-entry-location entry)
        (list (list :location path (test-plan-entry-location entry)))))))
 
