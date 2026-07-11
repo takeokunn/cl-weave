@@ -46,7 +46,7 @@ documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 - `describe-todo` / `it-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
-- AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, capability matrix, package exports, policy documents, matchers, mutations, MOP architecture assertions, and aliases
+- AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, capability matrix, package exports, policy documents, matchers, mutations, and MOP architecture assertions
 - source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
@@ -231,10 +231,11 @@ The workflow runs on Linux and macOS, then uploads `cl-weave-results.json`,
 `cl-weave-cli-results.json`, `cl-weave-metadata.json`, `cl-weave-plan.json`,
 `cl-weave-watch-once.json`, `cl-weave-tap.txt`, and `cl-weave-junit.xml` as
 `cl-weave-test-reports-${system}` artifacts. JSON result
-schema v5 is intended for AI agents and external automation: the root object
+schema v6 is intended for AI agents and external automation: the root object
 identifies itself with `kind: "test-results"`, and every event includes both a
 machine `path` and a stable Vitest-style `pathString`, while assertion payloads
-stay structurally typed for agent consumption. JSONL event schema v2 is intended
+stay structurally typed for agent consumption. Ordered cleanup and hook failures
+are retained as `secondaryConditions`. JSONL event schema v3 is intended
 for streaming automation, coverage is intended for SBCL-side inspection,
 metadata is intended for agent discovery, one-shot watch output is intended for
 automation that needs watch resolution without entering a polling loop, TAP is
@@ -308,7 +309,8 @@ structured timeout metadata such as `:attempts`, `:timeout-ms`,
 `expect-assertions` and `expect-has-assertions` are checked at the end of each
 test attempt and reset for retries and concurrent tests. Declaration forms do
 not count as assertions; executed `expect`, `expect-not`, smart assertions,
-and thunk aliases count once.
+and the thunk expectation macros `expect-resolves` and `expect-rejects` count
+once.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -951,9 +953,10 @@ global defaults, so `:retry 0` disables a global retry budget for one case,
 `:timeout-ms` replaces the global per-attempt timeout, and `--max-workers`
 bounds adjacent concurrent worker batches.
 
-`it-fails` inverts one runnable case: any assertion failure, error, or timeout
-is reported as `:pass`; an unexpectedly passing body is
-reported as `:fail` with `expected-failure-missed`.
+`it-fails` inverts one runnable case only when its test attempt signals
+`assertion-failure`. An implementation error or timeout remains visible as
+`:error` or `:fail`; an unexpectedly passing body is reported as `:fail` with
+`expected-failure-missed`.
 
 ### Interactive Restarts
 
@@ -1105,8 +1108,7 @@ AI agents can also query plans as plain Lisp facts:
 ```
 
 `test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
-`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, `:tag`,
-`:depends-on`, and `:location`.
+`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
 `logic-where`, `logic-program`, `logic-run`, and `test-plan-where` keep data and
 logic separate: relations stay plain lists, while query and rule syntax stays in
 macros. Variables are symbols whose names start with `?`, clauses are matched

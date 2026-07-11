@@ -7,17 +7,18 @@ framework, CLI, reporter, metadata, and Nix workflow changes.
 
 ### Release Classification
 
-- additive only
+- breaking cleanup
 
 ### Public Surface Notes
 
-- No intentional public-surface break is planned in the current unreleased set.
+- Legacy `assert-*` and `is-*` compatibility aliases were removed in favor of
+  the canonical `expect`, `expect-not`, `signals`, and `finishes` surface.
 - Existing CLI output, reporter shapes, and machine-readable metadata remain
   the expected public surface for these changes.
 
 ### Migration Notes
 
-- No downstream migration steps are currently required.
+- Replace legacy assertion aliases with the canonical expectation macros.
 
 ## 0.1.0 - 2026-07-11
 

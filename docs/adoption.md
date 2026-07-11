@@ -77,70 +77,20 @@ should move directly onto the native suite DSL:
 - `explain!`
 - `results-status`
 
-The assertion and fixture helpers below remain part of the supported API
-because they encode reusable testing semantics rather than framework-specific
-compatibility:
+The assertion surface is intentionally narrow. Use `expect` and `expect-not`
+for value assertions, `signals` for expected conditions, and `finishes` for
+forms that must complete normally. Domain-specific predicates can be composed
+with `expect`'s `:to-satisfy` matcher. Compatibility aliases are deliberately
+not retained.
 
-- `assert-true`
-- `assert-false`
-- `assert-equal`
-- `assert-eq`
-- `assert-eql`
-- `assert-=`
-- `assert-bool`
-- `assert-set-equal`
-- `assert-string=`
-- `assert-string-contains`
-- `assert-list-contains`
-- `assert-monotonic-increasing`
-- `assert-monotonic-decreasing`
-- `assert-null`
-- `assert-not-null`
-- `assert-type`
-- `assert-type-equal`
-- `assert-values`
-- `assert-signals`
-- `assert-no-signals`
-- `assert-within-tolerance`
-- `assert-within-tolerance-percent`
+The fixture helpers below remain part of the supported API because they encode
+reusable isolation semantics:
+
 - `with-replaced-function`
 - `with-restored-binding`
 - `with-restored-bindings`
 - `with-restored-hash-table`
 - `with-cleared-hash-table`
-
-Predicate-style assertion macros are part of the native API for concise type
-and value checks:
-
-- `is-equal`
-- `is-not-equal`
-- `is-eq`
-- `is-not-eq`
-- `is-real`
-- `is-keyword`
-- `is-integer`
-- `is-number`
-- `is-float`
-- `is-symbol`
-- `is-double-float`
-- `is-near`
-- `is-list`
-- `is-member`
-- `is-not-member`
-- `is-fact`
-- `is-nil`
-- `is-non-nil`
-- `is-positive`
-- `is-negative`
-- `is-zero`
-- `is-between`
-- `is-empty`
-- `is-finite`
-- `is-string`
-- `is-string-contains`
-- `is-type`
-- `is-record`
-- `is-every`
 
 Property-style migrations should target `cl-weave`'s native property surface
 directly:

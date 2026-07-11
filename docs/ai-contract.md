@@ -365,7 +365,7 @@ verification and scope policy for those channels lives in
       "kind": "test-results",
       "commands": ["run", "watch"],
       "reporters": ["json", "sexp"],
-      "schemaVersion": 5,
+      "schemaVersion": 6,
       "streaming": false,
       "fields": [
         {
@@ -386,7 +386,7 @@ verification and scope policy for those channels lives in
       "kind": "test-event",
       "commands": ["run", "watch"],
       "reporters": ["jsonl"],
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "streaming": true,
       "fields": [
         {
@@ -403,20 +403,7 @@ verification and scope policy for those channels lives in
       "reporters": ["jsonl"],
       "schemaVersion": 2,
       "streaming": true,
-      "fields": [
-        {
-          "name": "test.tags",
-          "kind": "array",
-          "required": true,
-          "description": "Compatibility declaration tags preserved as metadata."
-        },
-        {
-          "name": "test.dependsOn",
-          "kind": "array",
-          "required": true,
-          "description": "Compatibility declaration dependencies preserved as metadata only."
-        }
-      ]
+      "fields": []
     },
     {
       "kind": "doctor-report",
@@ -461,7 +448,6 @@ verification and scope policy for those channels lives in
   "options": [
     {
       "name": "--filter",
-      "aliases": [],
       "commands": ["run", "list", "watch"],
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
@@ -479,7 +465,6 @@ verification and scope policy for those channels lives in
   "options": [
     {
       "name": "--filter",
-      "aliases": [],
       "commands": ["run", "list", "watch"],
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
@@ -497,7 +482,6 @@ verification and scope policy for those channels lives in
   "options": [
     {
       "name": "--filter",
-      "aliases": [],
       "commands": ["run", "list", "watch"],
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
@@ -515,7 +499,6 @@ verification and scope policy for those channels lives in
   "options": [
     {
       "name": "--filter",
-      "aliases": [],
       "commands": ["run", "list", "watch"],
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
@@ -568,6 +551,8 @@ ASDF system. `watch --once` shares the run-result artifact contracts, so result
 schemas advertise both `run` and `watch`. Agents must not infer the complete
 artifact list from this document's shortened example; call `cl-weave metadata` and read
 `artifactSchemas` directly.
+For `test-results`, the registry version tracks the JSON/camelCase contract;
+the S-expression payload carries its independent `:schema-version` value.
 `capabilityMatrix` expands high-level `capabilities` into implementation status,
 representative `publicApis`, validating `qualityGates`, and canonical
 `documentation` paths. Agents should use it as the feature-readiness map for
@@ -634,7 +619,7 @@ The reporter prints one form:
 
 ```lisp
 (:cl-weave/results
- :schema-version 3
+ :schema-version 4
  :passed 1
  :skipped 0
  :todos 0
@@ -648,6 +633,7 @@ The reporter prints one form:
    :seconds 0
    :duration-ms 0
    :condition nil
+   :secondary-conditions ()
    :reason nil
    :assertion nil)))
 ```
@@ -771,7 +757,7 @@ The reporter prints one JSON object:
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "kind": "test-results",
   "passed": 1,
   "skipped": 0,
@@ -789,6 +775,7 @@ The reporter prints one JSON object:
       "seconds": 0.0,
       "durationMs": 0.0,
       "condition": null,
+      "secondaryConditions": [],
       "reason": null,
       "assertion": null
     }
@@ -811,7 +798,7 @@ It prints one JSON object per line:
 
 ```jsonl
 {"schemaVersion":1,"kind":"test-results-start","total":1}
-{"schemaVersion":2,"kind":"test-event","event":{"status":"pass","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"seconds":0.0,"durationMs":0.0,"condition":null,"reason":null,"assertion":null}}
+{"schemaVersion":3,"kind":"test-event","event":{"status":"pass","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"seconds":0.0,"durationMs":0.0,"condition":null,"secondaryConditions":[],"reason":null,"assertion":null}}
 {"schemaVersion":1,"kind":"test-results-summary","passed":1,"skipped":0,"todos":0,"failed":0,"errored":0,"failedPaths":[],"erroredPaths":[]}
 ```
 
@@ -1007,6 +994,7 @@ not ok 2 - math > subtracts
   ---
   status: "fail"
   condition: "Expected 1 to be 2"
+  secondary condition: "Cleanup failed"
   ...
 ```
 
@@ -1039,7 +1027,8 @@ Only `:fail` and `:error` events become annotations. Passing, skipped, and todo
 events are represented only in the summary line so CI logs stay actionable.
 Annotation data uses GitHub workflow command escaping. `file` is emitted when
 source location metadata is available; otherwise cl-weave emits an annotation
-without a `file` property.
+without a `file` property. Secondary cleanup and hook conditions follow the
+primary condition in capture order and use the same workflow-command escaping.
 
 This reporter is a CI log affordance, not a structured artifact schema. Agents
 that need stable fields should continue to use the S-expression or JSON
@@ -1446,9 +1435,7 @@ The JSON test plan reporter prints one object:
       "focused": false,
       "retry": 0,
       "timeoutMs": null,
-      "concurrent": false,
-      "tags": [],
-      "dependsOn": []
+      "concurrent": false
     }
   ]
 }
@@ -1472,9 +1459,7 @@ The S-expression test plan reporter uses the same data:
    :focused nil
    :retry 0
    :timeout-ms nil
-   :concurrent nil
-   :tags nil
-   :depends-on nil)))
+   :concurrent nil)))
 ```
 
 Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
@@ -1482,15 +1467,12 @@ Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
 execution. Suite-level skip and todo suppression produces selected descendant
 plan entries without running suite hooks or case bodies. `pathString` can be
 fed back to `CL_WEAVE_TEST_FILTER` for focused execution after discovery.
-`tags` and `dependsOn` preserve compatibility declaration metadata only; they do
-not imply tag filtering or dependency scheduling.
-
 The JSONL test plan reporter uses the same entry shape as JSON test plan
 `tests` entries:
 
 ```jsonl
 {"schemaVersion":1,"kind":"test-plan-start","total":1}
-{"schemaVersion":2,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false,"tags":[],"dependsOn":[]}}
+{"schemaVersion":2,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false}}
 {"schemaVersion":1,"kind":"test-plan-summary","total":1,"runnable":1,"skipped":0,"todos":0}
 ```
 
@@ -1505,8 +1487,6 @@ the Lisp-native logic layer:
 ;; => ((:test ("suite" "case"))
 ;;     (:status ("suite" "case") :run)
 ;;     (:retry ("suite" "case") 0)
-;;     (:tag ("suite" "case") :fast)
-;;     (:depends-on ("suite" "case") bootstrap)
 ;;     ...)
 
 (cl-weave:test-plan-where
@@ -1621,15 +1601,16 @@ semantics exact.
   (expect (parse-fragment input) :to-be :accepted))
 ```
 
-Reporter schemas are unchanged. A raw assertion failure, error, or timeout
-becomes final status `:pass`. A raw normal completion becomes final status
-`:fail` with an `expected-failure-missed` condition. `:reason` remains reserved
-for skip and todo events; expected-failure metadata is not emitted as an event
-reason.
+Reporter schemas are unchanged. A raw `assertion-failure` becomes final status
+`:pass`. An implementation error or timeout retains its raw `:error` or `:fail`
+status. A raw normal completion becomes final status `:fail` with an
+`expected-failure-missed` condition. `:reason` remains reserved for skip and
+todo events; expected-failure metadata is not emitted as an event reason.
 
 Retry observes transformed attempt events. This means an unexpectedly passing
-expected-failure case is retryable as `:fail`, while the first raw failure or
-error becomes `:pass` and stops retrying.
+expected-failure case is retryable as `:fail`, while the first assertion
+failure becomes `:pass` and stops retrying. Errors and timeouts follow the
+ordinary retry policy.
 
 ## Interactive Restart Contract
 
@@ -1707,7 +1688,8 @@ index needed for focused reproduction:
  :expected (value command))
 ```
 
-Generator combinators do not create new event types. `src/property.lisp` owns
+Generator combinators do not create new event types. `src/property-core.lisp`,
+`src/property-generators.lisp`, and `src/property-runner.lisp` separate
 generator data, value production, shrinking, and property execution;
 `src/registration.lisp` only expands `it-property` into that runner. `gen-map`,
 `gen-one-of`, `gen-recursive`, `gen-tuple`, and `gen-such-that` only affect
@@ -1791,6 +1773,9 @@ the parent runner while still receiving parseable failure data.
 - `:status` is one of `:pass`, `:skip`, `:todo`, `:fail`, or `:error`; JSON
   uses the corresponding lowercase strings.
 - `:condition` is a printable string or `nil`; JSON uses a string or `null`.
+- `:secondary-conditions` is an ordered list of printable cleanup and hook
+  conditions; JSON uses the `secondaryConditions` array, including an empty
+  array when none were captured.
 - `:reason` is a skip or todo reason string for `:skip` and `:todo` events,
   otherwise `nil`; JSON uses a string or `null`.
 - `:assertion` is `nil` unless the failure came from `expect`; JSON uses an
