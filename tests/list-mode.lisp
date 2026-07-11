@@ -28,7 +28,7 @@
         :function (lambda () (push :body events-log))
         :retry 2
         :timeout-ms 250
-        :concurrent t))
+        :execution-mode :concurrent))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -191,7 +191,7 @@
         :function (lambda () t)
         :retry 2
         :timeout-ms 250
-        :concurrent t))
+        :execution-mode :concurrent))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -220,7 +220,7 @@
        (cl-weave::make-test-case
         :name "runs"
         :function (lambda () t)
-        :concurrent t))
+        :execution-mode :concurrent))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -356,7 +356,7 @@
        (cl-weave::make-test-case
         :name "runs"
         :function (lambda () t)
-        :concurrent t))
+        :execution-mode :concurrent))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -380,7 +380,7 @@
        (cl-weave::make-test-case
         :name "runs"
         :function (lambda () t)
-        :concurrent t))
+        :execution-mode :concurrent))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case

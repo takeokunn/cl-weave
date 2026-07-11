@@ -145,7 +145,8 @@
 
   (it "expands it options into retry and timeout metadata"
     (expect (macroexpand-1
-             '(it "eventually stable" (:retry 2 :timeout-ms 100 :concurrent t)
+             '(it "eventually stable" (:retry 2 :timeout-ms 100
+                                      :execution-mode :concurrent)
                 (expect :ok :to-be :ok)))
             :to-satisfy
             (lambda (form)
@@ -157,9 +158,9 @@
                    (tree-contains-p form :execution-mode)
                    (tree-contains-p form :concurrent)))))
 
-  (it "expands false concurrent option into sequential execution metadata"
+  (it "expands explicit sequential execution metadata"
     (expect (macroexpand-1
-             '(it "generated sequential case" (:concurrent nil)
+             '(it "generated sequential case" (:execution-mode :sequential)
                 (expect :ok :to-be :ok)))
             :to-satisfy
             (lambda (form)
@@ -168,7 +169,7 @@
                    (tree-contains-p form :sequential)))))
 
   (it "rejects removed compatibility metadata options"
-    (dolist (option '(:tags :depends-on))
+    (dolist (option '(:tags :depends-on :concurrent))
       (expect (lambda ()
                 (macroexpand-1
                  `(it "removed metadata" (,option nil)

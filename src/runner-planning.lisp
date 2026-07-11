@@ -34,7 +34,6 @@
 
 (defun effective-test-execution-mode (test inherited-mode)
   (or (test-case-execution-mode test)
-      (when (test-case-concurrent test) :concurrent)
       inherited-mode))
 
 (defun effective-concurrent-test-case-p (test inherited-mode)

@@ -86,15 +86,15 @@
 
 (defun test-registration-options (options)
   (loop for (key nil) on options by #'cddr
-        unless (member key '(:retry :timeout-ms :concurrent))
+        unless (member key '(:retry :timeout-ms :execution-mode))
           do (error "Unknown test option ~S." key))
   (append
    (when (plist-key-present-p options :retry)
      `(:retry ,(getf options :retry)))
    (when (plist-key-present-p options :timeout-ms)
      `(:timeout-ms ,(getf options :timeout-ms)))
-   (when (plist-key-present-p options :concurrent)
-     `(:execution-mode (if ,(getf options :concurrent) :concurrent :sequential)))))
+   (when (plist-key-present-p options :execution-mode)
+     `(:execution-mode ,(getf options :execution-mode)))))
 
 (defun source-location-form ()
   `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))

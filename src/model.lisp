@@ -46,8 +46,8 @@
     (after-each `(suite-after-each ,suite))))
 
 (define-record-class test-case
-  (name function focus skip-reason todo-reason retry timeout-ms concurrent
-   execution-mode expected-failure-reason location))
+  (name function focus skip-reason todo-reason retry timeout-ms execution-mode
+   expected-failure-reason location))
 
 (define-record-class assertion-detail
   (form matcher actual expected negated pass))
@@ -156,7 +156,7 @@
     suite))
 
 (defun register-test
-    (name function &key focus skip-reason todo-reason retry timeout-ms concurrent
+    (name function &key focus skip-reason todo-reason retry timeout-ms
        execution-mode expected-failure-reason location)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite
@@ -169,11 +169,7 @@
                        :todo-reason todo-reason
                        :retry retry
                        :timeout-ms timeout-ms
-                       :concurrent concurrent
-                       :execution-mode
-                       (normalize-execution-mode
-                        (or execution-mode
-                            (when concurrent :concurrent)))
+                       :execution-mode (normalize-execution-mode execution-mode)
                        :expected-failure-reason expected-failure-reason
                        :location location)))))
 

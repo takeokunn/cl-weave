@@ -26,7 +26,7 @@
          suite
          (cl-weave::make-test-case
           :name "first"
-          :concurrent t
+          :execution-mode :concurrent
           :function (lambda ()
                       (record :first-start)
                       (unless (wait-until-recorded :second-start 1)
@@ -36,7 +36,7 @@
          suite
          (cl-weave::make-test-case
           :name "second"
-          :concurrent t
+          :execution-mode :concurrent
           :function (lambda ()
                       (record :second-start)
                       (sleep 0.02)
@@ -65,7 +65,7 @@
          suite
          (cl-weave::make-test-case
           :name "first"
-          :concurrent t
+          :execution-mode :concurrent
           :function (lambda ()
                       (record :first-start)
                       (sleep 0.02)
@@ -74,7 +74,7 @@
          suite
          (cl-weave::make-test-case
           :name "second"
-          :concurrent t
+          :execution-mode :concurrent
           :function (lambda ()
                       (record :second-start)
                       (record :second-end))))
@@ -150,7 +150,7 @@
        suite
        (cl-weave::make-test-case
         :name "fails"
-        :concurrent t
+        :execution-mode :concurrent
         :function (lambda ()
                     (push :first events-log)
                     (expect :actual :to-be :expected))))
@@ -158,7 +158,7 @@
        suite
        (cl-weave::make-test-case
         :name "must not run"
-        :concurrent t
+        :execution-mode :concurrent
         :function (lambda ()
                     (push :second events-log))))
       (let ((events (cl-weave::collect-events root :bail t)))
