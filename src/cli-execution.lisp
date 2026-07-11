@@ -79,7 +79,7 @@
 (defun bootstrap-local-asd-definitions (options)
   (dolist (directory (system-bootstrap-directories options))
     (dolist (pathname (directory-asd-files directory))
-      (load pathname))))
+      (asdf:load-asd pathname))))
 
 (defun ensure-requested-system-visible (system options)
   (unless (asdf:find-system system nil)

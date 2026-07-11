@@ -2201,7 +2201,7 @@
             (lambda (directory)
               (declare (ignore directory))
               (list asd-file)))
-           ((symbol-function 'load)
+           ((symbol-function 'asdf:load-asd)
             (lambda (pathname)
               (push pathname loaded-asds)
               (setf bootstrapped t)))
