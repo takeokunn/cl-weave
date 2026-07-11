@@ -112,38 +112,45 @@
               :to-be nil)))
 
   (it "dispatches every shrink candidate to exactly one continuation"
-    (let ((original (make-condition 'simple-error
-                                    :format-control "original"
-                                    :format-arguments nil)))
+    (labels ((dispatch (current visited candidate property)
+               (let* ((original (make-condition 'simple-error
+                                                :format-control "original"
+                                                :format-arguments nil))
+                      (state (cl-weave::make-property-shrink-state
+                              :original original
+                              :function property
+                              :current current
+                              :visited (cons current visited)
+                              :steps 1
+                              :max-steps 10))
+                      (calls nil))
+                 (cl-weave::call-property-shrink-candidate/k
+                  state 0 candidate
+                  (lambda (next-state)
+                    (push (list :accept
+                                (cl-weave::property-shrink-state-current
+                                 next-state))
+                          calls))
+                  (lambda (rejected-state)
+                    (expect rejected-state :to-be state)
+                    (push (list :reject) calls)))
+                 calls)))
       (dolist (case
                (list
-                (list :accept '(2) nil 1
-                      (lambda (value) (error "failure: ~S" value))
-                      '(1))
-                (list :reject '(2) nil 2
-                      (lambda (value) (error "failure: ~S" value))
-                      nil)
-                (list :reject '(2) '((1)) 1
-                      (lambda (value) (error "failure: ~S" value))
-                      nil)
-                (list :reject '(2) nil 1 #'identity nil)
-                (list :reject '(2) nil 1
+                (list '((:accept (1))) '(2) nil 1
+                      (lambda (value) (error "failure: ~S" value)))
+                (list '((:reject)) '(2) nil 2
+                      (lambda (value) (error "failure: ~S" value)))
+                (list '((:reject)) '(2) '((1)) 1
+                      (lambda (value) (error "failure: ~S" value)))
+                (list '((:reject)) '(2) nil 1 #'identity)
+                (list '((:reject)) '(2) nil 1
                       (lambda (value)
                         (declare (ignore value))
-                        (error 'type-error :datum 1 :expected-type 'string))
-                      nil)))
-        (destructuring-bind
-            (expected current visited candidate property expected-next) case
-          (let ((calls nil))
-            (cl-weave::call-property-shrink-candidate/k
-             original property current visited 0 candidate
-             (lambda (next) (push (list :accept next) calls))
-             (lambda () (push (list :reject) calls)))
-            (expect calls
-                    :to-equal
-                    (list (if expected-next
-                              (list expected expected-next)
-                               (list expected)))))))))
+                        (error 'type-error :datum 1 :expected-type 'string)))))
+        (destructuring-bind (expected current visited candidate property) case
+          (expect (dispatch current visited candidate property)
+                  :to-equal expected)))))
 
   (it "stops at the first accepted shrink candidate"
     (let ((generator

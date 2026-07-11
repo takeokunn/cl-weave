@@ -23,6 +23,16 @@
   produce
   shrink)
 
+(defstruct (property-shrink-state
+            (:constructor make-property-shrink-state
+                (&key original function current visited steps max-steps)))
+  (original nil :read-only t)
+  (function nil :read-only t)
+  (current nil :read-only t)
+  (visited nil :read-only t)
+  (steps 0 :type (integer 0 *) :read-only t)
+  (max-steps 0 :type (integer 0 *) :read-only t))
+
 (define-condition property-shrinker-error (error)
   ((generator :initarg :generator :reader property-shrinker-error-generator)
    (value :initarg :value :reader property-shrinker-error-value)
@@ -163,4 +173,3 @@
   (declare (type integer min max))
   (lambda (value)
     (integer-shrink-candidates value min max)))
-

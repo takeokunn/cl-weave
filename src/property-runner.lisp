@@ -24,50 +24,95 @@
   (declare (ignore original candidate))
   nil)
 
-(defun call-property-shrink-candidate/k
-    (original function current visited index candidate accept reject)
-  (let ((next (copy-list current)))
+(defun property-shrink-state-with-attempt (state steps)
+  (make-property-shrink-state
+   :original (property-shrink-state-original state)
+   :function (property-shrink-state-function state)
+   :current (property-shrink-state-current state)
+   :visited (property-shrink-state-visited state)
+   :steps steps
+   :max-steps (property-shrink-state-max-steps state)))
+
+(defun property-shrink-state-with-current (state current)
+  (make-property-shrink-state
+   :original (property-shrink-state-original state)
+   :function (property-shrink-state-function state)
+   :current current
+   :visited (cons current (property-shrink-state-visited state))
+   :steps (property-shrink-state-steps state)
+   :max-steps (property-shrink-state-max-steps state)))
+
+(defun call-property-shrink-candidate/k (state index candidate accept reject)
+  (let ((next (copy-list (property-shrink-state-current state))))
     (setf (nth index next) candidate)
     (let ((candidate-condition
-            (property-failure-condition function next)))
-      (if (and (not (equal next current))
-               (not (member next visited :test #'equal))
+            (property-failure-condition
+             (property-shrink-state-function state) next)))
+      (if (and (not (equal next (property-shrink-state-current state)))
+               (not (member next (property-shrink-state-visited state)
+                            :test #'equal))
                candidate-condition
-               (same-property-failure-p original candidate-condition))
-          (funcall accept next)
-          (funcall reject)))))
+               (same-property-failure-p
+                (property-shrink-state-original state) candidate-condition))
+          (funcall accept (property-shrink-state-with-current state next))
+          (funcall reject state)))))
+
+(defun try-property-shrink-candidates/k
+    (state index candidates accept reject complete)
+  (if (null candidates)
+      (funcall reject state)
+      (let ((next-steps
+              (consume-property-shrink-budget
+               (property-shrink-state-current state)
+               (property-shrink-state-steps state)
+               (property-shrink-state-max-steps state))))
+        (if (null next-steps)
+            (funcall complete state)
+            (let ((attempted-state
+                    (property-shrink-state-with-attempt state next-steps)))
+              (call-property-shrink-candidate/k
+               attempted-state index (first candidates) accept
+               (lambda (rejected-state)
+                 (try-property-shrink-candidates/k
+                  rejected-state index (rest candidates)
+                  accept reject complete))))))))
+
+(defun advance-property-shrink/k
+    (state generators index accept complete)
+  (if (null generators)
+      (funcall complete state)
+      (let* ((generator (first generators))
+             (value (nth index (property-shrink-state-current state)))
+             (candidates (property-shrink-candidates generator value)))
+        (try-property-shrink-candidates/k
+         state index candidates accept
+         (lambda (rejected-state)
+           (advance-property-shrink/k
+            rejected-state (rest generators) (1+ index) accept complete))
+         complete))))
+
+(defun shrink-property-state/k (state generators complete)
+  (advance-property-shrink/k
+   state generators 0
+   (lambda (accepted-state)
+     (shrink-property-state/k accepted-state generators complete))
+   complete))
 
 (defun shrink-property-values (generators values function &optional original-condition)
-  (loop with max-steps = (ensure-property-shrink-max-steps
-                          *property-shrink-max-steps*)
-        with original = (or original-condition
-                            (property-failure-condition function values))
-        with current = values
-        with visited = (list values)
-        with steps = 0
-        for changed = nil
-        do (loop for generator in generators
-                 for index from 0
-                 for value in current
-                 do (loop for candidate in
-                          (property-shrink-candidates generator value)
-                          do (let ((next-steps
-                                    (consume-property-shrink-budget
-                                     current steps max-steps)))
-                               (unless next-steps
-                                 (return-from shrink-property-values current))
-                               (setf steps next-steps))
-                          when (call-property-shrink-candidate/k
-                                original function current visited index candidate
-                                (lambda (next)
-                                  (setf current next
-                                        changed t)
-                                  (push next visited)
-                                  t)
-                                (lambda () nil))
-                            do (return)))
-        while changed
-        finally (return current)))
+  (let ((state
+          (make-property-shrink-state
+           :original (or original-condition
+                         (property-failure-condition function values))
+           :function function
+           :current values
+           :visited (list values)
+           :steps 0
+           :max-steps
+           (ensure-property-shrink-max-steps *property-shrink-max-steps*))))
+    (shrink-property-state/k
+     state generators
+     (lambda (final-state)
+       (property-shrink-state-current final-state)))))
 
 (defun signal-property-failure (names form values minimal seed case-index condition)
   (signal-assertion-failure
