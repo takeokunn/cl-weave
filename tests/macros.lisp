@@ -213,6 +213,30 @@
                     count (eq (first tail) :execution-mode))
               :to-be 1)))
 
+  (it "rejects non-list and circular suite-each cases at expansion time"
+    (dolist (form-factory
+             (list (lambda ()
+                     '(describe-each "not cases" "suite ~A" (value) value))
+                   (lambda ()
+                     '(describe-each #(1 2) "suite ~A" (value) value))
+                   (lambda ()
+                     '(describe-skip-each dynamic-cases "suite ~A" (value)))
+                   (lambda ()
+                     '(describe-todo-each dynamic-cases "suite ~A" (value)))
+                   (lambda ()
+                     (let ((cases (list (list 1))))
+                       (setf (cdr cases) cases)
+                       (list 'describe-each cases "suite ~A" '(value) 'value)))))
+      (handler-case
+          (progn
+            (macroexpand-1 (funcall form-factory))
+            (error "Expected suite-each expansion to reject invalid cases."))
+        (error (condition)
+          (expect (princ-to-string condition)
+                  :to-satisfy
+                  (lambda (message)
+                    (search "literal proper list" message)))))))
+
   (it "restores replaced functions and bindings after temporary mutation"
     (expect (sample-size '(a b c)) :to-be 3)
     (with-replaced-function (sample-size (lambda (value)

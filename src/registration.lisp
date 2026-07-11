@@ -6,24 +6,41 @@
       (values default-reason body)))
 
 (defun registration-proper-list-p (value)
-  (handler-case
-      (progn (length value) t)
-    (type-error () nil)))
+  (cond
+    ((null value) t)
+    ((atom value) nil)
+    (t
+     (labels ((walk (slow fast)
+                (cond
+                  ((null fast) t)
+                  ((atom fast) nil)
+                  ((null (cdr fast)) t)
+                  ((atom (cdr fast)) nil)
+                  (t
+                   (let ((next-slow (cdr slow))
+                         (next-fast (cddr fast)))
+                     (and (not (eq next-slow next-fast))
+                          (walk next-slow next-fast)))))))
+       (walk value value)))))
 
 (defun suite-registration-form (name forms options)
   `(register-suite ,name (lambda () ,@forms) ,@options))
 
 (defun validate-suite-each-syntax (cases name bindings target)
   (unless (registration-proper-list-p cases)
-    (error "~S requires CASES to be a literal proper list, got ~S." target cases))
+    (let ((*print-circle* t))
+      (error "~S requires CASES to be a literal proper list, got ~S." target cases)))
   (unless (stringp name)
     (error "~S requires NAME to be a literal format string, got ~S." target name))
   (unless (registration-proper-list-p bindings)
-    (error "~S requires BINDINGS to be a literal proper list, got ~S." target bindings))
+    (let ((*print-circle* t))
+      (error "~S requires BINDINGS to be a literal proper list, got ~S." target bindings)))
   (loop for case in cases
         for index from 0
         unless (registration-proper-list-p case)
-          do (error "~S case ~D must be a literal proper list, got ~S." target index case))
+          do (let ((*print-circle* t))
+               (error "~S case ~D must be a literal proper list, got ~S."
+                      target index case)))
   (values))
 
 (defun suite-each-cases (cases name bindings forms target)
@@ -81,6 +98,7 @@
   `(progn ,@(suite-each-cases cases suite-name bindings body 'describe-sequential)))
 
 (defmacro describe-skip-each (cases suite-name bindings &body body)
+  (validate-suite-each-syntax cases suite-name bindings 'describe-skip-each)
   (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")
     `(progn
        ,@(loop for case in cases
@@ -90,6 +108,7 @@
                             ,@forms))))))
 
 (defmacro describe-todo-each (cases suite-name bindings &body body)
+  (validate-suite-each-syntax cases suite-name bindings 'describe-todo-each)
   (multiple-value-bind (reason forms) (split-reasoned-body body "todo")
     `(progn
        ,@(loop for case in cases
@@ -287,15 +306,17 @@
 
 (defmacro it-property (name bindings &body body)
   (unless (registration-proper-list-p bindings)
-    (error "IT-PROPERTY requires BINDINGS to be a literal proper list, got ~S." bindings))
+    (let ((*print-circle* t))
+      (error "IT-PROPERTY requires BINDINGS to be a literal proper list, got ~S." bindings)))
   (loop for binding in bindings
         for index from 0
         unless (and (registration-proper-list-p binding)
                     (= (length binding) 2)
                     (symbolp (first binding))
                     (first binding))
-          do (error "IT-PROPERTY binding ~D must have the form (NAME GENERATOR), got ~S."
-                    index binding))
+          do (let ((*print-circle* t))
+               (error "IT-PROPERTY binding ~D must have the form (NAME GENERATOR), got ~S."
+                      index binding)))
   (let ((names (mapcar #'first bindings))
         (generators (mapcar #'second bindings)))
     `(it ,name
