@@ -186,7 +186,9 @@
                             :focused t
                             :retry 2
                             :timeout-ms 250
-                            :concurrent t)
+                            :concurrent t
+                            :tags '(:fast :migration)
+                            :depends-on '(bootstrap))
                            (cl-weave::make-test-plan-entry
                             :status :skip
                             :path '("plan" "skips")
@@ -195,7 +197,7 @@
                             :retry 0))
                      stream))))
       (expect output :to-contain ":CL-WEAVE/TEST-PLAN")
-      (expect output :to-contain ":SCHEMA-VERSION 2")
+      (expect output :to-contain ":SCHEMA-VERSION 3")
       (expect output :to-contain ":RUNNABLE 1")
       (expect output :to-contain ":SKIPPED 1")
       (expect output :to-contain ":PATH-STRING \"plan > runs\"")
@@ -203,7 +205,10 @@
       (expect output :to-contain ":FILE \"tests/plan.lisp\"")
       (expect output :to-contain ":FOCUSED T")
       (expect output :to-contain ":TIMEOUT-MS 250")
-      (expect output :to-contain ":CONCURRENT T")))
+      (expect output :to-contain ":CONCURRENT T")
+      (expect output :to-contain ":TAGS (:FAST :MIGRATION)")
+      (expect output :to-contain ":DEPENDS-ON")
+      (expect output :to-contain "BOOTSTRAP")))
 
   (it "prints AI-readable JSON test plans"
     (let ((output (with-output-to-string (stream)
@@ -215,7 +220,9 @@
                             :focused t
                             :retry 2
                             :timeout-ms 250
-                            :concurrent t)
+                            :concurrent t
+                            :tags '(:fast :migration)
+                            :depends-on '(bootstrap))
                            (cl-weave::make-test-plan-entry
                             :status :skip
                             :path '("plan" "skips")
@@ -223,7 +230,7 @@
                             :focused nil
                             :retry 0))
                      stream))))
-      (expect output :to-contain "\"schemaVersion\":2")
+      (expect output :to-contain "\"schemaVersion\":3")
       (expect output :to-contain "\"kind\":\"test-plan\"")
       (expect output :to-contain "\"runnable\":1")
       (expect output :to-contain "\"skipped\":1")
@@ -234,6 +241,8 @@
       (expect output :to-contain "\"retry\":2")
       (expect output :to-contain "\"timeoutMs\":250")
       (expect output :to-contain "\"concurrent\":true")
+      (expect output :to-contain "\"tags\":[\"fast\",\"migration\"]")
+      (expect output :to-contain "\"dependsOn\":[\"BOOTSTRAP\"]")
       (expect output :to-contain "\"reason\":\"blocked\"")))
 
   (it "prints AI-readable JSONL test plans"
@@ -246,7 +255,9 @@
                             :focused t
                             :retry 2
                             :timeout-ms 250
-                            :concurrent t)
+                            :concurrent t
+                            :tags '(:fast :migration)
+                            :depends-on '(bootstrap))
                            (cl-weave::make-test-plan-entry
                             :status :skip
                             :path '("plan" "skips")
@@ -262,13 +273,178 @@
       (expect output :to-contain "\"kind\":\"test-plan-start\"")
       (expect output :to-contain "\"schemaVersion\":1,\"kind\":\"test-plan-start\"")
       (expect output :to-contain "\"kind\":\"test-plan-entry\"")
-      (expect output :to-contain "\"schemaVersion\":1,\"kind\":\"test-plan-entry\"")
+      (expect output :to-contain "\"schemaVersion\":2,\"kind\":\"test-plan-entry\"")
       (expect output :to-contain "\"test\":{\"status\":\"run\"")
       (expect output :to-contain "\"pathString\":\"plan > runs\"")
+      (expect output :to-contain "\"tags\":[\"fast\",\"migration\"]")
+      (expect output :to-contain "\"dependsOn\":[\"BOOTSTRAP\"]")
       (expect output :to-contain "\"kind\":\"test-plan-summary\"")
       (expect output :to-contain "\"schemaVersion\":1,\"kind\":\"test-plan-summary\"")
       (expect output :to-contain "\"runnable\":1")
       (expect output :to-contain "\"skipped\":1")))
+
+  (it "exposes stable reporter artifact schema metadata"
+    (labels ((schema-for (kind)
+               (find kind
+                     (cl-weave:reporter-artifact-schemas)
+                     :key (lambda (entry) (getf entry :kind))
+                     :test #'string=))
+             (field-names (schema)
+               (mapcar (lambda (entry) (getf entry :name))
+                       (getf schema :fields))))
+      (let ((results (schema-for "test-results"))
+            (event-stream (schema-for "test-event"))
+            (plan (schema-for "test-plan"))
+            (plan-entry (schema-for "test-plan-entry"))
+            (mutations (schema-for "mutations")))
+        (expect results :not :to-be nil)
+        (expect (getf results :commands) :to-equal '("run" "watch"))
+        (expect (getf results :reporters) :to-equal '("json" "sexp"))
+        (expect (getf results :schema-version) :to-be 5)
+        (expect (getf results :streaming) :to-be nil)
+        (expect (field-names results)
+                :to-equal '("schemaVersion" "kind" "events" "summary"))
+
+        (expect event-stream :not :to-be nil)
+        (expect (getf event-stream :commands) :to-equal '("run" "watch"))
+        (expect (getf event-stream :reporters) :to-equal '("jsonl"))
+        (expect (getf event-stream :schema-version) :to-be 2)
+        (expect (getf event-stream :streaming) :to-be t)
+        (expect (field-names event-stream)
+                :to-equal '("schemaVersion" "kind" "event"))
+
+        (expect plan :not :to-be nil)
+        (expect (getf plan :commands) :to-equal '("list"))
+        (expect (getf plan :reporters) :to-equal '("json" "sexp"))
+        (expect (getf plan :schema-version) :to-be 3)
+        (expect (getf plan :streaming) :to-be nil)
+        (expect (field-names plan)
+                :to-equal '("schemaVersion" "kind" "tests" "summary"))
+
+        (expect plan-entry :not :to-be nil)
+        (expect (getf plan-entry :commands) :to-equal '("list"))
+        (expect (getf plan-entry :reporters) :to-equal '("jsonl"))
+        (expect (getf plan-entry :schema-version) :to-be 2)
+        (expect (getf plan-entry :streaming) :to-be t)
+        (expect (field-names plan-entry)
+                :to-equal '("schemaVersion" "kind" "test" "test.status"
+                            "test.path" "test.pathString" "test.location"
+                            "test.reason" "test.focused" "test.retry"
+                            "test.timeoutMs" "test.concurrent" "test.tags"
+                            "test.dependsOn"))
+
+        (expect mutations :not :to-be nil)
+        (expect (getf mutations :commands) :to-equal '())
+        (expect (getf mutations :reporters) :to-equal '("json" "sexp"))
+        (expect (getf mutations :schema-version) :to-be 1)
+        (expect (getf mutations :streaming) :to-be nil)
+        (expect (field-names mutations)
+                :to-equal '("schemaVersion" "kind" "total" "killed"
+                            "survived" "errored" "score" "results")))))
+
+  (it "keeps reporter artifact schemas aligned with emitted artifacts"
+    (labels ((schema-for (kind)
+               (find kind
+                     (cl-weave:reporter-artifact-schemas)
+                     :key (lambda (entry) (getf entry :kind))
+                     :test #'string=)))
+      (let* ((events (list (cl-weave::make-test-event
+                            :status :pass
+                            :path '("schema" "result")
+                            :elapsed-internal-time 0)
+                           (cl-weave::make-test-event
+                            :status :fail
+                            :path '("schema" "failure")
+                            :reason "boom"
+                            :elapsed-internal-time 0)))
+             (plan (list (cl-weave::make-test-plan-entry
+                          :status :run
+                          :path '("schema" "plan")
+                          :location '(:file "tests/reporters.lisp")
+                          :focused t
+                          :retry 1
+                          :timeout-ms 50
+                          :concurrent t
+                          :tags '(:contract)
+                          :depends-on '(bootstrap))))
+             (mutations (run-mutations '(+ 1 1)
+                                       (lambda (form mutation)
+                                         (declare (ignore mutation))
+                                         (= (eval form) 2))))
+             (json-output (with-output-to-string (stream)
+                            (cl-weave::report-json events stream)))
+             (jsonl-output (with-output-to-string (stream)
+                             (cl-weave::report-jsonl events stream)))
+             (plan-output (with-output-to-string (stream)
+                            (cl-weave::report-plan-json plan stream)))
+             (plan-jsonl-output (with-output-to-string (stream)
+                                  (cl-weave::report-plan-jsonl plan stream)))
+             (mutation-output (with-output-to-string (stream)
+                                (cl-weave:report-mutations-json mutations stream))))
+        (let ((results (schema-for "test-results"))
+              (results-start (schema-for "test-results-start"))
+              (event-stream (schema-for "test-event"))
+              (results-summary (schema-for "test-results-summary"))
+              (plan-schema (schema-for "test-plan"))
+              (plan-start (schema-for "test-plan-start"))
+              (plan-entry (schema-for "test-plan-entry"))
+              (plan-summary (schema-for "test-plan-summary"))
+              (mutation-schema (schema-for "mutations")))
+          (expect json-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf results :schema-version)
+                          (getf results :kind)))
+          (expect json-output :to-contain "\"events\":[")
+          (expect json-output :to-contain "\"failedPaths\":[\"schema > failure\"]")
+
+          (expect jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf results-start :schema-version)
+                          (getf results-start :kind)))
+          (expect jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf event-stream :schema-version)
+                          (getf event-stream :kind)))
+          (expect jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf results-summary :schema-version)
+                          (getf results-summary :kind)))
+
+          (expect plan-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf plan-schema :schema-version)
+                          (getf plan-schema :kind)))
+          (expect plan-output :to-contain "\"tests\":[")
+          (expect plan-output :to-contain "\"tags\":[\"contract\"]")
+
+          (expect plan-jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf plan-start :schema-version)
+                          (getf plan-start :kind)))
+          (expect plan-jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf plan-entry :schema-version)
+                          (getf plan-entry :kind)))
+          (expect plan-jsonl-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf plan-summary :schema-version)
+                          (getf plan-summary :kind)))
+
+          (expect mutation-output
+                  :to-contain
+                  (format nil "\"schemaVersion\":~D,\"kind\":\"~A\""
+                          (getf mutation-schema :schema-version)
+                          (getf mutation-schema :kind)))
+          (expect mutation-output :to-contain "\"score\":")
+          (expect mutation-output :to-contain "\"results\":[")))))
 
   (it "prints CI-readable JUnit XML results"
     (let ((output (with-output-to-string (stream)

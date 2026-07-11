@@ -7,6 +7,29 @@
    #:around-each
    #:after-all
    #:after-each
+   #:assert-=
+   #:assert-bool
+   #:assert-eq
+   #:assert-eql
+   #:assert-equal
+   #:assert-false
+   #:assert-list-contains
+   #:assert-monotonic-decreasing
+   #:assert-monotonic-increasing
+   #:assert-no-signals
+   #:assert-not-null
+   #:assert-null
+   #:assert-mutation-score
+   #:assert-set-equal
+   #:assert-signals
+   #:assert-string=
+   #:assert-string-contains
+   #:assert-true
+   #:assert-type
+   #:assert-type-equal
+   #:assert-values
+   #:assert-within-tolerance
+   #:assert-within-tolerance-percent
    #:assertion-failure
    #:before-all
    #:before-each
@@ -23,13 +46,11 @@
    #:describe.only
    #:describe.only.each
    #:describe.run-if
-   #:describe.runIf
    #:describe.sequential
    #:describe.sequential.each
    #:describe.skip
    #:describe.skip.each
    #:describe.skip-if
-   #:describe.skipIf
    #:describe.todo
    #:describe.todo.each
    #:describe-concurrent
@@ -51,16 +72,20 @@
    #:expect-assertions
    #:expect.extend
    #:expect-extend
-   #:|expect.hasAssertions|
    #:expect.hasassertions
    #:expect-has-assertions
    #:expect.not
    #:expect-not
+   #:expect.poll
+   #:expect-poll
    #:expect.rejects
    #:expect-rejects
    #:expect.resolves
    #:expect-resolves
+   #:fail
+   #:finishes
    #:gen-boolean
+   #:gen-character
    #:gen-form
    #:gen-integer
    #:gen-keyword
@@ -70,9 +95,44 @@
    #:gen-one-of
    #:gen-recursive
    #:gen-sexp
+   #:gen-state-machine
+   #:gen-string
    #:gen-such-that
    #:gen-symbol
    #:gen-tuple
+   #:gen-vector
+   #:is
+   #:is-between
+   #:is-double-float
+   #:is-empty
+   #:is-eq
+   #:is-equal
+   #:is-every
+   #:is-false
+   #:is-fact
+   #:is-finite
+   #:is-float
+   #:is-integer
+   #:is-keyword
+   #:is-list
+   #:is-member
+   #:is-near
+   #:is-negative
+   #:is-nil
+   #:is-non-nil
+   #:is-not-eq
+   #:is-not-equal
+   #:is-not-member
+   #:is-number
+   #:is-positive
+   #:is-real
+   #:is-record
+   #:is-string
+   #:is-string-contains
+   #:is-symbol
+   #:is-true
+   #:is-type
+   #:is-zero
    #:it
    #:it.concurrent
    #:it.concurrent.each
@@ -93,7 +153,6 @@
    #:it-only
    #:it-only-each
    #:it.run-if
-   #:it.runIf
    #:it-run-if
    #:it.sequential
    #:it.sequential.each
@@ -104,7 +163,6 @@
    #:it-skip
    #:it-skip-each
    #:it.skip-if
-   #:it.skipIf
    #:it-skip-if
    #:it.todo
    #:it.todo.each
@@ -159,6 +217,10 @@
    #:mutation-path
    #:mutation-replacement
    #:mutation-result-status
+   #:mutation-score-failure
+   #:mutation-score-failure-min-score
+   #:mutation-score-failure-summary
+   #:mutation-score-passes-p
    #:mutation-summary
    #:report-mutations-json
    #:report-mutations-sexp
@@ -166,6 +228,8 @@
    #:run-isolated
    #:run-mutations
    #:retry-test
+   #:signals
+   #:skip
    #:skip-test
    #:test
    #:test.concurrent
@@ -189,7 +253,6 @@
    #:test-plan-facts
    #:test-plan-where
    #:test.run-if
-   #:test.runIf
    #:test-run-if
    #:test.sequential
    #:test.sequential.each
@@ -200,10 +263,14 @@
    #:test-skip
    #:test-skip-each
    #:test.skip-if
-   #:test.skipIf
    #:test-skip-if
    #:test.todo
    #:test.todo.each
    #:test-todo
    #:test-todo-each
+   #:with-cleared-hash-table
+   #:with-replaced-function
+   #:with-restored-binding
+   #:with-restored-bindings
+   #:with-restored-hash-table
    #:with-mocked-functions))

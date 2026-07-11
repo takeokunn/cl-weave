@@ -69,12 +69,27 @@
             (lambda (form)
               (tree-contains-p form 'expect-rejects))))
 
+  (it "expands expect.poll into canonical expect-poll"
+    (expect (macroexpand-1 '(expect.poll (lambda () :ok) :to-be :ok))
+            :to-satisfy
+            (lambda (form)
+              (tree-contains-p form 'expect-poll))))
+
   (it "expands expect-rejects into rejecting thunk evaluation"
     (expect (macroexpand-1 '(expect-rejects (lambda () (error "boom")) :to-be-type-of 'simple-error))
             :to-satisfy
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::call-rejecting-expectation-thunk)
                    (tree-contains-p form 'expect-rejects)))))
+
+  (it "expands expect-poll into polling thunk evaluation"
+    (expect (macroexpand-1 '(expect-poll (lambda () :ok) (:timeout-ms 10 :interval-ms 0) :to-be :ok))
+            :to-satisfy
+            (lambda (form)
+              (and (tree-contains-p form 'cl-weave::call-polling-expectation-thunk)
+                   (tree-contains-p form 'expect-poll)
+                   (tree-contains-p form :timeout-ms)
+                   (tree-contains-p form :interval-ms)))))
 
   (it "expands expect.extend into the custom matcher registry"
     (expect (macroexpand-1
@@ -157,6 +172,53 @@
               (and (tree-contains-p form 'cl-weave::register-test)
                    (tree-contains-p form :execution-mode)
                    (tree-contains-p form :sequential)))))
+
+  (it "restores replaced functions and bindings after temporary mutation"
+    (expect (sample-size '(a b c)) :to-be 3)
+    (with-replaced-function (sample-size (lambda (value)
+                                           (+ 10 (length value))))
+      (expect (sample-size '(a b c)) :to-be 13))
+    (expect (sample-size '(a b c)) :to-be 3)
+
+    (setf *fixture-value* :outer)
+    (with-restored-binding (*fixture-value*)
+      (setf *fixture-value* :inner)
+      (expect *fixture-value* :to-be :inner))
+    (expect *fixture-value* :to-be :outer)
+
+    (setf *fixture-value* :root
+          *fixture-events* '(:original))
+    (with-restored-bindings ((*fixture-value*) (*fixture-events*))
+      (setf *fixture-value* :mutated
+            *fixture-events* '(:changed))
+      (expect *fixture-value* :to-be :mutated)
+      (expect *fixture-events* :to-equal '(:changed)))
+    (expect *fixture-value* :to-be :root)
+    (expect *fixture-events* :to-equal '(:original))
+
+    (let ((table (make-hash-table :test #'equal)))
+      (setf (gethash "keep" table) 1
+            (gethash "drop" table) 2)
+      (with-restored-hash-table (table)
+        (remhash "keep" table)
+        (setf (gethash "drop" table) 99
+              (gethash "add" table) 3)
+        (expect (gethash "drop" table) :to-be 99)
+        (expect (gethash "add" table) :to-be 3))
+      (expect (hash-table-count table) :to-be 2)
+      (expect (gethash "keep" table) :to-be 1)
+      (expect (gethash "drop" table) :to-be 2)
+      (expect (nth-value 1 (gethash "add" table)) :to-be nil))
+
+    (let ((table (make-hash-table :test #'equal)))
+      (setf (gethash "persist" table) 1)
+      (with-cleared-hash-table (table)
+        (expect (hash-table-count table) :to-be 0)
+        (setf (gethash "ephemeral" table) 2)
+        (expect (gethash "ephemeral" table) :to-be 2))
+      (expect (hash-table-count table) :to-be 1)
+      (expect (gethash "persist" table) :to-be 1)
+      (expect (nth-value 1 (gethash "ephemeral" table)) :to-be nil)))
 
   (it "expands it-concurrent into concurrent test registration"
     (expect (macroexpand-1
@@ -327,9 +389,6 @@
      (it.run-if t "conditional alias" (expect :ok :to-be :ok))
      cl-weave:it-run-if)
     (expect-macroexpands-through
-     (it.runIf t "conditional camel alias" (expect :ok :to-be :ok))
-     cl-weave:it-run-if)
-    (expect-macroexpands-through
      (it.sequential "serial alias" (expect :ok :to-be :ok))
      cl-weave:it-sequential)
     (expect-macroexpands-through
@@ -344,9 +403,6 @@
      cl-weave:it-skip-each)
     (expect-macroexpands-through
      (it.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
-     cl-weave:it-skip-if)
-    (expect-macroexpands-through
-     (it.skipIf t "conditional skip camel alias" (expect :ok :to-be :ok))
      cl-weave:it-skip-if)
     (expect-macroexpands-through
      (it.todo "todo alias" "later")
@@ -373,9 +429,6 @@
      cl-weave:expect-assertions)
     (expect-macroexpands-through
      (expect.hasassertions)
-     cl-weave:expect-has-assertions)
-    (expect-macroexpands-through
-     (|expect.hasAssertions|)
      cl-weave:expect-has-assertions)
     (expect-macroexpands-through
      (test.concurrent "parallel alias" (expect :ok :to-be :ok))
@@ -408,9 +461,6 @@
      (test.run-if t "conditional alias" (expect :ok :to-be :ok))
      cl-weave:test-run-if)
     (expect-macroexpands-through
-     (test.runIf t "conditional camel alias" (expect :ok :to-be :ok))
-     cl-weave:test-run-if)
-    (expect-macroexpands-through
      (test.sequential "serial alias" (expect :ok :to-be :ok))
      cl-weave:test-sequential)
     (expect-macroexpands-through
@@ -431,9 +481,6 @@
      cl-weave:test-skip-each)
     (expect-macroexpands-through
      (test.skip-if t "conditional skip alias" (expect :ok :to-be :ok))
-     cl-weave:test-skip-if)
-    (expect-macroexpands-through
-     (test.skipIf t "conditional skip camel alias" (expect :ok :to-be :ok))
      cl-weave:test-skip-if)
     (expect-macroexpands-through
      (test.todo "todo alias" "later")
@@ -490,10 +537,6 @@
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-run-if)
     (expect-macroexpands-through
-     (describe.runIf t "conditional suite camel alias"
-       (it "case" (expect :ok :to-be :ok)))
-     cl-weave:describe-run-if)
-    (expect-macroexpands-through
      (describe.skip "skipped suite alias" "because"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-skip)
@@ -506,10 +549,6 @@
      cl-weave:describe-skip-each)
     (expect-macroexpands-through
      (describe.skip-if t "conditional skipped suite alias"
-       (it "case" (expect :ok :to-be :ok)))
-     cl-weave:describe-skip-if)
-    (expect-macroexpands-through
-     (describe.skipIf t "conditional skipped suite camel alias"
        (it "case" (expect :ok :to-be :ok)))
      cl-weave:describe-skip-if)
     (expect-macroexpands-through
@@ -530,11 +569,30 @@
      cl-weave:expect-resolves)
     (expect-macroexpands-through
      (expect.rejects (lambda () (error "boom")) :to-be-type-of 'simple-error)
-     cl-weave:expect-rejects))
+     cl-weave:expect-rejects)
+    (expect-macroexpands-through
+     (expect.poll (lambda () :ok) :to-be :ok)
+     cl-weave:expect-poll))
 
   (it "compares a single macroexpansion step"
     (expect '(sample-unless ready (setf *fixture-value* :done))
             :to-expand-to
             '(if ready
                  nil
-                 (progn (setf *fixture-value* :done))))))
+                 (progn (setf *fixture-value* :done)))))
+
+  (it "reports the expanded form when to-expand-to fails"
+    (handler-case
+        (progn
+          (expect '(sample-unless ready (setf *fixture-value* :done))
+                  :to-expand-to
+                  '(when ready (setf *fixture-value* :done)))
+          (error "Expected to-expand-to to fail."))
+      (cl-weave:assertion-failure (condition)
+        (let ((detail (cl-weave::failure-detail condition)))
+          (expect (cl-weave::assertion-detail-actual detail)
+                  :to-equal
+                  '(if ready nil (progn (setf *fixture-value* :done))))
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal
+                  '(when ready (setf *fixture-value* :done))))))))

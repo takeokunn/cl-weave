@@ -52,6 +52,60 @@
     (expect (symbol-package symbol) :to-be (find-package "CL-USER"))
     (expect keyword :to-satisfy #'keywordp))
 
+  (it-property "generates characters from an alphabet"
+      ((character (gen-character :alphabet "abc")))
+    (expect character :to-satisfy #'characterp)
+    (expect "abc" :to-contain (string character)))
+
+  (it-property "generates bounded strings"
+      ((value (gen-string :min-length 2 :max-length 5 :alphabet "ab")))
+    (expect value :to-satisfy #'stringp)
+    (expect value :to-satisfy
+            (lambda (string)
+              (<= 2 (length string) 5)))
+    (expect value :to-satisfy
+            (lambda (string)
+              (every (lambda (character)
+                       (find character "ab" :test #'char=))
+                     string))))
+
+  (it-property "generates bounded vectors"
+      ((value (gen-vector (gen-member '(:left :right))
+                          :min-length 1
+                          :max-length 4)))
+    (expect value :to-satisfy #'vectorp)
+    (expect value :to-satisfy
+            (lambda (vector)
+              (<= 1 (length vector) 4)))
+    (expect value :to-satisfy
+            (lambda (vector)
+              (every (lambda (entry)
+                       (member entry '(:left :right)))
+                     vector))))
+
+  (it-property "generates replayable state-machine traces"
+      ((trace (gen-state-machine
+               0
+               (lambda (state event)
+                 (ecase event
+                   (:inc (1+ state))
+                   (:dec (1- state))
+                   (:reset 0)))
+               (gen-member '(:inc :dec :reset))
+               :min-length 1
+               :max-length 5)))
+    (let ((events (getf trace :events))
+          (states (getf trace :states)))
+      (expect (getf trace :initial) :to-be 0)
+      (expect events :to-satisfy
+              (lambda (value)
+                (<= 1 (length value) 5)))
+      (expect states :to-satisfy
+              (lambda (value)
+                (= (length value) (1+ (length events)))))
+      (expect (first states) :to-be 0)
+      (expect (getf trace :final) :to-be (first (last states)))))
+
   (it-property "generates bounded s-expression trees"
       ((form (gen-sexp :max-depth 3 :max-list-length 3)))
     (expect (tree-depth form) :to-be-less-than-or-equal 4)
@@ -78,6 +132,43 @@
               :to-satisfy
               (lambda (candidates)
                 (member '(:x) candidates :test #'equal)))))
+
+  (it "shrinks strings and vectors safely"
+    (let ((string-generator (gen-string :min-length 1 :max-length 4 :alphabet "ab"))
+          (vector-generator (gen-vector (gen-member '(:a :b))
+                                        :min-length 1
+                                        :max-length 3)))
+      (expect (funcall (cl-weave::property-generator-shrink string-generator)
+                       "bb")
+              :to-contain "ab")
+      (expect (funcall (cl-weave::property-generator-shrink vector-generator)
+                       #(:b :b))
+              :to-contain-equal #(:a :b))))
+
+  (it "shrinks state-machine traces by event stream"
+    (let* ((transition (lambda (state event)
+                         (ecase event
+                           (:inc (1+ state))
+                           (:dec (1- state)))))
+           (generator (gen-state-machine
+                       0 transition (gen-member '(:inc :dec))
+                       :min-length 1
+                       :max-length 3))
+           (trace '(:initial 0 :events (:inc :inc) :states (0 1 2) :final 2))
+           (candidates (funcall (cl-weave::property-generator-shrink generator)
+                                trace))
+           (single-event (find-if
+                          (lambda (candidate)
+                            (equal (getf candidate :events) '(:inc)))
+                          candidates)))
+      (expect single-event :to-satisfy #'identity)
+      (expect (getf single-event :states) :to-equal '(0 1))
+      (expect (getf single-event :final) :to-be 1)))
+
+  (it "rejects invalid state-machine transitions"
+    (expect (lambda ()
+              (gen-state-machine 0 :not-a-function (gen-member '(:inc))))
+            :to-throw "TRANSITION"))
 
   (it "reports generated and minimized values on failure"
     (handler-case
@@ -180,4 +271,3 @@
   (declare (ignore path))
   (when (eq form :enabled)
     (list :disabled)))
-

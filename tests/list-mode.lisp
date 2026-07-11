@@ -28,7 +28,9 @@
         :function (lambda () (push :body events-log))
         :retry 2
         :timeout-ms 250
-        :concurrent t))
+        :concurrent t
+        :tags '(:fast :migration)
+        :depends-on '(bootstrap)))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -41,7 +43,11 @@
                 :to-equal '(("plan" "runs later")))
         (expect (cl-weave:test-plan-entry-retry (first plan)) :to-be 2)
         (expect (cl-weave:test-plan-entry-timeout-ms (first plan)) :to-be 250)
-        (expect (cl-weave:test-plan-entry-concurrent (first plan)) :to-be t))))
+        (expect (cl-weave:test-plan-entry-concurrent (first plan)) :to-be t)
+        (expect (cl-weave:test-plan-entry-tags (first plan))
+                :to-equal '(:fast :migration))
+        (expect (cl-weave:test-plan-entry-depends-on (first plan))
+                :to-equal '(bootstrap)))))
 
   (it "lists inherited and overridden execution modes as concurrent booleans"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -191,7 +197,9 @@
         :function (lambda () t)
         :retry 2
         :timeout-ms 250
-        :concurrent t))
+        :concurrent t
+        :tags '(:fast :migration)
+        :depends-on '(bootstrap)))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -205,6 +213,9 @@
         (expect facts :to-contain '(:retry ("logic" "runs") 2))
         (expect facts :to-contain '(:timeout-ms ("logic" "runs") 250))
         (expect facts :to-contain '(:concurrent ("logic" "runs")))
+        (expect facts :to-contain '(:tag ("logic" "runs") :fast))
+        (expect facts :to-contain '(:tag ("logic" "runs") :migration))
+        (expect facts :to-contain '(:depends-on ("logic" "runs") bootstrap))
         (expect facts :to-contain '(:reason ("logic" "skips") "blocked")))))
 
   (it "queries test plans with Prolog-style variables"
@@ -220,7 +231,9 @@
        (cl-weave::make-test-case
         :name "runs"
         :function (lambda () t)
-        :concurrent t))
+        :concurrent t
+        :tags '(:fast)
+        :depends-on '(bootstrap)))
       (cl-weave::add-child
        suite
        (cl-weave::make-test-case
@@ -232,7 +245,9 @@
                (query-test-plan plan
                                 '((:status ?test :run)
                                   (:focused ?test)
-                                  (:concurrent ?test))))
+                                  (:concurrent ?test)
+                                  (:tag ?test :fast)
+                                  (:depends-on ?test bootstrap))))
              (limited (query-test-plan plan '((:test ?test)) :limit 1)))
         (expect (logic-variable-p '?test) :to-be t)
         (expect focused-concurrent :to-equal '(((?test . ("logic" "runs")))))
