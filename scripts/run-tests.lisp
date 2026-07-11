@@ -313,7 +313,6 @@
      (asdf:load-system "cl-weave")
      (asdf:load-system "cl-weave-tests"))))
 
-#-cl-weave-direct-load
 (load-project-systems :coverage (requested-coverage-p))
 
 #+sbcl

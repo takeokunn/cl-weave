@@ -163,10 +163,8 @@
                          retry
                          timeout-ms
                          max-workers)
-  "Load SYSTEM directly when it is part of the local project, then run the currently registered cl-weave tests."
-  (if (cl-weave::local-project-system-p system)
-      (cl-weave::load-local-system system (make-hash-table :test #'equal))
-      (asdf:load-system system :force t))
+  "Reload SYSTEM through ASDF, then run the currently registered cl-weave tests."
+  (asdf:load-system system :force t)
   (apply #'run-all
          (run-system-argument-pairs
           :reporter reporter

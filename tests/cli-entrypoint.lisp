@@ -301,28 +301,21 @@
         (expect loaded-asds :to-equal (list asd-file))
         (expect loaded-systems :to-equal '("example")))))
 
-  (it "loads local project systems directly instead of routing them through ASDF"
+  (it "loads project systems through ASDF"
     (let* ((options (cl-weave/cli::make-cli-options
                      :systems '("cl-weave-tests")))
-           (loaded-local-systems '())
            (loaded-asdf-systems '()))
       (with-mocked-functions
-          (((symbol-function 'cl-weave::load-local-system)
-            (lambda (system &optional loaded-systems)
-              (declare (ignore loaded-systems))
-              (push system loaded-local-systems)
-              :loaded-local))
-           ((symbol-function 'asdf:find-system)
+          (((symbol-function 'asdf:find-system)
             (lambda (&rest args)
               (declare (ignore args))
-              (error "asdf:find-system should not be called for local systems")))
+              :cl-weave-tests))
            ((symbol-function 'asdf:load-system)
             (lambda (system)
               (push system loaded-asdf-systems)
               :loaded-asdf)))
         (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-local-systems :to-equal '("cl-weave-tests"))
-        (expect loaded-asdf-systems :to-equal '()))))
+        (expect loaded-asdf-systems :to-equal '("cl-weave-tests")))))
 
   (it "reports actionable CLI errors when requested systems remain unavailable"
     (let* ((cwd #P"/tmp/cl-weave-missing/")
@@ -438,7 +431,7 @@
 
   (it "keeps command usage synchronized with CLI option metadata"
     (let ((usage (cl-weave/cli::cli-usage)))
-      (dolist (entry (getf (cl-weave/cli::framework-metadata) :options))
+      (dolist (entry (getf (cl-weave/metadata:framework-metadata) :options))
         (let ((name (getf entry :name))
               (argument (getf entry :argument)))
           (expect usage

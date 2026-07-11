@@ -1,31 +1,19 @@
 (in-package #:cl-weave/tests)
 
 (describe "asdf integration"
-  (it "resolves the runtime source directory from the loaded ASDF system"
-    (expect (cl-weave::runtime-source-directory)
-            :to-equal
-            (asdf:system-relative-pathname "cl-weave" "src/")))
-
-  (it "tracks local systems loaded during a run"
+  (it "loads systems through ASDF during a run"
     (let ((loaded-systems nil))
       (with-mocked-functions
-          (((symbol-function 'cl-weave::local-project-system-p)
-            (lambda (system)
-              (declare (ignore system))
-              t))
-           ((symbol-function 'cl-weave::load-local-system)
-            (lambda (system loaded-systems-table)
-              (setf (gethash system loaded-systems-table) t)
-              (push loaded-systems-table loaded-systems)
+          (((symbol-function 'asdf:load-system)
+            (lambda (system &key force)
+              (push (list system force) loaded-systems)
               t))
            ((symbol-function 'cl-weave:run-all)
             (lambda (&rest arguments)
               (declare (ignore arguments))
               t)))
         (expect (cl-weave:run-system "cl-weave-tests") :to-be-truthy)
-        (expect (length loaded-systems) :to-be 1)
-        (expect (gethash "cl-weave-tests" (first loaded-systems))
-                :to-be-truthy))))
+        (expect loaded-systems :to-equal '(("cl-weave-tests" t))))))
 
   (it "clears registered tests before each watched system reload"
     (let ((suite-counts nil))
