@@ -25,6 +25,7 @@
      (:file "mutation")
      (:file "fixtures")
      (:file "cps")
+     (:file "platform-timeout")
      (:file "retry-timeout")
      (:file "concurrent")
      (:file "coverage")

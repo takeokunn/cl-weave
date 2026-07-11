@@ -13,6 +13,9 @@
     :serial t
     :components
     ((:file "package")
+     (:file "platform-protocol")
+     (:file "platform-portable")
+     (:file "platform-sbcl")
      (:file "model")
      (:file "logic")
      (:file "isolation")

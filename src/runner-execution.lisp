@@ -209,17 +209,11 @@
     (when timeout-ms
       (/ timeout-ms 1000.0))))
 
-#+sbcl
 (defun call-test-case-with-timeout/k (suite test timeout continue)
-  (if timeout
-      (sb-ext:with-timeout timeout
-        (call-test-case/k suite test continue))
-      (call-test-case/k suite test continue)))
-
-#-sbcl
-(defun call-test-case-with-timeout/k (suite test timeout continue)
-  (declare (ignore timeout))
-  (call-test-case/k suite test continue))
+  (call-with-platform-timeout/k
+   timeout
+   (lambda () (call-test-case/k suite test #'identity))
+   continue))
 
 (defun expected-failure-case-p (test)
   (test-case-expected-failure-reason test))
@@ -309,8 +303,7 @@
       start
       (with-escape-continuation (finish-attempt)
         (handler-bind
-            (#+sbcl
-             (sb-ext:timeout
+             ((platform-timeout
                (lambda (condition)
                  (funcall
                   finish-attempt

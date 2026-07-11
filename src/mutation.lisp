@@ -355,24 +355,16 @@
   (cond
     ((null timeout-ms) nil)
     ((and (integerp timeout-ms) (plusp timeout-ms))
-     #-sbcl
-     (error "Mutation timeouts require SBCL.")
-     #+sbcl
+     (require-platform-capability :timeout)
      timeout-ms)
     (t (error "Mutation timeout must be NIL or a positive integer in milliseconds: ~S"
               timeout-ms))))
 
-#+sbcl
 (defun call-mutation-test (mutation test timeout-ms)
-  (if timeout-ms
-      (sb-ext:with-timeout (/ timeout-ms 1000.0)
-        (funcall test (mutation-form mutation) mutation))
-      (funcall test (mutation-form mutation) mutation)))
-
-#-sbcl
-(defun call-mutation-test (mutation test timeout-ms)
-  (declare (ignore timeout-ms))
-  (funcall test (mutation-form mutation) mutation))
+  (call-with-platform-timeout/k
+   (and timeout-ms (/ timeout-ms 1000.0))
+   (lambda () (funcall test (mutation-form mutation) mutation))
+   #'identity))
 
 (defun run-mutation (mutation test timeout-ms)
   (handler-case
@@ -385,8 +377,7 @@
       (make-mutation-result :mutation mutation
                             :status :killed
                             :condition condition))
-    #+sbcl
-    (sb-ext:timeout ()
+    (platform-timeout ()
       (make-mutation-result :mutation mutation
                             :status :errored
                             :condition (make-condition 'test-timeout
