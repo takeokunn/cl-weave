@@ -420,11 +420,24 @@
       (progn
         (apply function values)
         nil)
-    (condition (condition)
+    (error (condition)
       condition)))
 
-(defun shrink-property-values (generators values function)
-  (loop with current = values
+(defgeneric same-property-failure-p (original candidate)
+  (:documentation
+   "Return true when CANDIDATE represents the same property failure as ORIGINAL."))
+
+(defmethod same-property-failure-p ((original condition) (candidate condition))
+  (eq (class-of original) (class-of candidate)))
+
+(defmethod same-property-failure-p (original candidate)
+  (declare (ignore original candidate))
+  nil)
+
+(defun shrink-property-values (generators values function &optional original-condition)
+  (loop with original = (or original-condition
+                            (property-failure-condition function values))
+        with current = values
         for changed = nil
         do (loop for generator in generators
                  for index from 0
@@ -433,11 +446,15 @@
                           (funcall (property-generator-shrink generator) value)
                           for next = (copy-list current)
                           do (setf (nth index next) candidate)
-                          when (and (not (equal next current))
-                                    (property-failure-condition function next))
-                            do (setf current next
-                                     changed t)
-                               (return)))
+                          do (let ((candidate-condition
+                                    (property-failure-condition function next)))
+                               (when (and (not (equal next current))
+                                          candidate-condition
+                                          (same-property-failure-p
+                                           original candidate-condition))
+                                 (setf current next
+                                       changed t)
+                                 (return))))
         while changed
         finally (return current)))
 
@@ -462,6 +479,7 @@
           for values = (generated-property-values generators rng)
           for condition = (property-failure-condition function values)
           when condition
-            do (let ((minimal (shrink-property-values generators values function)))
+            do (let ((minimal (shrink-property-values generators values function
+                                                      condition)))
                  (signal-property-failure names form values minimal seed case-index condition))))
   t)

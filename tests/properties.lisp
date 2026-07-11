@@ -191,6 +191,64 @@
           (expect actual :to-contain :values)
           (expect actual :to-contain :minimal)))))
 
+  (it "does not treat warnings as property failures"
+    (let ((cl-weave:*property-test-count* 3)
+          (cl-weave:*property-seed* 17)
+          (runs 0))
+      (handler-bind ((warning (lambda (condition)
+                                (declare (ignore condition))
+                                (invoke-restart 'muffle-warning))))
+        (expect (cl-weave::run-property
+                 (list (gen-integer :min 5 :max 5))
+                 (lambda (value)
+                   (incf runs)
+                   (warn "generated ~S" value))
+                 '(value)
+                 '(warning-property))
+                :to-be t))
+      (expect runs :to-be 3)))
+
+  (it "matches property failures by condition type by default"
+    (expect (same-property-failure-p
+             (make-condition 'simple-error
+                             :format-control "first"
+                             :format-arguments nil)
+             (make-condition 'simple-error
+                             :format-control "second"
+                             :format-arguments nil))
+            :to-be t)
+    (expect (same-property-failure-p
+             (make-condition 'simple-error
+                             :format-control "failure"
+                             :format-arguments nil)
+             (make-condition 'type-error :datum 1 :expected-type 'string))
+            :to-be nil))
+
+  (it "does not shrink a property failure into a different error type"
+    (let ((cl-weave:*property-test-count* 1)
+          (cl-weave:*property-seed* 23)
+          (generator
+            (cl-weave::make-property-generator
+             :name :heterogeneous-failure
+             :produce (lambda (rng)
+                        (declare (ignore rng))
+                        2)
+             :shrink (lambda (value)
+                       (if (= value 2) '(1 0) '())))))
+      (handler-case
+          (cl-weave::run-property
+           (list generator)
+           (lambda (value)
+             (case value
+               (1 (error "different failure"))
+               (otherwise (expect value :to-be -1))))
+           '(value)
+           '(heterogeneous-property-failure))
+        (assertion-failure (condition)
+          (let* ((detail (cl-weave::failure-detail condition))
+                 (actual (cl-weave::assertion-detail-actual detail)))
+            (expect (getf actual :minimal) :to-equal '(0)))))))
+
   (it "uses property count from the CI environment"
     (let ((runs 0))
       (with-mocked-functions

@@ -219,6 +219,7 @@
    #:mutation-summary
    #:*property-seed*
    #:*property-test-count*
+   #:same-property-failure-p
    #:*snapshot-directory*
    #:*snapshot-file-name*
    #:*update-snapshots*
