@@ -69,7 +69,7 @@ jobs:
       - name: Run coverage artifact
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
@@ -115,6 +115,7 @@ jobs:
             cl-weave-results.json
             cl-weave-events.jsonl
             cl-weave.coverage
+            cl-weave-coverage-report/
             cl-weave-cli-results.json
             cl-weave-metadata.json
             cl-weave-plan.json
