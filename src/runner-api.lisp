@@ -135,13 +135,19 @@
 
 (defparameter *list-reporters* '(:spec :sexp :json :jsonl))
 
+(defun run-reporters ()
+  (copy-list *run-reporters*))
+
+(defun list-reporters ()
+  (copy-list *list-reporters*))
+
 (defun ensure-run-reporter (reporter)
-  (unless (member reporter *run-reporters*)
+  (unless (member reporter (run-reporters))
     (error "cl-weave: run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))
   reporter)
 
 (defun ensure-list-reporter (reporter)
-  (unless (member reporter *list-reporters*)
+  (unless (member reporter (list-reporters))
     (error "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
   reporter)
 

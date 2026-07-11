@@ -5,7 +5,7 @@
     (let* ((readme (read-text-file (merge-pathnames #P"README.md"
                                                     (uiop:getcwd))))
            (normalized-readme (normalize-shell-text readme))
-           (metadata (cl-weave/cli::framework-metadata))
+           (metadata (cl-weave/metadata:framework-metadata))
            (gates (getf metadata :quality-gates)))
       (expect readme :to-contain "## Adoption")
       (expect readme :to-contain "### AI Discovery")
@@ -43,17 +43,14 @@
   (it "derives artifact schema metadata from reporter contracts"
     (expect (cl-weave:reporter-artifact-schemas)
             :to-be cl-weave::*reporter-artifact-schemas*)
-    (expect (getf (cl-weave/cli::framework-metadata) :artifact-schemas)
+    (expect (getf (cl-weave/metadata:framework-metadata) :artifact-schemas)
             :to-be (cl-weave:reporter-artifact-schemas)))
 
   (it "exposes framework metadata through the public Lisp API"
-    (let ((public-metadata (cl-weave:framework-metadata))
-          (cli-metadata (cl-weave/cli::framework-metadata)))
-      (expect public-metadata :to-equal cli-metadata)
+    (let ((public-metadata (cl-weave/metadata:framework-metadata)))
       (expect (getf public-metadata :artifact-schemas)
               :to-equal (cl-weave:reporter-artifact-schemas))
-      (expect (getf public-metadata :citation)
-              :to-equal (getf cli-metadata :citation))))
+      (expect (getf public-metadata :citation) :not :to-be nil)))
 
   (it "keeps artifact schemas aligned with command reporter contracts"
     (labels ((reporter-choices-for (command metadata)
@@ -79,7 +76,7 @@
                        (dolist (reporter (getf schema :reporters))
                          (expect (member reporter choices :test #'string=)
                                  :not :to-be nil))))))))
-      (let ((metadata (cl-weave/cli::framework-metadata)))
+      (let ((metadata (cl-weave/metadata:framework-metadata)))
         (dolist (schema (getf metadata :artifact-schemas))
           (expect-schema-reporters-valid-for-command schema metadata)
           (if (getf schema :streaming)
@@ -89,11 +86,11 @@
   (it "keeps reporter metadata synchronized with implemented reporters"
     (flet ((reporter-name (reporter)
              (string-downcase (symbol-name reporter))))
-      (let ((metadata (cl-weave/cli::framework-metadata)))
+      (let ((metadata (cl-weave/metadata:framework-metadata)))
         (expect (getf metadata :reporters)
-                :to-equal (mapcar #'reporter-name cl-weave::*run-reporters*))
+                :to-equal (mapcar #'reporter-name (cl-weave:run-reporters)))
         (expect (getf metadata :list-reporters)
-                :to-equal (mapcar #'reporter-name cl-weave::*list-reporters*)))))
+                :to-equal (mapcar #'reporter-name (cl-weave:list-reporters))))))
 
   (it "keeps package export metadata synchronized with actual packages"
     (flet ((actual-exports (package-name)
@@ -107,12 +104,15 @@
                          :key (lambda (entry) (getf entry :name))
                          :test #'string=)
                    :exports)))
-      (let ((metadata (cl-weave/cli::framework-metadata)))
+      (let ((metadata (cl-weave/metadata:framework-metadata)))
         (let ((declared-core (metadata-exports "cl-weave" metadata))
               (actual-core (actual-exports "cl-weave"))
+              (declared-metadata (metadata-exports "cl-weave/metadata" metadata))
+              (actual-metadata (actual-exports "cl-weave/metadata"))
               (declared-cli (metadata-exports "cl-weave/cli" metadata))
               (actual-cli (actual-exports "cl-weave/cli")))
           (expect declared-core :to-equal actual-core)
+          (expect declared-metadata :to-equal actual-metadata)
           (expect declared-cli :to-equal actual-cli)))))
 
   (it "keeps framework metadata identifiers unique"
@@ -130,7 +130,7 @@
                (mapcar (lambda (entry)
                          (string-downcase (symbol-name (getf entry :name))))
                        entries)))
-      (let ((metadata (cl-weave/cli::framework-metadata)))
+      (let ((metadata (cl-weave/metadata:framework-metadata)))
         (dolist (key '(:commands :reporters :list-reporters
                        :capabilities :environment))
           (expect-unique-strings (getf metadata key)))
@@ -349,7 +349,7 @@
 
   (it "advertises framework metadata in machine-readable capability APIs"
     (let ((capability-matrix
-            (getf (cl-weave/cli::framework-metadata) :capability-matrix)))
+            (getf (cl-weave/metadata:framework-metadata) :capability-matrix)))
       (dolist (capability-name '("structured-reporting"
                                  "artifact-schemas"
                                  "ai-discovery-metadata"
@@ -363,7 +363,7 @@
           (expect public-apis :to-contain "framework-metadata")))))
 
   (it "keeps environment specs aligned with environment-backed metadata"
-    (dolist (entry cl-weave/cli::*metadata-cli-options*)
+    (dolist (entry cl-weave/metadata::*metadata-cli-options*)
       (let ((name (getf entry :name))
             (environment (getf entry :environment)))
         (if environment

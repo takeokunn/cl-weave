@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defparameter *json-cli-option-fields*
   '((:name "name" write-json-string-value)
@@ -309,4 +309,3 @@
         do (write-framework-metadata-json-field field metadata stream))
   (write-char #\} stream)
   (terpri stream))
-

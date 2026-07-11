@@ -283,10 +283,6 @@
   "Return structured reporter artifact schema metadata."
   (copy-tree *reporter-artifact-schemas*))
 
-(defun framework-metadata ()
-  "Return the structured framework metadata root for embedded Lisp tooling."
-  (cl-weave/cli::framework-metadata))
-
 (defun summary-count (items status accessor)
   (count status items :key accessor))
 

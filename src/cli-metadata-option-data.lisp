@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defparameter *metadata-cli-options*
   '((:name "--system"
@@ -177,4 +177,3 @@
      :choices nil
      :environment nil
      :description "Print command usage")))
-

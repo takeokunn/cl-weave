@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defparameter *metadata-quality-gates*
   '((:name "flake-check"
@@ -99,4 +99,3 @@
      :timeout-seconds 360
      :artifacts ("cl-weave-junit.xml")
      :description "Verify CI-oriented JUnit report generation.")))
-

@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defparameter *metadata-commands*
   '("run" "list" "watch" "doctor" "metadata" "version" "help"))
@@ -236,4 +236,3 @@
     :cache-provider "cachix"
     :cache-modes ("pull-only" "push-enabled")
     :quality-gate-source "qualityGates"))
-

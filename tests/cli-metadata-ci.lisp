@@ -102,7 +102,7 @@
                       (list (list :name :custom-mutator
                                   :description "custom mutation operator"))))
            (output (with-output-to-string (stream)
-                     (cl-weave/cli::write-framework-metadata-json
+                     (cl-weave/metadata::write-framework-metadata-json
                       metadata stream))))
       (expect output :to-contain "\"kind\":\"custom-metadata\"")
       (expect output :to-contain "\"schemaVersion\":7")
@@ -159,7 +159,7 @@
       (expect output :not :to-contain "\"describe-it-dsl\"")))
 
   (it "advertises CI workflow operations as structured metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (ci (getf metadata :continuous-integration)))
       (expect (getf metadata :schema-version) :to-be 22)
       (expect ci :not :to-be nil)
@@ -179,7 +179,7 @@
       (expect (getf ci :quality-gate-source) :to-equal "qualityGates")))
 
   (it "advertises CI quality gates as structured metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (gates (getf metadata :quality-gates))
            (flake-gate (find "flake-check" gates
                              :key (lambda (entry) (getf entry :name))
@@ -242,7 +242,7 @@
               :to-contain "cl-weave-junit.xml")))
 
   (it "keeps CI workflow contract synchronized with metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (ci (getf metadata :continuous-integration))
            (workflow (read-text-file #P".github/workflows/ci.yml")))
       (expect (probe-file (merge-pathnames (getf ci :workflow-path) (uiop:getcwd)))
@@ -261,7 +261,7 @@
       (expect (getf metadata :quality-gates) :to-satisfy #'consp)))
 
   (it "keeps CI workflow quality gates synchronized with metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (gates (getf metadata :quality-gates))
            (workflow (read-text-file #P".github/workflows/ci.yml"))
            (artifact-section (workflow-artifact-section workflow)))
@@ -280,7 +280,7 @@
           (expect artifact-section :to-contain artifact)))))
 
   (it "keeps flake checks synchronized with metadata quality gates"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (gate-names (sort (remove "flake-check"
                                      (mapcar (lambda (entry) (getf entry :name))
                                              (getf metadata :quality-gates))
@@ -294,7 +294,7 @@
       (expect gate-names :to-equal check-names)))
 
   (it "keeps distribution channel metadata synchronized with README and flake packaging"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (channels (getf metadata :distribution-channels))
            (readme (read-text-file #P"README.md"))
            (flake (read-text-file #P"flake.nix"))
@@ -342,7 +342,7 @@
       (expect (getf remote-channel :run-command) :to-contain remote-ref)))
 
   (it "keeps the distribution policy synchronized with distribution metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (channels (getf metadata :distribution-channels))
            (readme (normalize-markdown-text
                     (read-text-file

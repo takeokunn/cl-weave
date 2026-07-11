@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (declaim
  (special *metadata-cli-options*
@@ -26,10 +26,10 @@
           reporters))
 
 (defun metadata-run-reporters ()
-  (reporter-keyword-names cl-weave::*run-reporters*))
+  (reporter-keyword-names (cl-weave:run-reporters)))
 
 (defun metadata-list-reporters ()
-  (reporter-keyword-names cl-weave::*list-reporters*))
+  (reporter-keyword-names (cl-weave:list-reporters)))
 
 (defun metadata-output-reporters ()
   '("json" "sexp"))
@@ -103,9 +103,7 @@
 
 (defun package-export-metadata (package-designator)
   (let ((package (or (find-package package-designator)
-                     (error 'cli-error
-                            :message (format nil "Unknown metadata package: ~A"
-                                             package-designator)))))
+                     (error "Unknown metadata package: ~A" package-designator))))
     (list :name (string-downcase (package-name package))
           :exports
           (sort (loop for symbol being the external-symbols of package
@@ -161,7 +159,7 @@
    :release-process (metadata-release-process)
    :continuous-integration (metadata-continuous-integration)
    :package-exports (list (package-export-metadata :cl-weave)
+                          (package-export-metadata :cl-weave/metadata)
                           (package-export-metadata :cl-weave/cli))
    :matchers (cl-weave:list-matchers)
    :mutation-operators (cl-weave:list-mutation-operators)))
-

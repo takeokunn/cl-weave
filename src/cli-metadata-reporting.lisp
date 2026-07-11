@@ -1,9 +1,9 @@
 (in-package #:cl-weave/cli)
 
 (defun report-framework-metadata (options stream)
-  (let ((metadata (framework-metadata)))
+  (let ((metadata (cl-weave/metadata:framework-metadata)))
     (case (metadata-reporter options)
-      (:json (write-framework-metadata-json metadata stream))
+      (:json (cl-weave/metadata::write-framework-metadata-json metadata stream))
       (:sexp (write metadata :stream stream :pretty t)
              (terpri stream)))))
 

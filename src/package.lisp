@@ -169,7 +169,8 @@
    #:reset-mock
    #:restore-all-mocks
    #:reporter-artifact-schemas
-   #:framework-metadata
+   #:run-reporters
+   #:list-reporters
    #:skip
    #:mock-restore
    #:spy-on
@@ -217,149 +218,10 @@
    #:with-restored-bindings
    #:with-restored-hash-table))
 
-(in-package #:cl-weave)
-
-(defun runtime-source-directory ()
-  (or (ignore-errors
-        (asdf:system-relative-pathname "cl-weave" "src/"))
-      (make-pathname :name nil
-                     :type nil
-                     :defaults *load-truename*)))
-
-(defvar *runtime-source-directory* (runtime-source-directory))
-
-(defparameter *local-project-system-source-files*
-  '(("cl-weave"
-     "package.lisp"
-     "model.lisp"
-     "logic.lisp"
-     "isolation.lisp"
-     "snapshots.lisp"
-     "mocks.lisp"
-     "matcher-core.lisp"
-     "matcher-structural.lisp"
-     "matcher-runtime.lisp"
-     "matcher-builtins.lisp"
-     "expectation.lisp"
-     "property-core.lisp"
-     "property-generators.lisp"
-     "property-runner.lisp"
-     "mutation.lisp"
-     "registration.lisp"
-     "fixtures.lisp"
-     "continuations.lisp"
-     "expect-runtime.lisp"
-     "expect.lisp"
-     "reporter-schema.lisp"
-     "reporter-json.lisp"
-     "reporter-results.lisp"
-     "reporter-tap.lisp"
-     "reporter-github.lisp"
-     "reporter-plan.lisp"
-     "reporter-mutation.lisp"
-     "reporter-junit.lisp"
-     "runner-execution.lisp"
-     "runner-selection.lisp"
-     "runner-planning.lisp"
-     "runner-concurrency.lisp"
-     "runner-collection.lisp"
-     "runner-api.lisp"
-     "watch.lisp"
-     "cli-options.lisp"
-     "cli-metadata-project-data.lisp"
-     "cli-metadata-quality-data.lisp"
-     "cli-metadata-option-data.lisp"
-     "cli-metadata-capability-data.lisp"
-     "cli-metadata-core.lisp"
-     "cli-metadata-doctor.lisp"
-     "cli-metadata-json-core.lisp"
-     "cli-metadata-json-schema.lisp"
-     "cli-metadata-reporting.lisp"
-     "cli.lisp"
-     "cli-execution.lisp")
-    ("cl-weave-tests"
-     "tests/package.lisp"
-     "tests/support.lisp"
-     "tests/expect-core.lisp"
-     "tests/expect-failures.lisp"
-     "tests/expect-extensions.lisp"
-     "tests/expect-records.lisp"
-     "tests/macros.lisp"
-     "tests/isolation.lisp"
-     "tests/property-support.lisp"
-     "tests/property-generators.lisp"
-     "tests/property-shrinking.lisp"
-     "tests/property-environment.lisp"
-     "tests/mutation.lisp"
-     "tests/fixtures.lisp"
-     "tests/cps.lisp"
-     "tests/retry-timeout.lisp"
-     "tests/concurrent.lisp"
-     "tests/coverage.lisp"
-     "tests/expected-failures.lisp"
-     "tests/skips.lisp"
-     "tests/todos.lisp"
-     "tests/focus.lisp"
-     "tests/filtering.lisp"
-     "tests/sharding.lisp"
-     "tests/sequence.lisp"
-     "tests/list-mode.lisp"
-     "tests/bail.lisp"
-     "tests/cli-support.lisp"
-     "tests/cli-options.lisp"
-     "tests/cli-execution.lisp"
-     "tests/cli-metadata-core.lisp"
-     "tests/cli-metadata-ci.lisp"
-     "tests/cli-metadata-capabilities.lisp"
-     "tests/cli-metadata-contracts.lisp"
-     "tests/cli-entrypoint.lisp"
-     "tests/community-health.lisp"
-     "tests/asdf-integration.lisp"
-     "tests/mocking.lisp"
-     "tests/reporter-formats.lisp"
-     "tests/reporter-plans.lisp"
-     "tests/reporter-schemas.lisp"
-     "tests/reporter-ci.lisp"
-     "tests/reporter-status.lisp"
-     "tests/reporter-runtime.lisp")))
-
-(defun %local-project-system-name (system)
-  (etypecase system
-    (string system)
-    (symbol (symbol-name system))
-    (t (princ-to-string system))))
-
-(defun local-project-system-p (system)
-  (not (null (assoc (%local-project-system-name system)
-                    *local-project-system-source-files*
-                    :test #'string-equal))))
-
-(defun local-project-system-root (system)
-  (if (string-equal (%local-project-system-name system) "cl-weave")
-      *runtime-source-directory*
-      (uiop:ensure-directory-pathname
-       (merge-pathnames "../" *runtime-source-directory*))))
-
-(defun local-project-system-source-files (system)
-  (cdr (assoc (%local-project-system-name system)
-              *local-project-system-source-files*
-              :test #'string-equal)))
-
-(defun local-project-system-dependencies (system)
-  (when (string-equal (%local-project-system-name system) "cl-weave-tests")
-    '("cl-weave")))
-
-(defun load-local-system (system &optional loaded-systems)
-  (let ((system-name (%local-project-system-name system)))
-    (dolist (dependency (local-project-system-dependencies system-name))
-      (load-local-system dependency loaded-systems))
-    (unless (and loaded-systems (gethash system-name loaded-systems))
-      (when loaded-systems
-        (setf (gethash system-name loaded-systems) t))
-      (dolist (runtime-file (local-project-system-source-files system-name))
-        (load (merge-pathnames runtime-file
-                               (local-project-system-root system-name)))))
-    t))
+(defpackage #:cl-weave/metadata
+  (:use #:cl)
+  (:export
+   #:framework-metadata))
 
 (defpackage #:cl-weave/cli
   (:use #:cl)

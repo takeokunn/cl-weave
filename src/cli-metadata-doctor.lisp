@@ -49,7 +49,7 @@
 (defun doctor-checks (options)
   (let* ((cwd (uiop:getcwd))
          (asd-files (directory-asd-files cwd))
-         (metadata (framework-metadata))
+         (metadata (cl-weave/metadata:framework-metadata))
          (requested-system (doctor-requested-system options))
          (output-file (cli-options-output-file options)))
     (list
@@ -107,13 +107,12 @@
          (status (doctor-overall-status checks)))
     (list :schema-version 1
           :kind "doctor-report"
-          :status (metadata-symbol-name status)
-          :version (cli-version)
+          :status (cl-weave/metadata::metadata-symbol-name status)
+          :version (cl-weave/metadata::cli-version)
           :runtime (doctor-runtime-metadata)
           :checks
           (loop for entry in checks
                 collect (list :name (getf entry :name)
-                              :status (metadata-symbol-name
+                              :status (cl-weave/metadata::metadata-symbol-name
                                        (getf entry :status))
                               :summary (getf entry :summary))))))
-

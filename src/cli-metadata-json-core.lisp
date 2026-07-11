@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defun metadata-symbol-name (symbol)
   (string-downcase (symbol-name symbol)))
@@ -90,4 +90,3 @@
               (json-field "choices" choices write-json-string-list item-stream))
         item-stream)))
    stream))
-

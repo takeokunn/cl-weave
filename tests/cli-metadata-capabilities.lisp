@@ -2,7 +2,7 @@
 
 (describe "cli metadata capabilities"
   (it "advertises parsed CLI options as structured metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (options (getf metadata :options))
            (filter-option (find "--filter" options
                                 :key (lambda (entry) (getf entry :name))
@@ -64,12 +64,12 @@
               :to-contain "CL_WEAVE_UPDATE_SNAPSHOTS")))
 
   (it "advertises property test environment controls as metadata"
-    (let ((environment (getf (cl-weave/cli::framework-metadata) :environment)))
+    (let ((environment (getf (cl-weave/metadata:framework-metadata) :environment)))
       (expect environment :to-contain "CL_WEAVE_PROPERTY_TESTS")
       (expect environment :to-contain "CL_WEAVE_PROPERTY_SEED")))
 
   (it "advertises watch once controls as metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (environment (getf metadata :environment))
          (options (getf metadata :options))
            (watch-once-option (find "--once" options
@@ -83,7 +83,7 @@
               :to-equal '("CL_WEAVE_WATCH_ONCE"))))
 
   (it "advertises reporter artifact schemas as structured metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (schemas (getf metadata :artifact-schemas))
            (results-schema (find "test-results" schemas
                                  :key (lambda (entry) (getf entry :kind))

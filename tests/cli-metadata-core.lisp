@@ -148,7 +148,7 @@
                                                  (uiop:getcwd)))))
       (expect-json-field-contracts-documented
        docs
-       (list cl-weave/cli::*framework-metadata-json-fields*
+       (list cl-weave/metadata::*framework-metadata-json-fields*
              cl-weave/cli::*json-capability-matrix-fields*
              cl-weave/cli::*json-reference-document-fields*
              cl-weave/cli::*json-citation-fields*
@@ -170,7 +170,7 @@
     (let* ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
                                                   (uiop:getcwd))))
            (normalized-docs (normalize-markdown-text docs))
-           (metadata (getf (cl-weave/cli::framework-metadata) :release-process)))
+           (metadata (getf (cl-weave/metadata:framework-metadata) :release-process)))
       (expect normalized-docs
               :to-contain
               (normalize-markdown-text
@@ -189,7 +189,7 @@
                 (normalize-markdown-text item)))))
 
   (it "advertises canonical project links as metadata"
-    (let ((metadata (cl-weave/cli::framework-metadata)))
+    (let ((metadata (cl-weave/metadata:framework-metadata)))
       (expect (getf metadata :homepage)
               :to-equal "https://github.com/takeokunn/cl-weave")
       (expect (getf metadata :bug-tracker)

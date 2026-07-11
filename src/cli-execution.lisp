@@ -28,7 +28,7 @@
      t)
     (:list
      (unless (member (cli-options-reporter options)
-                     cl-weave::*list-reporters*)
+                     (cl-weave:list-reporters))
        (error 'cli-error
               :message "cl-weave: list mode supports spec, sexp, json, and jsonl reporters."))
      t)
@@ -92,15 +92,11 @@
                    system))))
 
 (defun load-requested-inputs (options)
-  (let ((loaded-local-systems (make-hash-table :test #'equal)))
-    (dolist (system (cli-options-systems options))
-      (if (cl-weave::local-project-system-p system)
-          (cl-weave::load-local-system system loaded-local-systems)
-          (progn
-            (ensure-requested-system-visible system options)
-            (asdf:load-system system))))
-    (dolist (file (cli-options-load-files options))
-      (load file))))
+  (dolist (system (cli-options-systems options))
+    (ensure-requested-system-visible system options)
+    (asdf:load-system system))
+  (dolist (file (cli-options-load-files options))
+    (load file)))
 
 (defun call-with-output-stream (options callback)
   (let ((output-file (cli-options-output-file options)))

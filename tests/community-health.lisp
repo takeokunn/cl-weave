@@ -80,7 +80,7 @@
                "Existing CLI output, reporter shapes, and machine-readable metadata remain the expected public surface"))))
 
   (it "keeps citation and license contracts synchronized with repository metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (reference-documents (getf metadata :reference-documents))
            (citation (getf metadata :citation))
            (citation-entry (find "CITATION.cff"
@@ -134,7 +134,7 @@
       (expect license-document :to-contain author-name)))
 
   (it "keeps the community health contract synchronized with GitHub intake files"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (entries (getf metadata :community-health))
            (document (normalize-markdown-text
                       (read-text-file
@@ -166,7 +166,7 @@
             (expect entry-text :to-contain (getf link :target)))))))
 
   (it "keeps support and security routing synchronized with public intake surfaces"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (homepage (getf metadata :homepage))
            (policy-documents (getf metadata :policy-documents))
            (reference-documents (getf metadata :reference-documents))
@@ -243,7 +243,7 @@
                 "about: Report vulnerabilities through the private security contact path."))))
 
   (it "keeps issue reporting guidance synchronized with bug intake contracts"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (community-health (getf metadata :community-health))
            (bug-report-entry (find "bug-report-form" community-health
                                    :key (lambda (entry) (getf entry :name))
@@ -299,7 +299,7 @@
       (expect bug-template :to-contain "canonical reproduction details")))
 
   (it "keeps pull request intake guidance synchronized with PR contracts"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (community-health (getf metadata :community-health))
            (pr-entry (find "pull-request-template" community-health
                            :key (lambda (entry) (getf entry :name))
@@ -345,7 +345,7 @@
       (expect pr-template :to-contain "docs/pull-request-template.md")))
 
   (it "keeps runtime support metadata synchronized with published support docs"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (runtime-support (getf metadata :runtime-support))
            (readme (read-text-file #P"README.md"))
            (runtime-document (read-text-file #P"docs/runtime-support.md")))
@@ -389,7 +389,7 @@
                        feature))))))
 
   (it "keeps the governance document aligned with maintainer operations"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (governance (getf metadata :governance))
            (document (normalize-markdown-text
                       (read-text-file
@@ -438,7 +438,7 @@
       (expect-document-fragments codeowners '("*" "@"))))
 
   (it "keeps the release-process document synchronized with release metadata"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (release-process (getf metadata :release-process))
            (document (normalize-markdown-text
                       (read-text-file
@@ -451,7 +451,7 @@
         (expect document :to-contain (normalize-markdown-text item)))))
 
   (it "keeps lifecycle metadata synchronized with compatibility policies"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
+    (let* ((metadata (cl-weave/metadata:framework-metadata))
            (lifecycle (getf metadata :lifecycle))
            (support-document (normalize-markdown-text
                               (read-text-file

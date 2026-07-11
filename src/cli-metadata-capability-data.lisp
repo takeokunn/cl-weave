@@ -1,4 +1,4 @@
-(in-package #:cl-weave/cli)
+(in-package #:cl-weave/metadata)
 
 (defparameter *metadata-capabilities*
   '("vitest-dsl"
