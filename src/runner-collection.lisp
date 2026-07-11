@@ -1,5 +1,16 @@
 (in-package #:cl-weave)
 
+(defun suite-hook-path (suite phase)
+  (append (mapcar #'suite-name (rest (suite-lineage suite)))
+          (list (string-downcase (symbol-name phase)))))
+
+(defun make-suite-hook-event (suite phase causes)
+  (make-test-event
+   :status :error
+   :path (suite-hook-path suite phase)
+   :condition (make-condition 'hook-failure :phase phase :causes causes)
+   :elapsed-internal-time 0))
+
 (defun collect-suite-events/k
     (suite control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
   (if (or (execution-control-stopped control)
@@ -23,15 +34,33 @@
                active-status
                active-reason
                active-execution-mode)
-              (unwind-protect
-                   (call-hooks/k
-                    (suite-hook suite before-all)
-                    (lambda ()
+              (let ((before-errors
+                      (call-hooks/collect-errors (suite-hook suite before-all))))
+                (labels ((finish (events)
+                           (let* ((after-errors
+                                   (call-hooks/collect-errors
+                                    (reverse (suite-hook suite after-all))))
+                                  (all-events
+                                    (append
+                                     (when before-errors
+                                       (list (record-event/control
+                                              control
+                                              (make-suite-hook-event
+                                               suite :before-all before-errors))))
+                                     events
+                                     (when after-errors
+                                       (list (record-event/control
+                                              control
+                                              (make-suite-hook-event
+                                               suite :after-all after-errors)))))))
+                             (funcall continue all-events))))
+                  (if before-errors
+                      (finish '())
                       (collect-children/k
                        suite
                        (ordered-children suite (suite-children suite))
                        control
-                       continue
+                       #'finish
                        focus-enabled
                        ancestor-focused
                        name-filter
@@ -39,8 +68,7 @@
                        shard-paths
                        nil
                        nil
-                       active-execution-mode)))
-                (call-hooks/k (reverse (suite-hook suite after-all)) (lambda () nil))))))))
+                       active-execution-mode)))))))))
 
 (defun collect-children/k
     (suite children control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
@@ -263,4 +291,3 @@
       normalized-filter
       normalized-location-filter
       shard-paths))))
-

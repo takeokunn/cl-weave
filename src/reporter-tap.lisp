@@ -39,6 +39,9 @@
     (when (test-event-condition event)
       (format stream "  condition: ~A~%"
               (tap-quoted-string (princ-to-string (test-event-condition event)))))
+    (dolist (condition (test-event-secondary-conditions event))
+      (format stream "  secondary condition: ~A~%"
+              (tap-quoted-string (princ-to-string condition))))
     (report-tap-assertion (test-event-assertion event) stream)
     (format stream "  ...~%")))
 
@@ -56,4 +59,3 @@
                      (tap-directive event))
              (report-tap-diagnostics event stream)))
   (values))
-

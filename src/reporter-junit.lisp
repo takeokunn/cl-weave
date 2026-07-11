@@ -45,4 +45,3 @@
       (report-junit-event event stream))
     (format stream "</testsuite>~%")
     (values)))
-

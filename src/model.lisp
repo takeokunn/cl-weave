@@ -47,7 +47,7 @@
 
 (define-record-class test-case
   (name function focus skip-reason todo-reason retry timeout-ms concurrent
-   tags depends-on execution-mode expected-failure-reason location))
+   execution-mode expected-failure-reason location))
 
 (define-record-class assertion-detail
   (form matcher actual expected negated pass))
@@ -63,35 +63,49 @@
    :pass pass))
 
 (define-record-class test-event
-  (status path condition assertion reason location elapsed-internal-time))
+  (status path condition secondary-conditions assertion reason location
+   elapsed-internal-time))
 
 (define-record-class test-plan-entry
-  (path status reason focused retry timeout-ms concurrent tags depends-on
-   location))
+  (path status reason focused retry timeout-ms concurrent location))
+
+(defun report-test-failure (condition stream)
+  (let ((detail (failure-detail condition)))
+    (format stream "Test assertion failed: ~S"
+            (and detail (assertion-detail-form detail)))))
 
 (define-condition test-failure (error)
   ((detail :initarg :detail :reader failure-detail))
-  (:report
-   (lambda (condition stream)
-     (let ((detail (failure-detail condition)))
-       (format stream "Test assertion failed: ~S"
-               (and detail (assertion-detail-form detail)))))))
+  (:report report-test-failure))
 
 (define-condition assertion-failure (test-failure) ())
 
+(defun report-test-timeout (condition stream)
+  (format stream "Test exceeded its ~D ms timeout."
+          (test-timeout-ms condition)))
+
 (define-condition test-timeout (error)
   ((timeout-ms :initarg :timeout-ms :reader test-timeout-ms))
-  (:report
-   (lambda (condition stream)
-     (format stream "Test exceeded its ~D ms timeout."
-             (test-timeout-ms condition)))))
+  (:report report-test-timeout))
+
+(defun report-expected-failure-missed (condition stream)
+  (format stream "Test unexpectedly passed; expected failure: ~A"
+          (expected-failure-missed-reason condition)))
 
 (define-condition expected-failure-missed (error)
   ((reason :initarg :reason :reader expected-failure-missed-reason))
-  (:report
-   (lambda (condition stream)
-     (format stream "Test unexpectedly passed; expected failure: ~A"
-             (expected-failure-missed-reason condition)))))
+  (:report report-expected-failure-missed))
+
+(defun report-hook-failure (condition stream)
+  (format stream "~(~A~) hook failed (~D condition~:P): ~{~A~^; ~}"
+          (hook-failure-phase condition)
+          (length (hook-failure-causes condition))
+          (hook-failure-causes condition)))
+
+(define-condition hook-failure (error)
+  ((phase :initarg :phase :reader hook-failure-phase)
+   (causes :initarg :causes :reader hook-failure-causes))
+  (:report report-hook-failure))
 
 (defun root-suite ()
   (or *root-suite*
@@ -143,7 +157,7 @@
 
 (defun register-test
     (name function &key focus skip-reason todo-reason retry timeout-ms concurrent
-       tags depends-on execution-mode expected-failure-reason location)
+       execution-mode expected-failure-reason location)
   (let ((suite (or *current-suite* (root-suite))))
     (add-child suite
                (apply #'make-test-case
@@ -156,8 +170,6 @@
                        :retry retry
                        :timeout-ms timeout-ms
                        :concurrent concurrent
-                       :tags tags
-                       :depends-on depends-on
                        :execution-mode
                        (normalize-execution-mode
                         (or execution-mode

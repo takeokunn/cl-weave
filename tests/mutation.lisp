@@ -233,7 +233,8 @@
       (expect (mapcar #'mutation-result-status results) :to-contain :errored)
       (expect (getf summary :errored) :to-be 1)))
 
-  (it "records mutation test timeouts as errors"
+  #+sbcl
+  (it "records mutation test timeouts as errors on SBCL"
     (let* ((results (run-mutations '(+ 1 1)
                                    (lambda (form mutation)
                                      (declare (ignore form mutation))
@@ -245,6 +246,16 @@
               :to-be-instance-of 'cl-weave:test-timeout)
       (expect (cl-weave:test-timeout-ms (mutation-result-condition result))
               :to-be 10)))
+
+  #-sbcl
+  (it "rejects mutation timeouts when the implementation cannot enforce them"
+    (expect (lambda ()
+              (run-mutations '(+ 1 1)
+                             (lambda (form mutation)
+                               (declare (ignore form mutation))
+                               t)
+                             :timeout-ms 10))
+            :to-throw "Mutation timeouts require SBCL."))
 
   (it "validates mutation timeout values before execution"
     (handler-case

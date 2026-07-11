@@ -85,17 +85,16 @@
         thereis (eq candidate key)))
 
 (defun test-registration-options (options)
+  (loop for (key nil) on options by #'cddr
+        unless (member key '(:retry :timeout-ms :concurrent))
+          do (error "Unknown test option ~S." key))
   (append
    (when (plist-key-present-p options :retry)
      `(:retry ,(getf options :retry)))
    (when (plist-key-present-p options :timeout-ms)
      `(:timeout-ms ,(getf options :timeout-ms)))
    (when (plist-key-present-p options :concurrent)
-     `(:execution-mode (if ,(getf options :concurrent) :concurrent :sequential)))
-   (when (plist-key-present-p options :tags)
-     `(:tags ,(getf options :tags)))
-   (when (plist-key-present-p options :depends-on)
-     `(:depends-on ,(getf options :depends-on)))))
+     `(:execution-mode (if ,(getf options :concurrent) :concurrent :sequential)))))
 
 (defun source-location-form ()
   `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))
@@ -195,13 +194,14 @@
          (systems (isolated-systems-option-form options))
          (form `(progn ,@forms)))
     `(it ,name
-       (assert-isolated-success
-        (run-isolated ',form
-                      :systems ,systems
-                      :package ,package
-                      :timeout ,timeout
-                      :keep-files ,keep-files)
-        ',form))))
+       (let ((result (run-isolated ',form
+                                   :systems ,systems
+                                   :package ,package
+                                   :timeout ,timeout
+                                   :keep-files ,keep-files)))
+         (if (eq (isolated-result-status result) :pass)
+             t
+             (signal-isolated-failure result ',form))))))
 
 (defmacro it-each (cases test-name bindings &body body)
   `(progn
@@ -248,4 +248,3 @@
         (lambda ,names ,@body)
         ',names
         '(it-property ,name ,bindings ,@body)))))
-

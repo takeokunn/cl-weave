@@ -7,29 +7,7 @@
    #:around-each
    #:after-all
    #:after-each
-   #:assert-=
-   #:assert-bool
-   #:assert-eq
-   #:assert-eql
-   #:assert-equal
-   #:assert-false
-   #:assert-list-contains
-   #:assert-monotonic-decreasing
-   #:assert-monotonic-increasing
-   #:assert-no-signals
-   #:assert-not-null
-   #:assert-null
    #:assert-mutation-score
-   #:assert-set-equal
-   #:assert-signals
-   #:assert-string=
-   #:assert-string-contains
-   #:assert-true
-   #:assert-type
-   #:assert-type-equal
-   #:assert-values
-   #:assert-within-tolerance
-   #:assert-within-tolerance-percent
    #:assertion-failure
    #:before-all
    #:before-each
@@ -81,38 +59,6 @@
    #:gen-symbol
    #:gen-tuple
    #:gen-vector
-   #:is
-   #:is-between
-   #:is-double-float
-   #:is-empty
-   #:is-eq
-   #:is-equal
-   #:is-every
-   #:is-false
-   #:is-fact
-   #:is-finite
-   #:is-float
-   #:is-integer
-   #:is-keyword
-   #:is-list
-   #:is-member
-   #:is-near
-   #:is-negative
-   #:is-nil
-   #:is-non-nil
-   #:is-not-eq
-   #:is-not-equal
-   #:is-not-member
-   #:is-number
-   #:is-positive
-   #:is-real
-   #:is-record
-   #:is-string
-   #:is-string-contains
-   #:is-symbol
-   #:is-true
-   #:is-type
-   #:is-zero
    #:it
    #:it-concurrent
    #:it-concurrent-each
@@ -143,6 +89,12 @@
    #:logic-program
    #:logic-query
    #:logic-search-exhausted
+   #:property-shrinker-error
+   #:property-shrinker-error-cause
+   #:property-shrinker-error-generator
+   #:property-shrinker-error-value
+   #:retry-shrinker
+   #:skip-shrinking
    #:logic-search-exhausted-limit
    #:logic-search-exhausted-partial-results
    #:logic-search-exhausted-pending

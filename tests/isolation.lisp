@@ -1,7 +1,7 @@
 (in-package #:cl-weave/tests)
 
 (describe "isolation"
-  (it "expands it-isolated into the isolated runner"
+  (it "expands it-isolated into structured isolated execution"
     (expect (macroexpand-1
              '(it-isolated "child process"
                   (:systems ("cl-weave-tests") :timeout 5)
@@ -9,7 +9,7 @@
             :to-satisfy
             (lambda (form)
               (and (tree-contains-p form 'cl-weave::run-isolated)
-                   (tree-contains-p form 'cl-weave::assert-isolated-success)))))
+                   (tree-contains-p form 'cl-weave::signal-isolated-failure)))))
 
   (it-isolated "runs assertions in a child SBCL process"
       (:systems ("cl-weave-tests") :timeout 180)

@@ -6,29 +6,7 @@
    #:around-each
    #:after-all
    #:after-each
-   #:assert-=
-   #:assert-bool
-   #:assert-eq
-   #:assert-eql
-   #:assert-equal
-   #:assert-false
-   #:assert-list-contains
-   #:assert-monotonic-decreasing
-   #:assert-monotonic-increasing
-   #:assert-no-signals
-   #:assert-not-null
-   #:assert-null
    #:assert-mutation-score
-   #:assert-set-equal
-   #:assert-signals
-   #:assert-string=
-   #:assert-string-contains
-   #:assert-true
-   #:assert-type
-   #:assert-type-equal
-   #:assert-values
-   #:assert-within-tolerance
-   #:assert-within-tolerance-percent
    #:assertion-failure
    #:before-all
    #:before-each
@@ -86,8 +64,10 @@
    #:gen-symbol
    #:gen-tuple
    #:gen-vector
+   #:hook-failure
+   #:hook-failure-causes
+   #:hook-failure-phase
    #:*isolated-timeout-seconds*
-   #:assert-isolated-success
    #:isolated-result
    #:isolated-result-elapsed-ms
    #:isolated-result-exit-code
@@ -99,38 +79,6 @@
    #:isolated-result-stdout
    #:isolated-result-stdout-path
    #:isolated-result-timed-out-p
-   #:is
-   #:is-between
-   #:is-double-float
-   #:is-empty
-   #:is-eq
-   #:is-equal
-   #:is-every
-   #:is-false
-   #:is-fact
-   #:is-finite
-   #:is-float
-   #:is-integer
-   #:is-keyword
-   #:is-list
-   #:is-member
-   #:is-near
-   #:is-negative
-   #:is-nil
-   #:is-non-nil
-   #:is-not-eq
-   #:is-not-equal
-   #:is-not-member
-   #:is-number
-   #:is-positive
-   #:is-real
-   #:is-string
-   #:is-string-contains
-   #:is-symbol
-   #:is-true
-   #:is-type
-   #:is-record
-   #:is-zero
    #:it
    #:it-concurrent
    #:it-concurrent-each
@@ -194,7 +142,13 @@
    #:property-shrink-limit-max-steps
    #:property-shrink-limit-steps
    #:property-shrink-limit-values
+   #:property-shrinker-error
+   #:property-shrinker-error-cause
+   #:property-shrinker-error-generator
+   #:property-shrinker-error-value
+   #:retry-shrinker
    #:same-property-failure-p
+   #:skip-shrinking
    #:*snapshot-directory*
    #:*snapshot-file-name*
    #:*update-snapshots*
@@ -250,8 +204,6 @@
    #:test-plan-entry-status
    #:test-plan-entry-timeout-ms
    #:test-plan-entry-concurrent
-   #:test-plan-entry-tags
-   #:test-plan-entry-depends-on
    #:test-plan-facts
    #:test-plan-where
    #:test-failure
@@ -284,8 +236,14 @@
      "isolation.lisp"
      "snapshots.lisp"
      "mocks.lisp"
-     "matchers.lisp"
-     "property.lisp"
+     "matcher-core.lisp"
+     "matcher-structural.lisp"
+     "matcher-runtime.lisp"
+     "matcher-builtins.lisp"
+     "expectation.lisp"
+     "property-core.lisp"
+     "property-generators.lisp"
+     "property-runner.lisp"
      "mutation.lisp"
      "registration.lisp"
      "fixtures.lisp"
@@ -308,17 +266,30 @@
      "runner-api.lisp"
      "watch.lisp"
      "cli-options.lisp"
-     "cli-metadata-data.lisp"
-     "cli-metadata.lisp"
+     "cli-metadata-project-data.lisp"
+     "cli-metadata-quality-data.lisp"
+     "cli-metadata-option-data.lisp"
+     "cli-metadata-capability-data.lisp"
+     "cli-metadata-core.lisp"
+     "cli-metadata-doctor.lisp"
+     "cli-metadata-json-core.lisp"
+     "cli-metadata-json-schema.lisp"
+     "cli-metadata-reporting.lisp"
      "cli.lisp"
      "cli-execution.lisp")
     ("cl-weave-tests"
      "tests/package.lisp"
      "tests/support.lisp"
-     "tests/expect.lisp"
+     "tests/expect-core.lisp"
+     "tests/expect-failures.lisp"
+     "tests/expect-extensions.lisp"
+     "tests/expect-records.lisp"
      "tests/macros.lisp"
      "tests/isolation.lisp"
-     "tests/properties.lisp"
+     "tests/property-support.lisp"
+     "tests/property-generators.lisp"
+     "tests/property-shrinking.lisp"
+     "tests/property-environment.lisp"
      "tests/mutation.lisp"
      "tests/fixtures.lisp"
      "tests/cps.lisp"
@@ -334,11 +305,23 @@
      "tests/sequence.lisp"
      "tests/list-mode.lisp"
      "tests/bail.lisp"
-     "tests/cli.lisp"
+     "tests/cli-support.lisp"
+     "tests/cli-options.lisp"
+     "tests/cli-execution.lisp"
+     "tests/cli-metadata-core.lisp"
+     "tests/cli-metadata-ci.lisp"
+     "tests/cli-metadata-capabilities.lisp"
+     "tests/cli-metadata-contracts.lisp"
+     "tests/cli-entrypoint.lisp"
      "tests/community-health.lisp"
      "tests/asdf-integration.lisp"
      "tests/mocking.lisp"
-     "tests/reporters.lisp")))
+     "tests/reporter-formats.lisp"
+     "tests/reporter-plans.lisp"
+     "tests/reporter-schemas.lisp"
+     "tests/reporter-ci.lisp"
+     "tests/reporter-status.lisp"
+     "tests/reporter-runtime.lisp")))
 
 (defun %local-project-system-name (system)
   (etypecase system

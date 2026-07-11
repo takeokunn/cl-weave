@@ -10,6 +10,8 @@
   (with-output-to-string (stream)
     (when (test-event-condition event)
       (format stream "~A~%" (test-event-condition event)))
+    (dolist (condition (test-event-secondary-conditions event))
+      (format stream "secondary condition: ~A~%" condition))
     (report-assertion-detail (test-event-assertion event) stream)))
 
 (defun github-escaped-data (value)
@@ -64,4 +66,3 @@
             (getf summary :errored)
             (getf summary :total))
     (values)))
-

@@ -57,9 +57,8 @@
                  (mapcar #'sb-thread:join-thread threads))))
         (run-worker-batches/k tests (worker-batch-size tests) #'run-batch #'identity))))
   #-sb-thread
-  (mapcar (lambda (test)
-            (run-test-case/internal suite test))
-          tests))
+  (declare (ignore suite tests))
+  #-sb-thread
+  (error "cl-weave: concurrent execution requires an implementation with SB-THREAD."))
 
 (declaim (ftype (function (suite list execution-control function &optional t t t t t t t t) *) collect-children/k))
-

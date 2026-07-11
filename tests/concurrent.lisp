@@ -1,5 +1,6 @@
 (in-package #:cl-weave/tests)
 
+#+sb-thread
 (describe "concurrent tests"
   (it "runs adjacent concurrent tests before either one completes"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -164,4 +165,3 @@
         (expect (mapcar #'cl-weave::test-event-status events)
                 :to-equal '(:fail))
         (expect events-log :to-equal '(:first))))))
-

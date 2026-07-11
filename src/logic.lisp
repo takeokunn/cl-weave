@@ -317,10 +317,6 @@
        (list (list :timeout-ms path (test-plan-entry-timeout-ms entry))))
      (when (test-plan-entry-concurrent entry)
        (list (list :concurrent path)))
-     (loop for tag in (test-plan-entry-tags entry)
-           collect (list :tag path tag))
-     (loop for dependency in (test-plan-entry-depends-on entry)
-           collect (list :depends-on path dependency))
      (when (test-plan-entry-location entry)
        (list (list :location path (test-plan-entry-location entry)))))))
 

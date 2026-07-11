@@ -1,0 +1,167 @@
+(in-package #:cl-weave/cli)
+
+(declaim
+ (special *metadata-cli-options*
+          *metadata-extra-environment-variables*
+          *metadata-commands*
+          *metadata-quality-gates*
+          *metadata-capabilities*
+          *metadata-capability-matrix*
+          *metadata-policy-documents*
+          *metadata-reference-documents*
+          *metadata-citation*
+          *metadata-distribution-channels*
+          *metadata-support-channels*
+          *metadata-community-health*
+          *metadata-security-contacts*
+          *metadata-lifecycle*
+          *metadata-governance*
+          *metadata-runtime-support*
+          *metadata-release-process*
+          *metadata-continuous-integration*))
+
+(defun reporter-keyword-names (reporters)
+  (mapcar (lambda (reporter)
+            (string-downcase (symbol-name reporter)))
+          reporters))
+
+(defun metadata-run-reporters ()
+  (reporter-keyword-names cl-weave::*run-reporters*))
+
+(defun metadata-list-reporters ()
+  (reporter-keyword-names cl-weave::*list-reporters*))
+
+(defun metadata-output-reporters ()
+  '("json" "sexp"))
+
+(defun metadata-reporter-command-choices ()
+  (let ((run-reporters (metadata-run-reporters))
+        (list-reporters (metadata-list-reporters)))
+    `(("run" ,run-reporters)
+      ("watch" ,run-reporters)
+      ("list" ,list-reporters)
+      ("doctor" ,(metadata-output-reporters))
+      ("metadata" ,(metadata-output-reporters)))))
+
+
+(defun cli-option-usage-name (name argument)
+  (if argument
+      (format nil "~A ~A" name argument)
+      name))
+
+(defun cli-option-usage-label (entry)
+  (cli-option-usage-name (getf entry :name) (getf entry :argument)))
+
+(defun cli-option-usage-lines (entry)
+  (let* ((label (format nil "  ~A" (cli-option-usage-label entry)))
+         (description (getf entry :description))
+         (description-column 30))
+    (if (< (length label) description-column)
+        (list (format nil "~A~VT~A" label description-column description))
+        (list label
+              (format nil "~VT~A" description-column description)))))
+
+(defun materialized-metadata-cli-option (entry)
+  (let ((copy (copy-list entry)))
+    (when (eq (getf copy :choices) :run-reporters)
+      (setf (getf copy :choices) (metadata-run-reporters)))
+    (when (eq (getf copy :command-choices) :reporter-command-choices)
+      (setf (getf copy :command-choices) (metadata-reporter-command-choices)))
+    copy))
+
+(defun metadata-cli-options ()
+  (mapcar #'materialized-metadata-cli-option *metadata-cli-options*))
+
+(defun metadata-environment-variables ()
+  (sort (remove-duplicates
+         (append *metadata-extra-environment-variables*
+                 (loop for entry in (metadata-cli-options)
+                       append (getf entry :environment)))
+         :test #'string=)
+        #'string<))
+
+(defun cli-version ()
+  (or (ignore-errors
+        (let ((system (asdf:find-system "cl-weave" nil)))
+          (and system (asdf:component-version system))))
+      "unknown"))
+
+(defun metadata-system ()
+  (ignore-errors (asdf:find-system "cl-weave" nil)))
+
+(defun framework-homepage ()
+  (let ((system (metadata-system)))
+    (and system (asdf:system-homepage system))))
+
+(defun framework-bug-tracker ()
+  (let ((system (metadata-system)))
+    (and system (asdf:system-bug-tracker system))))
+
+(defun framework-license ()
+  (let ((system (metadata-system)))
+    (and system (asdf:system-license system))))
+
+(defun package-export-metadata (package-designator)
+  (let ((package (or (find-package package-designator)
+                     (error 'cli-error
+                            :message (format nil "Unknown metadata package: ~A"
+                                             package-designator)))))
+    (list :name (string-downcase (package-name package))
+          :exports
+          (sort (loop for symbol being the external-symbols of package
+                      collect (symbol-name symbol))
+                #'string<))))
+
+(defmacro define-metadata-readers (&rest readers)
+  `(progn
+     ,@(loop for (name variable) in readers
+             collect `(defun ,name () ,variable))))
+
+(define-metadata-readers
+  (metadata-policy-documents *metadata-policy-documents*)
+  (metadata-reference-documents *metadata-reference-documents*)
+  (metadata-citation *metadata-citation*)
+  (metadata-distribution-channels *metadata-distribution-channels*)
+  (metadata-support-channels *metadata-support-channels*)
+  (metadata-community-health *metadata-community-health*)
+  (metadata-security-contacts *metadata-security-contacts*)
+  (metadata-lifecycle *metadata-lifecycle*)
+  (metadata-governance *metadata-governance*)
+  (metadata-runtime-support *metadata-runtime-support*)
+  (metadata-release-process *metadata-release-process*)
+  (metadata-continuous-integration *metadata-continuous-integration*))
+
+(defun framework-metadata ()
+  (list
+   :kind "cl-weave-metadata"
+   :schema-version 22
+   :homepage (framework-homepage)
+   :bug-tracker (framework-bug-tracker)
+   :license (framework-license)
+   :version (cli-version)
+   :commands *metadata-commands*
+   :reporters (metadata-run-reporters)
+   :list-reporters (metadata-list-reporters)
+   :artifact-schemas (cl-weave:reporter-artifact-schemas)
+   :quality-gates *metadata-quality-gates*
+   :capabilities *metadata-capabilities*
+   :capability-matrix *metadata-capability-matrix*
+   :environment (metadata-environment-variables)
+   :options (metadata-cli-options)
+   :policy-documents (metadata-policy-documents)
+   :reference-documents (metadata-reference-documents)
+   :citation (metadata-citation)
+   :distribution-channels (metadata-distribution-channels)
+   :support-channels (metadata-support-channels)
+   :community-health (metadata-community-health)
+   :security-contacts (metadata-security-contacts)
+   :lifecycle (metadata-lifecycle)
+   :governance (metadata-governance)
+   :runtime-support (metadata-runtime-support)
+   :release-process (metadata-release-process)
+   :continuous-integration (metadata-continuous-integration)
+   :package-exports (list (package-export-metadata :cl-weave)
+                          (package-export-metadata :cl-weave/cli))
+   :matchers (cl-weave:list-matchers)
+   :mutation-operators (cl-weave:list-mutation-operators)))
+

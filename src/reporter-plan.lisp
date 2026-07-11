@@ -15,9 +15,7 @@
         :focused (test-plan-entry-focused entry)
         :retry (test-plan-entry-retry entry)
         :timeout-ms (test-plan-entry-timeout-ms entry)
-        :concurrent (test-plan-entry-concurrent entry)
-        :tags (test-plan-entry-tags entry)
-        :depends-on (test-plan-entry-depends-on entry)))
+        :concurrent (test-plan-entry-concurrent entry)))
 
 (defun report-plan-spec (plan stream)
   (let ((summary (plan-summary plan)))
@@ -46,9 +44,6 @@
   (terpri stream)
   (values))
 
-(defun json-write-plan-metadata-list (values stream)
-  (json-write-array values stream))
-
 (defun json-write-plan-entry (entry stream)
   (write-string "{" stream)
   (write-string "\"status\":" stream)
@@ -71,10 +66,6 @@
         (write-string "null" stream)))
   (write-string ",\"concurrent\":" stream)
   (write-string (if (test-plan-entry-concurrent entry) "true" "false") stream)
-  (write-string ",\"tags\":" stream)
-  (json-write-plan-metadata-list (test-plan-entry-tags entry) stream)
-  (write-string ",\"dependsOn\":" stream)
-  (json-write-plan-metadata-list (test-plan-entry-depends-on entry) stream)
   (write-string "}" stream))
 
 (defun report-plan-json (plan stream)
@@ -107,4 +98,3 @@
   (write-string "}" stream)
   (terpri stream)
   (values)))
-

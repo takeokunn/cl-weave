@@ -1,0 +1,145 @@
+(in-package #:cl-weave/tests)
+
+(describe "cli metadata capabilities"
+  (it "advertises parsed CLI options as structured metadata"
+    (let* ((metadata (cl-weave/cli::framework-metadata))
+           (options (getf metadata :options))
+           (filter-option (find "--filter" options
+                                :key (lambda (entry) (getf entry :name))
+                                :test #'string=))
+           (reporter-option (find "--reporter" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=))
+           (reporter-command-choices
+             (getf reporter-option :command-choices))
+           (sequence-option (find "--sequence" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=))
+           (max-workers-option (find "--max-workers" options
+                                     :key (lambda (entry) (getf entry :name))
+                                     :test #'string=))
+           (snapshot-option (find "--update-snapshots" options
+                                  :key (lambda (entry) (getf entry :name))
+                                  :test #'string=)))
+      (expect filter-option :not :to-be nil)
+      (expect (getf filter-option :commands) :to-contain "run")
+      (expect (getf filter-option :value-kind) :to-be :test-name-pattern)
+      (expect (getf filter-option :choices) :to-equal '())
+      (expect (getf filter-option :environment) :to-contain "CL_WEAVE_TEST_FILTER")
+      (expect reporter-option :not :to-be nil)
+      (expect (getf reporter-option :choices) :to-contain "json")
+      (expect (getf reporter-option :choices) :to-contain "junit")
+      (expect (assoc "run" reporter-command-choices :test #'string=)
+              :to-equal
+              '("run" ("spec" "sexp" "json" "jsonl" "tap" "github" "junit")))
+      (expect (assoc "watch" reporter-command-choices :test #'string=)
+              :to-equal
+              '("watch" ("spec" "sexp" "json" "jsonl" "tap" "github" "junit")))
+      (expect (assoc "list" reporter-command-choices :test #'string=)
+              :to-equal
+              '("list" ("spec" "sexp" "json" "jsonl")))
+      (expect (assoc "doctor" reporter-command-choices :test #'string=)
+              :to-equal '("doctor" ("json" "sexp")))
+      (expect (assoc "metadata" reporter-command-choices :test #'string=)
+              :to-equal '("metadata" ("json" "sexp")))
+      (expect (second (assoc "doctor" reporter-command-choices :test #'string=))
+              :not :to-contain "jsonl")
+      (expect (second (assoc "metadata" reporter-command-choices :test #'string=))
+              :not :to-contain "jsonl")
+      (expect (second (assoc "list" reporter-command-choices :test #'string=))
+              :not :to-contain "tap")
+      (expect sequence-option :not :to-be nil)
+      (expect (getf sequence-option :choices)
+              :to-equal '("random"))
+      (expect max-workers-option :not :to-be nil)
+      (expect (getf max-workers-option :commands) :to-contain "run")
+      (expect (getf max-workers-option :commands) :to-contain "watch")
+      (expect (getf max-workers-option :commands) :not :to-contain "list")
+      (expect (getf max-workers-option :value-kind) :to-be :positive-integer)
+      (expect (getf max-workers-option :environment)
+              :to-contain "CL_WEAVE_MAX_WORKERS")
+      (expect snapshot-option :not :to-be nil)
+      (expect (getf snapshot-option :value-kind) :to-be :boolean)
+      (expect (getf snapshot-option :environment)
+              :to-contain "CL_WEAVE_UPDATE_SNAPSHOTS")))
+
+  (it "advertises property test environment controls as metadata"
+    (let ((environment (getf (cl-weave/cli::framework-metadata) :environment)))
+      (expect environment :to-contain "CL_WEAVE_PROPERTY_TESTS")
+      (expect environment :to-contain "CL_WEAVE_PROPERTY_SEED")))
+
+  (it "advertises watch once controls as metadata"
+    (let* ((metadata (cl-weave/cli::framework-metadata))
+           (environment (getf metadata :environment))
+         (options (getf metadata :options))
+           (watch-once-option (find "--once" options
+                                    :key (lambda (entry) (getf entry :name))
+                                    :test #'string=)))
+      (expect environment :to-contain "CL_WEAVE_WATCH_ONCE")
+      (expect watch-once-option :not :to-be nil)
+      (expect (getf watch-once-option :commands) :to-equal '("watch"))
+      (expect (getf watch-once-option :value-kind) :to-be :boolean)
+      (expect (getf watch-once-option :environment)
+              :to-equal '("CL_WEAVE_WATCH_ONCE"))))
+
+  (it "advertises reporter artifact schemas as structured metadata"
+    (let* ((metadata (cl-weave/cli::framework-metadata))
+           (schemas (getf metadata :artifact-schemas))
+           (results-schema (find "test-results" schemas
+                                 :key (lambda (entry) (getf entry :kind))
+                                 :test #'string=))
+           (event-schema (find "test-event" schemas
+                               :key (lambda (entry) (getf entry :kind))
+                               :test #'string=))
+            (plan-schema (find "test-plan" schemas
+                               :key (lambda (entry) (getf entry :kind))
+                               :test #'string=))
+            (plan-entry-schema (find "test-plan-entry" schemas
+                                      :key (lambda (entry) (getf entry :kind))
+                                      :test #'string=))
+            (mutations-schema (find "mutations" schemas
+                                    :key (lambda (entry) (getf entry :kind))
+                                    :test #'string=))
+           (field-name (lambda (entry) (getf entry :name))))
+      (expect (getf metadata :schema-version) :to-be 22)
+      (expect results-schema :not :to-be nil)
+      (expect (getf results-schema :commands) :to-equal '("run" "watch"))
+      (expect (getf results-schema :reporters) :to-equal '("json" "sexp"))
+      (expect (getf results-schema :schema-version) :to-be 6)
+      (expect (getf results-schema :streaming) :to-be nil)
+      (expect (find "events" (getf results-schema :fields)
+                    :key field-name :test #'string=)
+              :not :to-be nil)
+      (expect event-schema :not :to-be nil)
+      (expect (getf event-schema :reporters) :to-equal '("jsonl"))
+      (expect (getf event-schema :schema-version) :to-be 3)
+      (expect (getf event-schema :streaming) :to-be t)
+      (expect (find "event" (getf event-schema :fields)
+                    :key field-name :test #'string=)
+              :not :to-be nil)
+      (expect (getf event-schema :commands) :to-equal '("run" "watch"))
+      (expect plan-schema :not :to-be nil)
+      (expect (getf plan-schema :commands) :to-equal '("list"))
+      (expect (getf plan-schema :schema-version) :to-be 3)
+      (expect plan-entry-schema :not :to-be nil)
+      (expect (getf plan-entry-schema :schema-version) :to-be 2)
+      (expect mutations-schema :not :to-be nil)
+      (expect (getf mutations-schema :commands) :to-equal '())
+      (expect (getf mutations-schema :reporters) :to-equal '("json" "sexp"))
+      (expect (getf mutations-schema :streaming) :to-be nil)
+      (expect (mapcar field-name (getf mutations-schema :fields))
+              :to-equal '("schemaVersion" "kind" "total" "killed"
+                          "survived" "errored" "score" "results"))
+      (let ((doctor-schema (find "doctor-report" schemas
+                                 :key (lambda (entry) (getf entry :kind))
+                                 :test #'string=)))
+        (expect doctor-schema :not :to-be nil)
+        (expect (getf doctor-schema :commands) :to-equal '("doctor"))
+        (expect (getf doctor-schema :reporters) :to-equal '("json" "sexp"))
+        (expect (getf doctor-schema :schema-version) :to-be 1)
+        (expect (getf doctor-schema :streaming) :to-be nil)
+        (expect (mapcar field-name (getf doctor-schema :fields))
+                :to-equal '("schemaVersion" "kind" "status" "version"
+                            "runtime" "checks")))))
+
+)

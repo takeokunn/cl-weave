@@ -59,14 +59,35 @@
       (write-string "null" stream)))
 
 (defun json-write-printed-value (value stream)
-  (write-json-string (prin1-to-string value) stream))
+  (let ((*print-circle* t)
+        (*print-readably* nil))
+    (write-json-string (prin1-to-string value) stream)))
+
+(defvar *json-active-values* nil)
+
+(defun call-with-json-composite (value stream writer)
+  (if (gethash value *json-active-values*)
+      (json-write-printed-value value stream)
+      (unwind-protect
+           (progn
+             (setf (gethash value *json-active-values*) t)
+             (funcall writer))
+        (remhash value *json-active-values*))))
 
 (defun proper-list-p (value)
-  (loop for tail = value then (cdr tail)
+  (loop with tortoise = value
+        with hare = value
         do (cond
-             ((null tail) (return t))
-             ((consp tail))
-             (t (return nil)))))
+             ((null hare) (return t))
+             ((atom hare) (return nil)))
+           (setf hare (cdr hare))
+           (cond
+             ((null hare) (return t))
+             ((atom hare) (return nil)))
+           (setf hare (cdr hare)
+                 tortoise (cdr tortoise))
+           (when (eq tortoise hare)
+             (return nil))))
 
 (defun keyword-json-key (symbol)
   (let* ((source (string-downcase (symbol-name symbol)))
@@ -112,6 +133,8 @@
                            (symbolp key)))))
               value)))
 
+(declaim (notinline json-write-value json-write-vector json-write-cons))
+
 (defun json-write-array (values stream)
   (json-write-sequence values #'json-write-value stream))
 
@@ -127,17 +150,14 @@
              (json-write-value value stream)))
   (write-char #\} stream))
 
-(defun json-write-value (value stream)
-  (typecase value
-    (null (write-string "null" stream))
-    ((eql t) (write-string "true" stream))
-    (string (write-json-string value stream))
-    (character (write-json-string (string value) stream))
-    (number (princ value stream))
-    (pathname (write-json-string (namestring value) stream))
-    (keyword (write-json-string (string-downcase (symbol-name value)) stream))
-    (vector (json-write-array value stream))
-    (cons
+(defun json-write-vector (value stream)
+  (call-with-json-composite
+   value stream (lambda () (json-write-array value stream))))
+
+(defun json-write-cons (value stream)
+  (call-with-json-composite
+   value stream
+   (lambda ()
      (cond
        ((json-plist-p value)
         (json-write-object
@@ -149,9 +169,25 @@
        ((proper-list-p value)
         (json-write-array value stream))
        (t
-        (json-write-printed-value value stream))))
-    (symbol (write-json-string (princ-to-string value) stream))
-    (t (json-write-printed-value value stream))))
+        (json-write-printed-value value stream))))))
+
+(defun json-write-value (value stream)
+  (let ((*json-active-values*
+          (or *json-active-values* (make-hash-table :test #'eq))))
+    (cond
+      ((null value) (write-string "null" stream))
+      ((eq value t) (write-string "true" stream))
+      ((stringp value) (write-json-string value stream))
+      ((characterp value) (write-json-string (string value) stream))
+      ((integerp value) (princ value stream))
+      ((numberp value) (json-write-printed-value value stream))
+      ((pathnamep value) (write-json-string (namestring value) stream))
+      ((keywordp value)
+       (write-json-string (string-downcase (symbol-name value)) stream))
+      ((vectorp value) (json-write-vector value stream))
+      ((consp value) (json-write-cons value stream))
+      ((symbolp value) (write-json-string (princ-to-string value) stream))
+      (t (json-write-printed-value value stream)))))
 
 (defun json-write-assertion (detail stream)
   (if detail
@@ -198,9 +234,14 @@
    (when (test-event-condition event)
      (princ-to-string (test-event-condition event)))
    stream)
+  (write-string ",\"secondaryConditions\":" stream)
+  (json-write-sequence
+   (test-event-secondary-conditions event)
+   (lambda (condition output)
+     (write-json-string (princ-to-string condition) output))
+   stream)
   (write-string ",\"reason\":" stream)
   (json-write-nullable-string (test-event-reason event) stream)
   (write-string ",\"assertion\":" stream)
   (json-write-assertion (test-event-assertion event) stream)
   (write-string "}" stream))
-

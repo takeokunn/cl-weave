@@ -109,23 +109,22 @@
       #-sbcl
       nil))
 
-(defun snapshot-key-from-expected (expected)
-  (unless (= (length expected) 1)
-    (error "Matcher :to-match-snapshot expects exactly one string snapshot key, got ~D values."
-           (length expected)))
-  (let ((key (first expected)))
-    (unless (stringp key)
-      (error "Matcher :to-match-snapshot expects a string snapshot key."))
-    key))
+(defmacro define-snapshot-expected-reader (name matcher-label value-name)
+  `(defun ,name (expected)
+     (unless (= (length expected) 1)
+       (error "Matcher ~A expects exactly one string ~A, got ~D values."
+              ,matcher-label ,value-name (length expected)))
+     (let ((value (first expected)))
+       (unless (stringp value)
+         (error "Matcher ~A expects a string ~A."
+                ,matcher-label ,value-name))
+       value)))
 
-(defun snapshot-sequence-prefix-from-expected (expected)
-  (unless (= (length expected) 1)
-    (error "Matcher :to-match-snapshot-sequence expects exactly one string snapshot key prefix, got ~D values."
-           (length expected)))
-  (let ((prefix (first expected)))
-    (unless (stringp prefix)
-      (error "Matcher :to-match-snapshot-sequence expects a string snapshot key prefix."))
-    prefix))
+(define-snapshot-expected-reader snapshot-key-from-expected
+  ":to-match-snapshot" "snapshot key")
+
+(define-snapshot-expected-reader snapshot-sequence-prefix-from-expected
+  ":to-match-snapshot-sequence" "snapshot key prefix")
 
 (defun snapshot-sequence-values (actual)
   (typecase actual
@@ -193,6 +192,57 @@
                   :present t
                   :reason :unexpected-snapshot))))
 
+(defun call-with-snapshot-comparison/k
+    (key actual-string entry on-match on-mismatch)
+  (if (and entry (string= actual-string (cdr entry)))
+      (funcall on-match)
+      (multiple-value-call on-mismatch
+        (snapshot-comparison-values key actual-string entry))))
+
+(defun call-with-snapshot-sequence-comparison/k
+    (values entries prefix count index on-match on-mismatch)
+  (let ((entry-index (make-hash-table :test #'equal)))
+    (dolist (entry entries)
+      (when (and (consp entry)
+                 (not (nth-value 1 (gethash (car entry) entry-index))))
+        (setf (gethash (car entry) entry-index) entry)))
+    (loop for value in values
+          for position from index
+          for key = (snapshot-sequence-key prefix position)
+          for actual-string = (snapshot-string value)
+          for entry = (gethash key entry-index)
+          do (multiple-value-bind (matched reported-actual reported-expected)
+                 (call-with-snapshot-comparison/k
+                  key actual-string entry
+                  (lambda () (values t nil nil))
+                  (lambda (actual expected)
+                    (values nil actual expected)))
+               (unless matched
+                 (return
+                   (multiple-value-call on-mismatch
+                     (snapshot-sequence-context-values
+                      reported-actual reported-expected
+                      prefix position count)))))
+          finally
+             (let ((extra-entry
+                     (find-if (lambda (candidate)
+                                (let ((candidate-index
+                                        (and (consp candidate)
+                                             (snapshot-sequence-key-index
+                                              prefix (car candidate)))))
+                                  (and candidate-index
+                                       (>= candidate-index count))))
+                              entries)))
+               (return
+                 (if extra-entry
+                     (multiple-value-call on-mismatch
+                       (snapshot-sequence-extra-values
+                        prefix
+                        (snapshot-sequence-key-index prefix (car extra-entry))
+                        count
+                        extra-entry))
+                     (funcall on-match)))))))
+
 (defun snapshot-match-or-update-p (actual expected)
   (let* ((key (snapshot-key-from-expected expected))
          (actual-string (snapshot-string actual))
@@ -225,32 +275,8 @@
                           next-entries)))
           (write-snapshot-file next-entries)
           t)
-        (loop for value in values
-              for index from 0
-              for key = (snapshot-sequence-key prefix index)
-              for actual-string = (snapshot-string value)
-              for entry = (snapshot-entry key entries)
-              unless (and entry (string= actual-string (cdr entry)))
-                do (multiple-value-bind (reported-actual reported-expected)
-                       (snapshot-comparison-values key actual-string entry)
-                     (multiple-value-bind (sequence-actual sequence-expected)
-                         (snapshot-sequence-context-values
-                          reported-actual reported-expected prefix index count)
-                       (return (values nil sequence-actual sequence-expected))))
-              finally
-                 (let ((extra-entry
-                         (find-if (lambda (entry)
-                                    (let ((index (and (consp entry)
-                                                      (snapshot-sequence-key-index
-                                                       prefix
-                                                       (car entry)))))
-                                      (and index (>= index count))))
-                                  entries)))
-                   (if extra-entry
-                       (let ((extra-index
-                               (snapshot-sequence-key-index prefix (car extra-entry))))
-                         (multiple-value-bind (reported-actual reported-expected)
-                             (snapshot-sequence-extra-values
-                              prefix extra-index count extra-entry)
-                           (return (values nil reported-actual reported-expected))))
-                       (return t)))))))
+        (call-with-snapshot-sequence-comparison/k
+         values entries prefix count 0
+         (lambda () t)
+         (lambda (reported-actual reported-expected)
+           (values nil reported-actual reported-expected))))))

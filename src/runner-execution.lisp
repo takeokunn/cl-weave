@@ -10,6 +10,7 @@
 (defvar *retry-budget-remaining* 0)
 (defvar *runner-default-condition-handler-disabled* nil)
 (defvar *runner-propagate-conditions* t)
+(defvar *attempt-secondary-conditions* nil)
 
 (defparameter *runner-dynamic-environment-variables*
   '(*root-suite*
@@ -83,12 +84,31 @@
         (funcall (first hooks))
         (call-hooks/k (rest hooks) continue))))
 
+(defun call-hooks/collect-errors (hooks)
+  (loop for hook in hooks
+        when (handler-case
+                 (progn (funcall hook) nil)
+               (error (condition) condition))
+          collect it))
+
 (defun call-around-hooks/k (hooks continue)
   (if (null hooks)
       (funcall continue)
-      (funcall (first hooks)
-               (lambda ()
-                 (call-around-hooks/k (rest hooks) continue)))))
+      (let ((continuation-errors nil))
+        (handler-case
+            (funcall
+             (first hooks)
+             (lambda ()
+               (handler-bind
+                   ((error (lambda (condition)
+                             (pushnew condition continuation-errors :test #'eq))))
+                 (call-around-hooks/k (rest hooks) continue))))
+          (error (condition)
+            (if (member condition continuation-errors :test #'eq)
+                (error condition)
+                (error 'hook-failure
+                       :phase :around-each
+                       :causes (list condition))))))))
 
 (defun call-test-case/k (suite test continue)
   (let ((*test-context* (make-hash-table :test #'equal))
@@ -97,17 +117,34 @@
         (*expected-assertion-count-form* nil)
         (*has-assertions-required* nil)
         (*has-assertions-form* nil))
-    (unwind-protect
-         (call-hooks/k
-          (effective-before-hooks suite)
-          (lambda ()
-            (call-around-hooks/k
-             (effective-around-hooks suite)
-             (lambda ()
-               (funcall (test-case-function test))
-               (verify-assertion-counts)
-               (funcall continue)))))
-      (call-hooks/k (effective-after-hooks suite) (lambda () nil)))))
+    (let ((primary-condition nil)
+          (result nil))
+      (handler-case
+          (setf result
+                (let ((before-errors
+                        (call-hooks/collect-errors
+                         (effective-before-hooks suite))))
+                  (when before-errors
+                    (error 'hook-failure
+                           :phase :before-each
+                           :causes before-errors))
+                  (call-around-hooks/k
+                   (effective-around-hooks suite)
+                   (lambda ()
+                     (funcall (test-case-function test))
+                     (verify-assertion-counts)
+                     (funcall continue)))))
+        (error (condition)
+          (setf primary-condition condition)))
+      (let ((cleanup-errors
+              (call-hooks/collect-errors (effective-after-hooks suite))))
+        (cond
+          (primary-condition
+           (setf *attempt-secondary-conditions* cleanup-errors)
+           (error primary-condition))
+          (cleanup-errors
+           (error 'hook-failure :phase :after-each :causes cleanup-errors))
+          (t result))))))
 
 (defun test-path (suite test)
   (append (mapcar #'suite-name (rest (suite-lineage suite)))
@@ -116,11 +153,13 @@
 (defun filter-path-string (path)
   (format nil "~{~A~^ > ~}" path))
 
-(defun make-event (status suite test start &key condition assertion reason)
+(defun make-event (status suite test start &key condition secondary-conditions assertion reason)
   (make-test-event
    :status status
    :path (test-path suite test)
    :condition condition
+   :secondary-conditions (or secondary-conditions
+                             *attempt-secondary-conditions*)
    :assertion assertion
    :reason reason
    :location (test-case-location test)
@@ -189,8 +228,22 @@
                    start
                    :condition (make-condition 'expected-failure-missed
                                               :reason reason)))
-      ((member (test-event-status event) '(:fail :error))
-       (make-event :pass suite test start))
+      ((and (eq (test-event-status event) :fail)
+            (typep (test-event-condition event) 'assertion-failure))
+       (let ((cleanup-conditions
+               (test-event-secondary-conditions event)))
+         (if cleanup-conditions
+             (make-event
+              :error
+              suite
+              test
+              start
+              :condition (make-condition 'hook-failure
+                                         :phase :after-each
+                                         :causes cleanup-conditions)
+              :assertion (test-event-assertion event)
+              :secondary-conditions cleanup-conditions)
+             (make-event :pass suite test start))))
       (t
        event))))
 
@@ -228,56 +281,56 @@
   (let ((*runner-default-condition-handler-disabled* t))
     (signal condition)))
 
+(defun call-with-propagated-condition/k (condition continue)
+  (when (and *runner-propagate-conditions*
+             (not *runner-default-condition-handler-disabled*))
+    (offer-condition-to-outer-handlers condition))
+  (funcall continue))
+
 (defmacro with-runner-condition-propagation ((enabled) &body body)
   `(let ((*runner-propagate-conditions* ,enabled))
      ,@body))
 
 (defun run-test-attempt (suite test start)
-  (let ((event nil))
+  (let ((event nil)
+        (*attempt-secondary-conditions* nil))
     (block attempt
       (setf event
              (handler-bind
                   (#+sbcl
                    (sb-ext:timeout
                      (lambda (condition)
-                      (when (and *runner-propagate-conditions*
-                                 (not *runner-default-condition-handler-disabled*))
-                        (offer-condition-to-outer-handlers condition))
-                      (let ((timeout (make-condition
-                                      'test-timeout
-                                     :timeout-ms (effective-timeout-ms test))))
-                        (return-from attempt
-                          (setf event
-                                (make-event :fail
-                                            suite
-                                            test
-                                            start
-                                             :condition timeout))))))
+                       (return-from attempt
+                         (setf event
+                               (call-with-propagated-condition/k
+                                condition
+                                (lambda ()
+                                  (make-event
+                                   :fail suite test start
+                                   :condition
+                                   (make-condition
+                                    'test-timeout
+                                    :timeout-ms (effective-timeout-ms test)))))))))
                  (assertion-failure
                     (lambda (condition)
-                      (when (and *runner-propagate-conditions*
-                                 (not *runner-default-condition-handler-disabled*))
-                        (offer-condition-to-outer-handlers condition))
                       (return-from attempt
                         (setf event
-                              (make-event :fail
-                                          suite
-                                          test
-                                          start
-                                          :condition condition
-                                          :assertion (failure-detail condition))))))
+                              (call-with-propagated-condition/k
+                               condition
+                               (lambda ()
+                                 (make-event
+                                  :fail suite test start
+                                  :condition condition
+                                  :assertion (failure-detail condition))))))))
                   (error
                     (lambda (condition)
-                      (when (and *runner-propagate-conditions*
-                                 (not *runner-default-condition-handler-disabled*))
-                        (offer-condition-to-outer-handlers condition))
                       (return-from attempt
                         (setf event
-                              (make-event :error
-                                          suite
-                                          test
-                                          start
-                                          :condition condition))))))
+                              (call-with-propagated-condition/k
+                               condition
+                               (lambda ()
+                                 (make-event :error suite test start
+                                             :condition condition))))))))
               (call-test-attempt/restarts suite test start))))
     (if (eq event *retry-test-restart-marker*)
         event
@@ -313,4 +366,3 @@
 (defun run-test-case/interactively (suite test)
   (with-runner-condition-propagation (t)
     (run-test-case/internal suite test)))
-

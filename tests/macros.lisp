@@ -167,6 +167,14 @@
                    (tree-contains-p form :execution-mode)
                    (tree-contains-p form :sequential)))))
 
+  (it "rejects removed compatibility metadata options"
+    (dolist (option '(:tags :depends-on))
+      (expect (lambda ()
+                (macroexpand-1
+                 `(it "removed metadata" (,option nil)
+                    (expect :ok :to-be :ok))))
+              :to-throw)))
+
   (it "restores replaced functions and bindings after temporary mutation"
     (expect (sample-size '(a b c)) :to-be 3)
     (with-replaced-function (sample-size (lambda (value)

@@ -20,6 +20,8 @@
         (format stream "~&    reason: ~A" (test-event-reason event)))
       (unless (member (test-event-status event) '(:pass :skip :todo))
         (format stream "~&    condition: ~A" (test-event-condition event))
+        (dolist (condition (test-event-secondary-conditions event))
+          (format stream "~&    secondary condition: ~A" condition))
         (report-assertion-detail (test-event-assertion event) stream)))
     (format stream "~&~%~D passed, ~D skipped, ~D todo, ~D failed, ~D errored, ~D total~%"
             (getf summary :passed)
@@ -39,6 +41,8 @@
         :duration-ms (event-duration-ms event)
         :condition (when (test-event-condition event)
                       (princ-to-string (test-event-condition event)))
+        :secondary-conditions
+        (mapcar #'princ-to-string (test-event-secondary-conditions event))
         :reason (test-event-reason event)
         :assertion (let ((detail (test-event-assertion event)))
                       (when detail
@@ -52,7 +56,7 @@
 (defun report-sexp (events stream)
   (let ((summary (result-summary events)))
     (prin1 (append (list :cl-weave/results
-                         :schema-version 3)
+                         :schema-version 4)
                    summary
                    (list :events (mapcar #'serializable-event events)))
            stream))
@@ -69,7 +73,7 @@
 (defun report-json (events stream)
   (let ((summary (result-summary events)))
   (write-string "{" stream)
-  (write-string "\"schemaVersion\":5" stream)
+  (write-string "\"schemaVersion\":6" stream)
   (write-string ",\"kind\":\"test-results\"" stream)
   (json-write-results-summary-fields summary stream)
   (write-string ",\"events\":" stream)
@@ -85,7 +89,7 @@
   (write-string "}" stream)
   (terpri stream)
   (dolist (event events)
-    (write-string "{\"schemaVersion\":2,\"kind\":\"test-event\",\"event\":" stream)
+    (write-string "{\"schemaVersion\":3,\"kind\":\"test-event\",\"event\":" stream)
     (json-write-event event stream)
     (write-string "}" stream)
     (terpri stream))
@@ -94,4 +98,3 @@
   (write-string "}" stream)
   (terpri stream)
   (values)))
-

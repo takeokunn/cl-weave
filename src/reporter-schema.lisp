@@ -51,11 +51,52 @@
     (:status :skip :plist-key :skipped :json-key "skipped")
     (:status :todo :plist-key :todos :json-key "todos")))
 
-(defparameter *reporter-artifact-schemas*
-  '((:kind "test-results"
+(defmacro define-reporter-artifact-schemas (&body schemas)
+  "Define reporter schema data after validating its declarative contract."
+  (labels ((property-present-p (plist property)
+             (loop for (key) on plist by #'cddr
+                   thereis (eq key property)))
+           (require-property (plist property context)
+             (unless (property-present-p plist property)
+               (error "~A must declare ~S." context property))
+             (getf plist property))
+           (ensure-unique (values context)
+             (let ((duplicate (find-if (lambda (value)
+                                         (> (count value values :test #'equal) 1))
+                                       values)))
+               (when duplicate
+                 (error "~A contains duplicate ~S." context duplicate)))))
+    (ensure-unique (mapcar (lambda (schema)
+                             (require-property schema :kind "Reporter schema"))
+                           schemas)
+                   "Reporter schema kinds")
+    (dolist (schema schemas)
+      (let ((kind (getf schema :kind)))
+        (dolist (property '(:commands :reporters :schema-version
+                            :streaming :fields))
+          (require-property schema property
+                            (format nil "Reporter schema ~S" kind)))
+        (let ((fields (getf schema :fields)))
+          (ensure-unique
+           (mapcar (lambda (field)
+                     (require-property field :name
+                                       (format nil "Field in schema ~S" kind)))
+                   fields)
+           (format nil "Field names in reporter schema ~S" kind))
+          (dolist (field fields)
+            (require-property field :kind
+                              (format nil "Field ~S in schema ~S"
+                                      (getf field :name) kind))
+            (require-property field :required
+                              (format nil "Field ~S in schema ~S"
+                                      (getf field :name) kind)))))))
+  `(defparameter *reporter-artifact-schemas* ',schemas))
+
+(define-reporter-artifact-schemas
+  (:kind "test-results"
      :commands ("run" "watch")
-     :reporters ("json" "sexp")
-     :schema-version 5
+     :reporters ("json")
+     :schema-version 6
      :streaming nil
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
@@ -63,8 +104,27 @@
                :description "Artifact discriminator.")
               (:name "events" :kind "array" :required t
                :description "Ordered test events.")
-              (:name "summary" :kind "object" :required t
-               :description "Aggregated run counts and failure paths.")))
+              (:name "passed" :kind "integer" :required t)
+              (:name "skipped" :kind "integer" :required t)
+              (:name "todos" :kind "integer" :required t)
+              (:name "failed" :kind "integer" :required t)
+              (:name "errored" :kind "integer" :required t)
+              (:name "failedPaths" :kind "array" :required t)
+              (:name "erroredPaths" :kind "array" :required t)))
+    (:kind "cl-weave/results"
+     :commands ("run" "watch")
+     :reporters ("sexp")
+     :schema-version 4
+     :streaming nil
+     :fields ((:name "schema-version" :kind "integer" :required t)
+              (:name "events" :kind "list" :required t)
+              (:name "passed" :kind "integer" :required t)
+              (:name "skipped" :kind "integer" :required t)
+              (:name "todos" :kind "integer" :required t)
+              (:name "failed" :kind "integer" :required t)
+              (:name "errored" :kind "integer" :required t)
+              (:name "failed-paths" :kind "list" :required t)
+              (:name "errored-paths" :kind "list" :required t)))
     (:kind "test-results-start"
      :commands ("run" "watch")
      :reporters ("jsonl")
@@ -79,7 +139,7 @@
     (:kind "test-event"
      :commands ("run" "watch")
      :reporters ("jsonl")
-     :schema-version 2
+     :schema-version 3
      :streaming t
      :fields ((:name "schemaVersion" :kind "integer" :required t
                :description "Artifact-local schema version.")
@@ -162,11 +222,7 @@
                (:name "test.timeoutMs" :kind "integer" :required t
                 :description "Nullable per-entry timeout in milliseconds.")
                (:name "test.concurrent" :kind "boolean" :required t
-                :description "Whether the entry requested concurrent execution.")
-               (:name "test.tags" :kind "array" :required t
-                :description "Compatibility declaration tags preserved as metadata.")
-               (:name "test.dependsOn" :kind "array" :required t
-                :description "Compatibility declaration dependencies preserved as metadata only.")))
+                :description "Whether the entry requested concurrent execution.")))
     (:kind "test-plan-summary"
      :commands ("list")
      :reporters ("jsonl")
@@ -221,11 +277,11 @@
               (:name "score" :kind "number" :required t
                :description "Killed-to-total mutation score.")
               (:name "results" :kind "array" :required t
-               :description "Per-mutation execution results.")))))
+               :description "Per-mutation execution results."))))
 
 (defun reporter-artifact-schemas ()
   "Return structured reporter artifact schema metadata."
-  *reporter-artifact-schemas*)
+  (copy-tree *reporter-artifact-schemas*))
 
 (defun framework-metadata ()
   "Return the structured framework metadata root for embedded Lisp tooling."
@@ -250,4 +306,3 @@
   (append (list :total (length plan))
           (collect-summary-fields plan #'test-plan-entry-status
                                   *plan-summary-field-specs*)))
-

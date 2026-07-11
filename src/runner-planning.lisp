@@ -51,8 +51,6 @@
    :retry (retry-count test)
    :timeout-ms (effective-timeout-ms test)
    :concurrent (effective-concurrent-test-case-p test execution-mode)
-   :tags (test-case-tags test)
-   :depends-on (test-case-depends-on test)
    :location (test-case-location test)))
 
 (defun concurrent-batching-enabled-p (control suppressed-status)
@@ -162,4 +160,3 @@
          (values :collect-test entry nil)))
       (:skip
        (values :skip nil nil)))))
-

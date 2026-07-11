@@ -37,8 +37,6 @@
                   :name "works"
                   :function (lambda () t)
                   :focus t
-                  :tags '(:unit)
-                  :depends-on '("setup")
                   :location '(:file "example.lisp" :line 12)))
            (suite (cl-weave::make-suite
                    :name "model"
@@ -46,7 +44,6 @@
       (expect suite :to-satisfy #'cl-weave::suite-p)
       (expect test :to-satisfy #'cl-weave::test-case-p)
       (expect (cl-weave::suite-children suite) :to-equal (list test))
-      (expect (cl-weave::test-case-tags test) :to-equal '(:unit))
       (expect (princ-to-string suite) :to-contain "model")
       (expect (princ-to-string suite) :to-contain ":children 1")
       (expect (princ-to-string test) :to-contain "works")
@@ -111,3 +108,130 @@
       (let ((result (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
       (expect (reverse events) :to-equal '(:around-cleanup :after)))))
+
+  (it "normalizes an around-each wrapper error as a hook failure"
+    (let* ((cause (make-condition 'simple-error :format-control "wrapper failed"))
+           (suite
+             (cl-weave::make-suite
+              :name "around wrapper"
+              :around-each
+              (list (lambda (next)
+                      (declare (ignore next))
+                      (error cause)))))
+           (test (cl-weave::make-test-case :name "case" :function (lambda () t)))
+           (event (cl-weave::run-test-case suite test))
+           (condition (cl-weave::test-event-condition event)))
+      (expect (cl-weave::test-event-status event) :to-be :error)
+      (expect condition :to-be-instance-of 'cl-weave:hook-failure)
+      (expect (cl-weave:hook-failure-phase condition) :to-be :around-each)
+      (expect (cl-weave:hook-failure-causes condition) :to-equal (list cause))))
+
+  (it "does not wrap a test error propagated through around-each"
+    (let* ((cause (make-condition 'simple-error :format-control "test failed"))
+           (suite
+             (cl-weave::make-suite
+              :name "around continuation"
+              :around-each (list (lambda (next) (funcall next)))))
+           (test
+             (cl-weave::make-test-case
+              :name "case"
+              :function (lambda () (error cause))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :error)
+      (expect (cl-weave::test-event-condition event) :to-be cause)))
+
+(describe "fixture failures"
+  (it "aggregates before-each failures without running the body"
+    (let ((log nil))
+      (let* ((suite
+               (cl-weave::make-suite
+                :name "setup"
+                :before-each
+                (list (lambda ()
+                        (push :first log)
+                        (error "first setup"))
+                      (lambda ()
+                        (push :second log)
+                        (error "second setup")))))
+             (test
+               (cl-weave::make-test-case
+                :name "case"
+                :function (lambda () (push :body log))))
+             (event (cl-weave::run-test-case suite test))
+             (condition (cl-weave::test-event-condition event)))
+        (expect (cl-weave::test-event-status event) :to-be :error)
+        (expect (cl-weave:hook-failure-phase condition) :to-be :before-each)
+        (expect (length (cl-weave:hook-failure-causes condition)) :to-be 2)
+        (expect log :to-equal '(:second :first)))))
+
+  (it "preserves a primary assertion failure and records every cleanup failure"
+    (let* ((cleanup-log nil)
+           (suite
+             (cl-weave::make-suite
+              :name "cleanup"
+              :after-each
+              (list (lambda ()
+                      (push :first cleanup-log)
+                      (error "first cleanup"))
+                    (lambda ()
+                      (push :second cleanup-log)
+                      (error "second cleanup")))))
+           (test
+             (cl-weave::make-test-case
+              :name "primary"
+              :function
+              (lambda ()
+                (error 'cl-weave:assertion-failure
+                       :detail (cl-weave::make-assertion-detail
+                                :form '(expect nil :to-be t))))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect (cl-weave::test-event-condition event)
+              :to-satisfy (lambda (condition)
+                            (typep condition 'cl-weave:assertion-failure)))
+      (expect cleanup-log :to-equal '(:first :second))
+      (expect (length (cl-weave::test-event-secondary-conditions event))
+              :to-be 2)))
+
+  (it "represents an otherwise unhandled after-each failure"
+    (let* ((suite
+             (cl-weave::make-suite
+              :name "cleanup"
+              :after-each (list (lambda () (error "cleanup")))))
+           (test (cl-weave::make-test-case :name "case" :function (lambda () t)))
+           (event (cl-weave::run-test-case suite test))
+           (condition (cl-weave::test-event-condition event)))
+      (expect (cl-weave::test-event-status event) :to-be :error)
+      (expect condition
+              :to-satisfy (lambda (value)
+                            (typep value 'cl-weave:hook-failure)))
+      (expect (cl-weave:hook-failure-phase condition) :to-be :after-each)
+      (expect (length (cl-weave:hook-failure-causes condition)) :to-be 1)))
+
+  (it "turns suite hook failures into events and still runs all cleanup hooks"
+    (let ((root (cl-weave::make-suite :name "root"))
+          (log nil))
+      (let ((cl-weave::*current-suite* root)
+            (cl-weave::*root-suite* root))
+        (cl-weave::register-suite
+         "broken suite"
+         (lambda ()
+           (before-all
+             (push :before log)
+             (error "setup"))
+           (after-all
+             (push :after-first log)
+             (error "first teardown"))
+           (after-all
+             (push :after-second log)
+             (error "second teardown"))
+           (it "must not run" (push :body log)))))
+      (let* ((events (cl-weave::collect-events root))
+             (conditions (mapcar #'cl-weave::test-event-condition events)))
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:error :error))
+        (expect (mapcar #'cl-weave:hook-failure-phase conditions)
+                :to-equal '(:before-all :after-all))
+        (expect (length (cl-weave:hook-failure-causes (second conditions)))
+                :to-be 2)
+        (expect log :to-equal '(:after-first :after-second :before))))))

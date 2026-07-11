@@ -252,8 +252,3 @@
     :expected '(:status :pass :exit-code 0)
     :negated nil
     :pass nil)))
-
-(defun assert-isolated-success (result form)
-  (unless (eq (isolated-result-status result) :pass)
-    (signal-isolated-failure result form))
-  t)
