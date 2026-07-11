@@ -34,133 +34,67 @@
   version
   help)
 
-(defvar *cli-option-handlers* (make-hash-table :test #'equal))
-(defvar *cli-environment-appliers* (make-hash-table :test #'equal))
-(defvar *cli-option-aliases-registered-p* nil)
-(defvar *current-cli-option-inline-p* nil)
+(defvar *cli-option-specs* '())
+(defvar *cli-environment-specs* '())
 
-(defmacro define-cli-option (flag (options rest) &body body)
-  `(setf (gethash ,flag *cli-option-handlers*)
-         (lambda (,options ,rest)
-           ,@body)))
+(defmacro define-cli-option-data (&body specs)
+  `(defparameter *cli-option-specs* ',specs))
 
-(defmacro define-cli-option-alias (alias target)
-  `(let ((handler (gethash ,target *cli-option-handlers*)))
-     (unless handler
-       (error "Unknown CLI option alias target: ~A" ,target))
-     (setf (gethash ,alias *cli-option-handlers*) handler)))
+(defmacro define-cli-environment-data (&body specs)
+  `(defparameter *cli-environment-specs* ',specs))
 
-(defmacro define-cli-environment-applier (flag (options name value) &body body)
-  `(setf (gethash ,flag *cli-environment-appliers*)
-         (lambda (,options ,name ,value)
-           (declare (ignorable ,options ,name ,value))
-           ,@body)))
+(defun cli-option-spec (flag)
+  (find flag *cli-option-specs* :key (lambda (entry) (getf entry :flag))
+        :test #'string=))
 
-(defmacro define-cli-flag-option (flag place &optional (value t value-supplied-p) command)
-  `(define-cli-option ,flag (options rest)
-     (when *current-cli-option-inline-p*
-       (error 'cli-error
-              :message (format nil "~A does not accept an inline value" ,flag)))
-     (setf ,place ,(if value-supplied-p value t))
-     ,@(when command
-         `((setf (cli-options-command options) ,command)))
-     rest))
+(defun cli-environment-spec (flag)
+  (find flag *cli-environment-specs* :key (lambda (entry) (getf entry :flag))
+        :test #'string=))
 
-(defmacro define-cli-value-option (flag place parser &optional argument-name)
-  (let ((value-name (gensym "VALUE"))
-        (raw-name (gensym "RAW"))
-        (name (or argument-name flag)))
-    `(define-cli-option ,flag (options rest)
-       (let* ((,raw-name (require-option-argument ,flag rest))
-              (,value-name ,(if parser
-                                `(funcall ,parser ,raw-name ,name)
-                                raw-name)))
-         (setf ,place ,value-name)
-         (rest rest)))))
+(defun set-cli-option-field (options field value)
+  (ecase field
+    (:command (setf (cli-options-command options) value))
+    (:systems (setf (cli-options-systems options) value))
+    (:load-files (setf (cli-options-load-files options) value))
+    (:reporter (setf (cli-options-reporter options) value))
+    (:name-filter (setf (cli-options-name-filter options) value))
+    (:output-file (setf (cli-options-output-file options) value))
+    (:list (setf (cli-options-list options) value))
+    (:watch (setf (cli-options-watch options) value))
+    (:watch-once (setf (cli-options-watch-once options) value))
+    (:watch-interval (setf (cli-options-watch-interval options) value))
+    (:bail (setf (cli-options-bail options) value))
+    (:retry (setf (cli-options-retry options) value))
+    (:test-timeout-ms (setf (cli-options-test-timeout-ms options) value))
+    (:max-workers (setf (cli-options-max-workers options) value))
+    (:shard (setf (cli-options-shard options) value))
+    (:order (setf (cli-options-order options) value))
+    (:seed (setf (cli-options-seed options) value))
+    (:coverage (setf (cli-options-coverage options) value))
+    (:coverage-output (setf (cli-options-coverage-output options) value))
+    (:pass-with-no-tests (setf (cli-options-pass-with-no-tests options) value))
+    (:snapshot-directory (setf (cli-options-snapshot-directory options) value))
+    (:snapshot-file (setf (cli-options-snapshot-file options) value))
+    (:update-snapshots (setf (cli-options-update-snapshots options) value))
+    (:version (setf (cli-options-version options) value))
+    (:help (setf (cli-options-help options) value)))
+  options)
 
-(defmacro define-cli-optional-value-option (flag place parser default &optional argument-name)
-  (let ((raw-name (gensym "RAW"))
-        (value-name (gensym "VALUE"))
-        (name (or argument-name flag)))
-    `(define-cli-option ,flag (options rest)
-       (multiple-value-bind (,raw-name remaining)
-           (consume-optional-value ,default rest)
-         (let ((,value-name ,(if parser
-                                 `(funcall ,parser ,raw-name ,name)
-                                 raw-name)))
-           (setf ,place ,value-name)
-           remaining)))))
+(defun push-cli-option-field (options field value)
+  (ecase field
+    (:systems (push value (cli-options-systems options)))
+    (:load-files (push value (cli-options-load-files options))))
+  options)
 
-(defmacro define-cli-environment-value-applier (flag place parser)
-  (let ((parsed-name (gensym "PARSED")))
-    `(define-cli-environment-applier ,flag (options name value)
-       (let ((,parsed-name ,(if parser
-                                `(funcall ,parser value name)
-                                'value)))
-         (setf ,place ,parsed-name)))))
+(defun apply-cli-option-command (options spec)
+  (let ((command (getf spec :command)))
+    (when command
+      (set-cli-option-field options :command command))))
 
-(defmacro define-cli-truthy-environment-applier (flag &body body)
-  `(define-cli-environment-applier ,flag (options name value)
-     (declare (ignore value))
-     (when (truthy-environment-p name)
-       ,@body)))
-
-(defmacro define-cli-collection-options (&body specs)
-  `(progn
-     ,@(loop for (flag slot-reader argument-name) in specs
-             collect
-             `(define-cli-option ,flag (options rest)
-                (let ((value (require-option-argument ,flag rest)))
-                  (push value (,slot-reader options))
-                  (rest rest))))))
-
-(defmacro define-cli-flag-options (&body specs)
-  `(progn
-     ,@(loop for spec in specs
-             collect
-             (destructuring-bind (flag place &key (value t value-supplied-p) command) spec
-               `(define-cli-flag-option ,flag ,place
-                  ,@(if value-supplied-p (list value) '())
-                  ,@(when command (list command)))))))
-
-(defmacro define-cli-value-options (&body specs)
-  `(progn
-     ,@(loop for (flag place parser &optional argument-name) in specs
-             collect
-             `(define-cli-value-option ,flag ,place ,parser ,argument-name))))
-
-(defmacro define-cli-optional-value-options (&body specs)
-  `(progn
-     ,@(loop for (flag place parser default &optional argument-name) in specs
-             collect
-             `(define-cli-optional-value-option ,flag ,place ,parser ,default
-                ,argument-name))))
-
-(defmacro define-cli-environment-value-appliers (&body specs)
-  `(progn
-     ,@(loop for (flag place parser) in specs
-             collect
-             `(define-cli-environment-value-applier ,flag ,place ,parser))))
-
-(defmacro define-cli-truthy-environment-appliers (&body specs)
-  `(progn
-     ,@(loop for (flag . body) in specs
-             collect
-             `(define-cli-truthy-environment-applier ,flag
-                ,@body))))
-
-(defun register-metadata-cli-option-aliases ()
-  (unless (boundp '*metadata-cli-options*)
-    (error "CLI metadata options are not loaded yet"))
-  (loop for entry in *metadata-cli-options*
-        for canonical = (getf entry :name)
-        do (loop for alias in (getf entry :aliases)
-                 do (define-cli-option-alias alias canonical)))
-  (setf *cli-option-aliases-registered-p* t))
-
-(defun ensure-cli-option-aliases-registered ()
-  (unless *cli-option-aliases-registered-p*
-    (register-metadata-cli-option-aliases)))
+(defun call-cli-option-parser (parser value name)
+  (if parser
+      (funcall parser value name)
+      value))
 
 (defun string-present-p (value)
   (and value (plusp (length value))))
@@ -307,6 +241,10 @@
   (declare (ignore ignore))
   (pathname value))
 
+(defun parse-system-list-option (value ignore)
+  (declare (ignore ignore))
+  (list value))
+
 (defun require-option-argument (flag rest)
   (let ((value (first rest)))
     (unless (and value (not (option-token-p value)))
@@ -324,85 +262,121 @@
       (values (first rest) (rest rest))
       (values default rest)))
 
-(define-cli-flag-options
-  ("--help" (cli-options-help options))
-  ("--version" (cli-options-version options))
-  ("--list" (cli-options-list options) :value t :command :list)
-  ("--watch" (cli-options-watch options) :value t :command :watch)
-  ("--once" (cli-options-watch-once options))
-  ("--coverage" (cli-options-coverage options))
-  ("--pass-with-no-tests" (cli-options-pass-with-no-tests options))
-  ("--fail-with-no-tests" (cli-options-pass-with-no-tests options) :value nil)
-  ("--update-snapshots" (cli-options-update-snapshots options)))
+(define-cli-option-data
+  (:flag "--help" :kind :flag :field :help)
+  (:flag "--version" :kind :flag :field :version)
+  (:flag "--list" :kind :flag :field :list :command :list)
+  (:flag "--watch" :kind :flag :field :watch :command :watch)
+  (:flag "--once" :kind :flag :field :watch-once)
+  (:flag "--coverage" :kind :flag :field :coverage)
+  (:flag "--pass-with-no-tests" :kind :flag :field :pass-with-no-tests)
+  (:flag "--fail-with-no-tests" :kind :flag :field :pass-with-no-tests :value nil)
+  (:flag "--update-snapshots" :kind :flag :field :update-snapshots)
+  (:flag "--system" :kind :collection :field :systems)
+  (:flag "--load" :kind :collection :field :load-files)
+  (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
+  (:flag "--filter" :kind :value :field :name-filter)
+  (:flag "--output" :kind :value :field :output-file)
+  (:flag "--watch-interval" :kind :value :field :watch-interval
+   :parser parse-positive-number)
+  (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
+  (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms
+   :parser parse-positive-integer)
+  (:flag "--max-workers" :kind :value :field :max-workers
+   :parser parse-positive-integer)
+  (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
+  (:flag "--sequence" :kind :value :field :order
+   :parser parse-sequence-order-option)
+  (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
+  (:flag "--coverage-output" :kind :value :field :coverage-output)
+  (:flag "--snapshot-dir" :kind :value :field :snapshot-directory
+   :parser parse-pathname-option)
+  (:flag "--snapshot-file" :kind :value :field :snapshot-file)
+  (:flag "--bail" :kind :optional-value :field :bail
+   :parser parse-bail-option :default "true"))
 
-(define-cli-collection-options
-  ("--system" cli-options-systems "SYSTEM")
-  ("--load" cli-options-load-files "FILE"))
+(define-cli-environment-data
+  (:flag "--system" :kind :value :field :systems :parser parse-system-list-option)
+  (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
+  (:flag "--filter" :kind :value :field :name-filter)
+  (:flag "--output" :kind :value :field :output-file)
+  (:flag "--watch-interval" :kind :value :field :watch-interval
+   :parser parse-positive-number)
+  (:flag "--bail" :kind :value :field :bail :parser parse-bail-option)
+  (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
+  (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms
+   :parser parse-positive-integer)
+  (:flag "--max-workers" :kind :value :field :max-workers
+   :parser parse-positive-integer)
+  (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
+  (:flag "--sequence" :kind :value :field :order
+   :parser parse-sequence-order-option)
+  (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
+  (:flag "--coverage-output" :kind :value :field :coverage-output)
+  (:flag "--pass-with-no-tests" :kind :value :field :pass-with-no-tests
+   :parser parse-boolean)
+  (:flag "--snapshot-dir" :kind :value :field :snapshot-directory
+   :parser parse-pathname-option)
+  (:flag "--snapshot-file" :kind :value :field :snapshot-file)
+  (:flag "--list" :kind :truthy :field :list :command :list)
+  (:flag "--watch" :kind :truthy :field :watch :command :watch)
+  (:flag "--once" :kind :truthy :field :watch-once)
+  (:flag "--coverage" :kind :truthy :field :coverage)
+  (:flag "--update-snapshots" :kind :truthy :field :update-snapshots))
 
-(define-cli-value-options
-  ("--reporter" (cli-options-reporter options) #'parse-reporter-option)
-  ("--filter" (cli-options-name-filter options) nil)
-  ("--output" (cli-options-output-file options) nil)
-  ("--watch-interval" (cli-options-watch-interval options) #'parse-positive-number)
-  ("--retry" (cli-options-retry options) #'parse-non-negative-integer)
-  ("--test-timeout-ms" (cli-options-test-timeout-ms options) #'parse-positive-integer)
-  ("--test-timeout" (cli-options-test-timeout-ms options) #'parse-positive-integer)
-  ("--max-workers" (cli-options-max-workers options) #'parse-positive-integer)
-  ("--shard" (cli-options-shard options) #'parse-shard-option)
-  ("--sequence" (cli-options-order options) #'parse-sequence-order-option)
-  ("--seed" (cli-options-seed options) #'parse-positive-integer)
-  ("--coverage-output" (cli-options-coverage-output options) nil)
-  ("--snapshot-dir" (cli-options-snapshot-directory options) #'parse-pathname-option)
-  ("--snapshot-file" (cli-options-snapshot-file options) nil))
-
-(define-cli-optional-value-options
-  ("--bail" (cli-options-bail options) #'parse-bail-option "true"))
-
-(define-cli-environment-value-appliers
-  ("--system" (cli-options-systems options) #'list)
-  ("--reporter" (cli-options-reporter options) #'parse-reporter-option)
-  ("--filter" (cli-options-name-filter options) nil)
-  ("--output" (cli-options-output-file options) nil)
-  ("--watch-interval" (cli-options-watch-interval options) #'parse-positive-number)
-  ("--bail" (cli-options-bail options) #'parse-bail-option)
-  ("--retry" (cli-options-retry options) #'parse-non-negative-integer)
-  ("--test-timeout-ms" (cli-options-test-timeout-ms options) #'parse-positive-integer)
-  ("--max-workers" (cli-options-max-workers options) #'parse-positive-integer)
-  ("--shard" (cli-options-shard options) #'parse-shard-option)
-  ("--sequence" (cli-options-order options) #'parse-sequence-order-option)
-  ("--seed" (cli-options-seed options) #'parse-positive-integer)
-  ("--coverage-output" (cli-options-coverage-output options) nil)
-  ("--pass-with-no-tests" (cli-options-pass-with-no-tests options) #'parse-boolean)
-  ("--snapshot-dir" (cli-options-snapshot-directory options) #'parse-pathname-option)
-  ("--snapshot-file" (cli-options-snapshot-file options) nil))
-
-(define-cli-truthy-environment-appliers
-  ("--list"
-   (setf (cli-options-list options) t
-         (cli-options-command options) :list))
-  ("--watch"
-   (setf (cli-options-watch options) t
-         (cli-options-command options) :watch))
-  ("--once"
-   (setf (cli-options-watch-once options) t))
-  ("--coverage"
-   (setf (cli-options-coverage options) t))
-  ("--update-snapshots"
-   (setf (cli-options-update-snapshots options) t)))
+(defun apply-cli-option (options flag rest inline-p)
+  (let ((spec (cli-option-spec flag)))
+    (unless spec
+      (error 'cli-error :message (format nil "Unknown option: ~A" flag)))
+    (ecase (getf spec :kind)
+      (:flag
+       (when inline-p
+         (error 'cli-error
+                :message (format nil "~A does not accept an inline value" flag)))
+       (set-cli-option-field options (getf spec :field)
+                             (if (member :value spec) (getf spec :value) t))
+       (apply-cli-option-command options spec)
+       rest)
+      (:collection
+       (push-cli-option-field options (getf spec :field)
+                              (require-option-argument flag rest))
+       (rest rest))
+      (:value
+       (let* ((raw (require-option-argument flag rest))
+              (name (getf spec :argument-name flag))
+              (value (call-cli-option-parser (getf spec :parser) raw name)))
+         (set-cli-option-field options (getf spec :field) value)
+         (rest rest)))
+      (:optional-value
+       (multiple-value-bind (raw remaining)
+           (consume-optional-value (getf spec :default) rest)
+         (let* ((name (getf spec :argument-name flag))
+                (value (call-cli-option-parser (getf spec :parser) raw name)))
+           (set-cli-option-field options (getf spec :field) value)
+           remaining))))))
 
 (defun apply-cli-option-environment (options entry)
   (let* ((binding (first-environment-binding (getf entry :environment)))
          (name (car binding))
          (value (cdr binding))
          (option-name (getf entry :name))
-         (applier (gethash option-name *cli-environment-appliers*)))
+         (spec (cli-environment-spec option-name)))
     (when binding
-      (unless applier
+      (unless spec
         (error 'cli-error
                :message (format nil
-                                "Unhandled environment-backed CLI option: ~A"
-                                option-name)))
-      (funcall applier options name value))))
+                                 "Unhandled environment-backed CLI option: ~A"
+                                 option-name)))
+      (ecase (getf spec :kind)
+        (:value
+         (set-cli-option-field
+          options
+          (getf spec :field)
+          (call-cli-option-parser (getf spec :parser) value name)))
+        (:truthy
+         (when (truthy-environment-p name)
+           (set-cli-option-field options (getf spec :field) t)
+           (apply-cli-option-command options spec)))))))
 
 (defun options-from-environment ()
   (let ((options (make-cli-options)))

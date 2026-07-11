@@ -58,11 +58,16 @@
                         (make-pathname :directory (list :relative
                                                         (isolated-temp-name prefix)))
                         (uiop:temporary-directory))
-        unless (probe-file pathname)
-          do (ensure-directories-exist pathname)
+        when (isolated-create-temp-directory pathname)
+          do
              (return pathname)
         finally (error "cl-weave: failed to allocate isolated temp directory for ~A"
                        prefix)))
+
+(defun isolated-create-temp-directory (pathname)
+  (unless (probe-file pathname)
+    (ensure-directories-exist pathname)
+    t))
 
 (defun read-file-string-or-empty (pathname)
   (if (probe-file pathname)
@@ -74,6 +79,21 @@
 
 (defun maybe-path-namestring (pathname keep-files)
   (and keep-files pathname (namestring pathname)))
+
+(defun normalize-isolated-keep-files (keep-files)
+  (case keep-files
+    ((nil) nil)
+    ((t) t)
+    (:on-failure :on-failure)
+    (otherwise
+     (error "cl-weave: isolated keep-files must be NIL, T, or :ON-FAILURE, got ~S."
+            keep-files))))
+
+(defun isolated-retain-files-p (keep-files status)
+  (case keep-files
+    ((nil) nil)
+    ((t) t)
+    (:on-failure (not (eq status :pass)))))
 
 #+sbcl
 (defun isolated-environment-entry-name-p (name entry)
@@ -158,11 +178,14 @@
                             keep-files)
   (unless (and (numberp timeout) (plusp timeout))
     (error "cl-weave: isolated timeout must be a positive number, got ~S." timeout))
-  (let* ((script (isolated-temp-pathname "cl-weave-isolated" "lisp"))
+  (let* ((keep-files (normalize-isolated-keep-files keep-files))
+         (script (isolated-temp-pathname "cl-weave-isolated" "lisp"))
          (stdout (isolated-temp-pathname "cl-weave-isolated" "out"))
          (stderr (isolated-temp-pathname "cl-weave-isolated" "err"))
          (home (isolated-temp-directory "cl-weave-isolated-home"))
-         (started (get-internal-real-time)))
+         (started (get-internal-real-time))
+         result
+         retain-files)
     (unwind-protect
          (progn
            (write-isolated-script script form systems package)
@@ -173,30 +196,33 @@
                       :search t
                       :wait nil
                       :output stdout
-                     :error stderr
-                     :environment (isolated-process-environment home)
-                     :if-output-exists :supersede
-                     :if-error-exists :supersede))
+                      :error stderr
+                      :environment (isolated-process-environment home)
+                      :if-output-exists :supersede
+                      :if-error-exists :supersede))
                   (wait-status (wait-isolated-process process timeout))
                   (exit-code (sb-ext:process-exit-code process))
                   (elapsed-ms (/ (* 1000
                                     (- (get-internal-real-time) started))
-                                 internal-time-units-per-second)))
-             (make-isolated-result
-              :status (cond
-                        ((eq wait-status :timeout) :timeout)
-                        ((eql exit-code 0) :pass)
-                        (t :fail))
-              :exit-code exit-code
-              :stdout (read-file-string-or-empty stdout)
-              :stderr (read-file-string-or-empty stderr)
-              :timed-out-p (eq wait-status :timeout)
-              :elapsed-ms elapsed-ms
-              :script-path (maybe-path-namestring script keep-files)
-              :stdout-path (maybe-path-namestring stdout keep-files)
-              :stderr-path (maybe-path-namestring stderr keep-files)
-              :home-path (maybe-path-namestring home keep-files))))
-      (unless keep-files
+                                 internal-time-units-per-second))
+                  (status (cond
+                            ((eq wait-status :timeout) :timeout)
+                            ((eql exit-code 0) :pass)
+                            (t :fail))))
+             (setf retain-files (isolated-retain-files-p keep-files status)
+                   result (make-isolated-result
+                           :status status
+                           :exit-code exit-code
+                           :stdout (read-file-string-or-empty stdout)
+                           :stderr (read-file-string-or-empty stderr)
+                           :timed-out-p (eq wait-status :timeout)
+                           :elapsed-ms elapsed-ms
+                           :script-path (maybe-path-namestring script retain-files)
+                           :stdout-path (maybe-path-namestring stdout retain-files)
+                           :stderr-path (maybe-path-namestring stderr retain-files)
+                           :home-path (maybe-path-namestring home retain-files)))
+             result))
+      (unless retain-files
         (ignore-errors (delete-file script))
         (ignore-errors (delete-file stdout))
         (ignore-errors (delete-file stderr))

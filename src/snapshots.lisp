@@ -61,6 +61,20 @@
         (let ((*read-eval* nil))
           (read stream nil nil))))))
 
+(defun snapshot-entry (key entries)
+  (assoc key entries :test #'string=))
+
+(defun snapshot-entries ()
+  (copy-tree (read-snapshot-file)))
+
+(defun snapshot-value (key)
+  (unless (stringp key)
+    (error "cl-weave:snapshot-value expects a string snapshot key."))
+  (let ((entry (snapshot-entry key (read-snapshot-file))))
+    (if entry
+        (values (cdr entry) t)
+        (values nil nil))))
+
 (defun write-snapshot-file (entries)
   (let ((file (snapshot-file-pathname)))
     (ensure-directories-exist file)
@@ -73,9 +87,6 @@
             (*print-pretty* t))
         (prin1 entries stream)
         (terpri stream)))))
-
-(defun snapshot-entry (key entries)
-  (assoc key entries :test #'string=))
 
 (defun replace-snapshot-entry (key value entries)
   (let ((entry (snapshot-entry key entries)))
@@ -107,6 +118,81 @@
       (error "Matcher :to-match-snapshot expects a string snapshot key."))
     key))
 
+(defun snapshot-sequence-prefix-from-expected (expected)
+  (unless (= (length expected) 1)
+    (error "Matcher :to-match-snapshot-sequence expects exactly one string snapshot key prefix, got ~D values."
+           (length expected)))
+  (let ((prefix (first expected)))
+    (unless (stringp prefix)
+      (error "Matcher :to-match-snapshot-sequence expects a string snapshot key prefix."))
+    prefix))
+
+(defun snapshot-sequence-values (actual)
+  (typecase actual
+    (list actual)
+    ((and vector (not string))
+     (coerce actual 'list))
+    (t
+     (error "Matcher :to-match-snapshot-sequence expects a list or non-string vector of states, got ~S."
+            actual))))
+
+(defun snapshot-sequence-key (prefix index)
+  (format nil "~A[~D]" prefix index))
+
+(defun snapshot-sequence-key-index (prefix key)
+  (when (stringp key)
+    (let* ((prefix-length (length prefix))
+           (key-length (length key)))
+      (when (and (> key-length (+ prefix-length 2))
+                 (string= key prefix :end1 prefix-length :end2 prefix-length)
+                 (char= (char key prefix-length) #\[)
+                 (char= (char key (1- key-length)) #\]))
+        (let ((index 0))
+          (loop for position from (1+ prefix-length) below (1- key-length)
+                for digit = (digit-char-p (char key position) 10)
+                unless digit
+                  do (return nil)
+                do (setf index (+ (* index 10) digit))
+                finally (return index)))))))
+
+(defun snapshot-sequence-entry-p (prefix entry)
+  (and (consp entry)
+       (snapshot-sequence-key-index prefix (car entry))))
+
+(defun remove-snapshot-sequence-entries (prefix entries)
+  (remove-if (lambda (entry)
+               (snapshot-sequence-entry-p prefix entry))
+             entries))
+
+(defun snapshot-sequence-context-values (actual expected prefix index count)
+  (values (append actual
+                  (list :snapshot-prefix prefix
+                        :snapshot-index index
+                        :snapshot-count count))
+          (append expected
+                  (list :snapshot-prefix prefix
+                        :snapshot-index index
+                        :snapshot-count count))))
+
+(defun snapshot-sequence-extra-values (prefix index count entry)
+  (let ((file (namestring (snapshot-file-pathname))))
+    (values (list :snapshot-prefix prefix
+                  :snapshot-key (car entry)
+                  :snapshot-file file
+                  :snapshot-index index
+                  :snapshot-count count
+                  :value nil
+                  :present nil
+                  :reason :unexpected-snapshot)
+            (list :snapshot-prefix prefix
+                  :snapshot-key (car entry)
+                  :snapshot-file file
+                  :snapshot-index index
+                  :snapshot-count count
+                  :value (cdr entry)
+                  :present t
+                  :reason :unexpected-snapshot))))
+
 (defun snapshot-match-or-update-p (actual expected)
   (let* ((key (snapshot-key-from-expected expected))
          (actual-string (snapshot-string actual))
@@ -122,3 +208,49 @@
        (multiple-value-bind (reported-actual reported-expected)
            (snapshot-comparison-values key actual-string entry)
          (values nil reported-actual reported-expected))))))
+
+(defun snapshot-sequence-match-or-update-p (actual expected)
+  (let* ((prefix (snapshot-sequence-prefix-from-expected expected))
+         (values (snapshot-sequence-values actual))
+         (count (length values))
+         (entries (read-snapshot-file)))
+    (if (snapshot-update-enabled-p)
+        (let ((next-entries (remove-snapshot-sequence-entries prefix entries)))
+          (loop for value in values
+                for index from 0
+                do (setf next-entries
+                         (replace-snapshot-entry
+                          (snapshot-sequence-key prefix index)
+                          (snapshot-string value)
+                          next-entries)))
+          (write-snapshot-file next-entries)
+          t)
+        (loop for value in values
+              for index from 0
+              for key = (snapshot-sequence-key prefix index)
+              for actual-string = (snapshot-string value)
+              for entry = (snapshot-entry key entries)
+              unless (and entry (string= actual-string (cdr entry)))
+                do (multiple-value-bind (reported-actual reported-expected)
+                       (snapshot-comparison-values key actual-string entry)
+                     (multiple-value-bind (sequence-actual sequence-expected)
+                         (snapshot-sequence-context-values
+                          reported-actual reported-expected prefix index count)
+                       (return (values nil sequence-actual sequence-expected))))
+              finally
+                 (let ((extra-entry
+                         (find-if (lambda (entry)
+                                    (let ((index (and (consp entry)
+                                                      (snapshot-sequence-key-index
+                                                       prefix
+                                                       (car entry)))))
+                                      (and index (>= index count))))
+                                  entries)))
+                   (if extra-entry
+                       (let ((extra-index
+                               (snapshot-sequence-key-index prefix (car extra-entry))))
+                         (multiple-value-bind (reported-actual reported-expected)
+                             (snapshot-sequence-extra-values
+                              prefix extra-index count extra-entry)
+                           (return (values nil reported-actual reported-expected))))
+                       (return t)))))))

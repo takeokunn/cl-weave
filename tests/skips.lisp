@@ -59,17 +59,13 @@
         (it-skip-if nil "skip-if false"
           (setf ran :skip-if-false))
         (test-run-if t "test-run-if true"
-          (setf ran :test-run-if-true))
-        (it.skipIf nil "camel skipIf false"
-          (setf ran :camel-skipif-false))
-        (test.runIf t "camel test.runIf true"
-          (setf ran :camel-test-runif-true)))
+          (setf ran :test-run-if-true)))
       (let ((events (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status events)
-                :to-equal '(:skip :skip :pass :pass :pass :pass))
+                :to-equal '(:skip :skip :pass :pass))
         (expect (mapcar #'cl-weave::test-event-reason events)
-                :to-equal '("conditional skip" "conditional run-if" nil nil nil nil))
-        (expect ran :to-be :camel-test-runif-true))))
+                :to-equal '("conditional skip" "conditional run-if" nil nil))
+        (expect ran :to-be :test-run-if-true))))
 
   (it "registers conditional suites as skipped or runnable groups"
     (let ((root (cl-weave::make-suite :name "root"))
@@ -81,21 +77,15 @@
           (it "case" (setf ran :skip-body)))
         (describe-run-if nil "run-if suite"
           (it "case" (setf ran :run-if-body)))
-        (describe.skipIf nil "camel enabled suite"
-          (it "case" (setf ran :camel-enabled-body)))
-        (describe.runIf nil "camel blocked suite"
-          (it "case" (setf ran :camel-blocked-body)))
         (describe-run-if t "enabled suite"
           (it "case" (setf ran :enabled-body))))
       (let ((events (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status events)
-                :to-equal '(:skip :skip :pass :skip :pass))
+                :to-equal '(:skip :skip :pass))
         (expect (mapcar #'cl-weave::test-event-reason events)
-                :to-equal '("conditional skip" "conditional run-if" nil "conditional run-if" nil))
+                :to-equal '("conditional skip" "conditional run-if" nil))
         (expect (mapcar #'cl-weave::test-event-path events)
                 :to-equal '(("skip-if suite" "case")
                             ("run-if suite" "case")
-                            ("camel enabled suite" "case")
-                            ("camel blocked suite" "case")
                             ("enabled suite" "case")))
         (expect ran :to-be :enabled-body)))))

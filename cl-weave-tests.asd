@@ -32,6 +32,7 @@
      (:file "list-mode")
      (:file "bail")
      (:file "cli")
+     (:file "community-health")
      (:file "asdf-integration")
      (:file "mocking")
      (:file "reporters"))))

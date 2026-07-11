@@ -547,6 +547,8 @@
    :retry (retry-count test)
    :timeout-ms (effective-timeout-ms test)
    :concurrent (effective-concurrent-test-case-p test execution-mode)
+   :tags (test-case-tags test)
+   :depends-on (test-case-depends-on test)
    :location (test-case-location test)))
 
 (defun concurrent-batching-enabled-p (control suppressed-status)
@@ -569,6 +571,92 @@
                    (walk (rest remaining) (cons child selected))
                    (values (nreverse selected) remaining)))))
     (walk children '())))
+
+(defun describe-event-collection-step
+    (suite child children control focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (typecase child
+    (suite
+     (let ((child-focused (or ancestor-focused (suite-focus child))))
+       (if (selected-child-suite-p
+            child
+            focus-enabled
+            child-focused
+            name-filter
+            location-filter
+            shard-paths)
+           (values :collect-suite child-focused nil nil)
+           (values :skip nil nil nil))))
+    (test-case
+     (if (selected-child-test-p
+          suite
+          child
+          focus-enabled
+          ancestor-focused
+          name-filter
+          location-filter
+          shard-paths)
+         (if (and (effective-concurrent-test-case-p child execution-mode)
+                  (concurrent-batching-enabled-p control suppressed-status))
+             (multiple-value-bind (tests rest-children)
+                 (collect-leading-concurrent-tests
+                  suite
+                  children
+                  focus-enabled
+                  ancestor-focused
+                  name-filter
+                  location-filter
+                  shard-paths
+                  execution-mode)
+               (values :collect-concurrent tests rest-children nil))
+             (values :collect-test
+                     (record-event/control
+                      control
+                      (if suppressed-status
+                          (suppressed-test-event suite child suppressed-status suppressed-reason)
+                          (run-test-case/internal suite child)))
+                     nil
+                     nil))
+         (values :skip nil nil nil)))
+    (t
+     (values :skip nil nil nil))))
+
+(defun describe-plan-collection-step
+    (suite child focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+  (typecase child
+    (suite
+     (let ((child-focused (or ancestor-focused (suite-focus child))))
+       (if (selected-child-suite-p
+            child
+            focus-enabled
+            child-focused
+            name-filter
+            location-filter
+            shard-paths)
+           (values :collect-suite child-focused nil)
+           (values :skip nil nil))))
+    (test-case
+     (if (selected-child-test-p
+          suite
+          child
+          focus-enabled
+          ancestor-focused
+          name-filter
+          location-filter
+          shard-paths)
+         (let* ((status (planned-test-status child suppressed-status))
+                (reason (planned-test-reason child suppressed-status suppressed-reason status))
+                (entry (make-plan-entry
+                        suite
+                        child
+                        status
+                        reason
+                        focus-enabled
+                        ancestor-focused
+                        execution-mode)))
+           (values :collect-test entry nil))
+         (values :skip nil nil)))
+    (t
+     (values :skip nil nil))))
 
 (defun worker-batch-size (tests)
   (let ((limit (normalize-max-workers *max-workers*)))
@@ -695,7 +783,7 @@
     (labels ((continue-with-tail (head-events remaining)
                (recur remaining
                       (lambda (tail)
-                        (funcall continue (append head-events tail)))))
+                       (funcall continue (append head-events tail)))))
              (continue-with-event (event)
                (if (execution-control-stopped control)
                    (funcall continue (list event))
@@ -705,67 +793,47 @@
       (if (or (null children) (execution-control-stopped control))
           (funcall continue '())
           (let ((child (first children)))
-            (typecase child
-              (suite
-               (let ((child-focused (or ancestor-focused (suite-focus child))))
-                 (if (selected-child-suite-p
-                      child
-                      focus-enabled
-                      child-focused
-                      name-filter
-                      location-filter
-                      shard-paths)
-                     (collect-suite-events/k
-                      child
-                      control
-                      (lambda (events)
-                        (if (execution-control-stopped control)
-                            (funcall continue events)
-                            (continue-with-tail events (rest children))))
-                      focus-enabled
-                      child-focused
-                      name-filter
-                      location-filter
-                      shard-paths
-                      suppressed-status
-                      suppressed-reason
-                      execution-mode)
-                     (recur (rest children) continue))))
-              (test-case
-               (if (selected-child-test-p
-                    suite
-                    child
-                    focus-enabled
-                    ancestor-focused
-                    name-filter
-                    location-filter
-                    shard-paths)
-                   (if (and (effective-concurrent-test-case-p child execution-mode)
-                            (concurrent-batching-enabled-p control suppressed-status))
-                       (multiple-value-bind (tests rest-children)
-                           (collect-leading-concurrent-tests
-                            suite
-                            children
-                            focus-enabled
-                            ancestor-focused
-                            name-filter
-                            location-filter
-                            shard-paths
-                            execution-mode)
-                         (continue-with-tail
-                          (mapcar (lambda (event)
-                                    (record-event/control control event))
-                                  (run-concurrent-test-cases suite tests))
-                          rest-children))
-                       (continue-with-event
-                        (record-event/control
-                         control
-                         (if suppressed-status
-                             (suppressed-test-event suite child suppressed-status suppressed-reason)
-                              (run-test-case/internal suite child)))))
-                   (recur (rest children) continue)))
-              (t
-               (recur (rest children) continue))))))))
+            (multiple-value-bind (step payload rest-children)
+                (describe-event-collection-step
+                 suite
+                 child
+                 children
+                 control
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)
+              (ecase step
+                (:skip
+                 (recur (rest children) continue))
+                (:collect-suite
+                 (collect-suite-events/k
+                  child
+                  control
+                  (lambda (events)
+                    (if (execution-control-stopped control)
+                        (funcall continue events)
+                        (continue-with-tail events (rest children))))
+                  focus-enabled
+                  payload
+                  name-filter
+                  location-filter
+                  shard-paths
+                  suppressed-status
+                  suppressed-reason
+                  execution-mode))
+                (:collect-concurrent
+                 (continue-with-tail
+                  (mapcar (lambda (event)
+                            (record-event/control control event))
+                          (run-concurrent-test-cases suite payload))
+                  rest-children))
+                (:collect-test
+                 (continue-with-event payload)))))))))
 
 (defun call-with-collection-context
     (suite name-filter location-filter shard order seed retry timeout-ms max-workers continue)
@@ -863,55 +931,39 @@
              (continue-with-entry (entry)
                (recur (rest children)
                       (lambda (tail)
-                        (funcall continue (cons entry tail))))))
+                       (funcall continue (cons entry tail))))))
       (if (null children)
           (funcall continue '())
           (let ((child (first children)))
-            (typecase child
-              (suite
-               (let ((child-focused (or ancestor-focused (suite-focus child))))
-                 (if (selected-child-suite-p
-                      child
-                      focus-enabled
-                      child-focused
-                      name-filter
-                      location-filter
-                      shard-paths)
-                     (collect-suite-plan/k
-                      child
-                      #'continue-with-tail
-                      focus-enabled
-                      child-focused
-                      name-filter
-                      location-filter
-                      shard-paths
-                      suppressed-status
-                      suppressed-reason
-                      execution-mode)
-                     (recur (rest children) continue))))
-              (test-case
-               (if (selected-child-test-p
-                    suite
-                    child
-                    focus-enabled
-                    ancestor-focused
-                    name-filter
-                    location-filter
-                    shard-paths)
-                   (let* ((status (planned-test-status child suppressed-status))
-                          (reason (planned-test-reason child suppressed-status suppressed-reason status))
-                          (entry (make-plan-entry
-                                  suite
-                                  child
-                                  status
-                                  reason
-                                  focus-enabled
-                                  ancestor-focused
-                                  execution-mode)))
-                     (continue-with-entry entry))
-                   (recur (rest children) continue)))
-              (t
-               (recur (rest children) continue))))))))
+            (multiple-value-bind (step payload)
+                (describe-plan-collection-step
+                 suite
+                 child
+                 focus-enabled
+                 ancestor-focused
+                 name-filter
+                 location-filter
+                 shard-paths
+                 suppressed-status
+                 suppressed-reason
+                 execution-mode)
+              (ecase step
+                (:skip
+                 (recur (rest children) continue))
+                (:collect-suite
+                 (collect-suite-plan/k
+                  child
+                  #'continue-with-tail
+                  focus-enabled
+                  payload
+                  name-filter
+                  location-filter
+                  shard-paths
+                  suppressed-status
+                  suppressed-reason
+                  execution-mode))
+                (:collect-test
+                 (continue-with-entry payload)))))))))
 
 (defun collect-test-plan (suite &key name-filter location-filter shard order seed retry timeout-ms)
   (call-with-collection-context

@@ -60,6 +60,88 @@
       (read-sequence contents stream)
       contents)))
 
+(defun normalize-shell-text (text)
+  (with-output-to-string (stream)
+    (loop with spacing = t
+          for character across text
+          do (cond
+               ((char= character #\')
+                nil)
+               ((member character '(#\Newline #\Tab #\Return #\Space))
+                (unless spacing
+                  (write-char #\Space stream)
+                  (setf spacing t)))
+               (t
+                (write-char character stream)
+                (setf spacing nil))))))
+
+(defun normalize-markdown-text (text)
+  (labels ((collapse-markdown-spacing ()
+             (with-output-to-string (stream)
+               (loop with spacing = t
+                     for character across text
+                     do (cond
+                          ((member character '(#\` #\Newline #\Tab #\Return #\Space))
+                           (unless spacing
+                             (write-char #\Space stream)
+                             (setf spacing t)))
+                          (t
+                           (write-char character stream)
+                           (setf spacing nil))))))
+           (tight-punctuation-p (character)
+             (member character '(#\, #\. #\: #\; #\) #\]))))
+    (let* ((collapsed (string-trim '(#\Space)
+                                   (collapse-markdown-spacing))))
+      (with-output-to-string (stream)
+        (loop for index from 0 below (length collapsed)
+              for character = (char collapsed index)
+              for next = (and (< (1+ index) (length collapsed))
+                              (char collapsed (1+ index)))
+              unless (and (char= character #\Space)
+                          next
+                          (tight-punctuation-p next))
+                do (write-char character stream))))))
+
+(defun workflow-command-string (command)
+  (format nil "~{~A~^ ~}" command))
+
+(defun normalize-command-document-text (text)
+  (with-output-to-string (stream)
+    (loop with spacing = t
+          for character across text
+          do (cond
+               ((member character '(#\` #\Newline #\Tab #\Return #\Space))
+                (unless spacing
+                  (write-char #\Space stream)
+                  (setf spacing t)))
+               (t
+                (write-char character stream)
+                (setf spacing nil))))))
+
+(defun split-normalized-words (text)
+  (remove ""
+          (uiop:split-string text :separator '(#\Space))
+          :test #'string=))
+
+(defun ordered-word-subsequence-p (needle haystack)
+  (loop with haystack-length = (length haystack)
+        with position = 0
+        for word in needle
+        do (loop while (and (< position haystack-length)
+                            (not (string= word (nth position haystack))))
+                 do (incf position))
+           (when (>= position haystack-length)
+             (return-from ordered-word-subsequence-p nil))
+           (incf position)
+        finally (return t)))
+
+(defun markdown-contains-command-p (markdown command)
+  (ordered-word-subsequence-p
+   (split-normalized-words
+    (normalize-shell-text (workflow-command-string command)))
+   (split-normalized-words
+    (normalize-command-document-text markdown))))
+
 (defvar *fixture-value* nil)
 (defvar *fixture-events* nil)
 (defun sample-size (value) (length value))
@@ -73,6 +155,16 @@
 (defmethod render-widget ((widget sample-widget) stream)
   (declare (ignore stream))
   (sample-widget-name widget))
+
+(defgeneric render-widget-mode (mode stream))
+
+(defmethod render-widget-mode ((mode (eql :preview)) stream)
+  (declare (ignore stream))
+  mode)
+
+(defmethod render-widget-mode ((mode sample-widget) stream)
+  (declare (ignore stream))
+  (sample-widget-name mode))
 
 (defmacro sample-unless (condition &body body)
   `(if ,condition

@@ -50,6 +50,33 @@
       (expect (getf summary :survived) :to-be 0)
       (expect (getf summary :score) :to-be 1.0)))
 
+  (it "checks mutation score quality gates for CI"
+    (let ((killed (run-mutations '(+ 1 1)
+                                 (lambda (form mutation)
+                                   (declare (ignore mutation))
+                                   (= (eval form) 2))))
+          (survived (run-mutations '(+ 1 1)
+                                   (lambda (form mutation)
+                                     (declare (ignore form mutation))
+                                     t))))
+      (multiple-value-bind (pass-p summary)
+          (mutation-score-passes-p killed 1.0)
+        (expect pass-p :to-be t)
+        (expect (getf summary :score) :to-be 1.0))
+      (multiple-value-bind (pass-p summary)
+          (mutation-score-passes-p survived 1.0)
+        (expect pass-p :to-be nil)
+        (expect (getf summary :survived) :to-be 1))
+      (expect (assert-mutation-score killed 1.0) :to-satisfy #'listp)
+      (handler-case
+          (progn
+            (assert-mutation-score survived 1.0)
+            (expect nil :to-be t))
+        (mutation-score-failure (condition)
+          (expect (mutation-score-failure-min-score condition) :to-be 1.0)
+          (expect (getf (mutation-score-failure-summary condition) :survived)
+                  :to-be 1)))))
+
   (it "keeps unexpected harness errors visible"
     (let* ((results (run-mutations '(+ 1 1)
                                    (lambda (form mutation)
@@ -74,4 +101,3 @@
       (expect json-output :to-contain "\"kind\":\"mutations\"")
       (expect json-output :to-contain "\"killed\":1")
       (expect json-output :to-contain "\"operator\":\"ARITHMETIC-OPERATOR\""))))
-

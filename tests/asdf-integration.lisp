@@ -92,6 +92,48 @@
                     :scope :full-suite
                     :new-state new-state))))
 
+  (it "skips reruns when watch sees no changed files"
+    (let ((calls nil))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave:run-system)
+            (lambda (&rest arguments)
+              (push arguments calls)
+              (error "run-system should not be called when nothing changed"))))
+        (multiple-value-bind (next-state continuep)
+            (cl-weave::run-watch-cycle
+             "cl-weave"
+             (list :changed nil
+                   :location-filter nil
+                   :scope :full-suite
+                   :new-state '((#P"/tmp/cl-weave/unchanged.lisp" . 1)))
+             :reporter :json
+             :stream *standard-output*
+             :status-stream *error-output*
+             :once nil)
+          (expect next-state :to-be nil)
+          (expect continuep :to-be-truthy)
+          (expect calls :to-equal nil)))))
+
+  (it "returns failure in once mode when the watched run fails"
+    (multiple-value-bind (next-state continuep)
+        (with-mocked-functions
+            (((symbol-function 'cl-weave:run-system)
+              (lambda (&rest arguments)
+                (declare (ignore arguments))
+                nil)))
+          (cl-weave::run-watch-cycle
+           "cl-weave"
+           (list :changed (list #P"/tmp/cl-weave/failed-watch.lisp")
+                 :location-filter nil
+                 :scope :full-suite
+                 :new-state '((#P"/tmp/cl-weave/failed-watch.lisp" . 2)))
+           :reporter :json
+           :stream *standard-output*
+           :status-stream (make-string-output-stream)
+           :once t))
+      (expect next-state :to-be nil)
+      (expect continuep :to-be nil)))
+
   (it "runs watch mode once without reloading the active test suite"
     (let ((calls nil)
           (output nil))
@@ -264,4 +306,3 @@
                              (list "cl-weave" :json "watch" nil nil nil nil nil
                                    nil nil nil nil nil nil)))))
       (expect output :to-contain "FULL-SUITE"))))
-

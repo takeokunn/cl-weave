@@ -1,5 +1,7 @@
 # cl-weave
 
+[![CI](https://github.com/takeokunn/cl-weave/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/takeokunn/cl-weave/actions/workflows/ci.yml)
+
 `cl-weave` is a modern Common Lisp testing framework inspired by Vitest and
 designed around Lisp's strengths: macros, conditions, dynamic bindings, and
 reproducible Nix workflows.
@@ -7,10 +9,26 @@ reproducible Nix workflows.
 The project is intentionally dependency-free at the core. It should be easy to
 run in CI, embed in ASDF projects, and extend from the REPL.
 
+## Support
+
+Use [docs/support-policy.md](docs/support-policy.md) for the canonical support
+boundaries.
+
+Use [docs/issue-reporting.md](docs/issue-reporting.md) for reproducible bugs
+and behavior questions.
+
+Use [CONTRIBUTING.md](CONTRIBUTING.md) for development, review, and release
+workflow expectations.
+
+Use [SECURITY.md](SECURITY.md) for private vulnerability reporting. Do not put
+exploit details in a public issue.
+
 ## Status
 
-Pre-1.0, but already usable for real projects. The current focus is tightening
-contracts, distribution ergonomics, and CI/AI integration around a stable core:
+Pre-1.0. The capability list below is the intended public surface, and it is
+validated by the CI entrypoints in this README on Linux and macOS. Pre-1.0
+releases may still introduce deliberate breaking changes; the expectations are
+documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
@@ -18,7 +36,7 @@ contracts, distribution ergonomics, and CI/AI integration around a stable core:
 - `it-each` / `test-each` and `describe-each` compile-time table tests
 - Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
   `expect.resolves`, `expect.rejects`, `expect.assertions`,
-  `expect.hasassertions`, exact `|expect.hasAssertions|`, and mock aliases
+  `expect.hasassertions`, and mock aliases
   using Common Lisp reader spelling
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
@@ -30,13 +48,14 @@ contracts, distribution ergonomics, and CI/AI integration around a stable core:
 - `describe-todo` / `it-todo` / `test-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
-- AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, package exports, matchers, mutations, and aliases
+- AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, capability matrix, package exports, policy documents, matchers, mutations, MOP architecture assertions, and aliases
 - source file metadata in structured reporters and test plans
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style `it-concurrent` / `test-concurrent` / `describe-concurrent` parallel execution modes
 - Vitest-style `it-fails` / `test-fails` expected-failure cases
+- FiveAM-style migration guidance for the native suite DSL
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
 - SBCL `sb-cover` reset/save integration for CI coverage artifacts
@@ -100,13 +119,24 @@ perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter js
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- doctor --reporter json --output cl-weave-doctor.json
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave-tests --filter parser
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
 ```
 
-Lisp-side agents can discover the same structured artifact contracts with
+Lisp-side agents can read the full structured framework metadata with
+`(cl-weave:framework-metadata)` and the artifact-only contract with
 `(cl-weave:reporter-artifact-schemas)` without shelling out to the CLI.
+
+## Adoption
+
+See [docs/adoption.md](docs/adoption.md)
+for the integration recipe. It covers ASDF wiring, Nix entrypoints, CI
+commands, migration guidance for FiveAM-style suites, and top-level runner
+helpers such as `run`, `explain!`, and `results-status`. Migrate suite by
+suite rather than rewriting everything at once, and keep existing CI
+entrypoints green until the new `cl-weave` entrypoint matches them.
 
 ### AI Discovery
 
@@ -119,18 +149,54 @@ perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --report
 
 The metadata payload advertises CLI commands, typed options, finite choices,
 command-specific choices, environment variables, CI quality gates,
-Vitest-shaped aliases, public package exports, matchers, mutation operators, and
-`artifactSchemas`. `artifactSchemas` is the contract for structured artifacts
+Vitest-shaped aliases, public package exports, matchers, mutation operators,
+`mop-architecture-assertions`, `capabilityMatrix`, `artifactSchemas`, and
+`distributionChannels`.
+For runtime self-diagnostics, `doctor --reporter json` emits a structured
+`doctor-report` artifact without requiring an ASDF system argument.
+The report separates bundled `cl-weave` visibility, optional requested-system
+resolution, workspace `.asd` discovery, and output-target configuration so CI
+and agents can distinguish environment drift from an actually missing target
+system.
+`artifactSchemas` is the contract for structured artifacts
 such as JSON run results, JSONL run events, JSON test plans, JSONL plan entries,
-and mutation reports. Each entry declares the artifact kind, producing
+doctor reports, and mutation reports. Each entry declares the artifact kind, producing
 commands, supported reporters, artifact-local `schemaVersion`, streaming mode,
 and field map, so agents can plan parsers and CI integrations without
 hard-coding reporter internals. Result artifacts intentionally advertise both
 `run` and `watch`, because `watch --once` emits the same machine-readable shape
 as a normal run. `qualityGates` exposes validation commands as argv vectors
 with explicit timeouts and expected artifacts, so agents can reproduce CI
-without scraping prose. The complete artifact list is intentionally discovered
-from the command output; documentation examples are illustrative.
+without scraping prose.
+`distributionChannels` is the canonical install and run table for source
+checkout execution, local Nix packaging, and remote Nix packaging. Agents
+should prefer its `installCommand` and `runCommand` vectors over inferring
+entrypoints from surrounding prose examples. The maintainer-facing verification
+and scope boundary for those channels lives in
+[docs/distribution-policy.md](docs/distribution-policy.md).
+`capabilityMatrix` is the readiness table: each entry links a high-level
+feature to implemented status, representative public APIs, validation gates,
+and canonical documentation. The complete artifact and capability lists are
+intentionally discovered from the command output; documentation examples are
+illustrative.
+
+## Supported Runtime
+
+`cl-weave` targets SBCL first. Linux and macOS are intended CI targets, and
+SBCL-specific features such as subprocess isolation and coverage handling are
+documented in [docs/runtime-support.md](docs/runtime-support.md). A platform is
+release-ready only when the ASDF load gate and the relevant CI entrypoints pass
+there.
+
+### Capability Matrix
+
+Runtime metadata exposes `capabilityMatrix` so humans and agents can evaluate
+framework readiness without guessing from examples. Every advertised
+capability has a corresponding readiness entry; highlighted areas include
+`vitest-dsl`, `expect-matchers`,
+`fixtures-and-restarts`, `mocks-and-spies`, `property-and-mutation`,
+`structured-reporting`, `watch-and-parallelism`, `isolation-and-cps`, and
+`ai-discovery-metadata`.
 
 ## CI
 
@@ -140,7 +206,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
@@ -163,9 +229,9 @@ pushes fresh build outputs back to the cache. The workflow also pulls from
 `nix-community` via `extraPullNames` to reduce cold-start latency.
 
 The workflow runs on Linux and macOS, then uploads `cl-weave-results.json`,
-`cl-weave-events.jsonl`, `cl-weave.coverage`, `cl-weave-cli-results.json`,
-`cl-weave-metadata.json`, `cl-weave-plan.json`, `cl-weave-watch-once.json`,
-`cl-weave-tap.txt`, and `cl-weave-junit.xml` as
+`cl-weave-events.jsonl`, `cl-weave.coverage`, `cl-weave-coverage-report/`,
+`cl-weave-cli-results.json`, `cl-weave-metadata.json`, `cl-weave-plan.json`,
+`cl-weave-watch-once.json`, `cl-weave-tap.txt`, and `cl-weave-junit.xml` as
 `cl-weave-test-reports-${system}` artifacts. JSON result
 schema v5 is intended for AI agents and external automation: the root object
 identifies itself with `kind: "test-results"`, and every event includes both a
@@ -201,20 +267,27 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (expect value :to-be-greater-than 10)
 (expect values :to-have-length 3)
 (expect (lambda () (parse-integer "42")) :to-run-under-ms 5)
-(expect (lambda () (loop repeat 10 collect :x)) :to-cons-less-than 4096)
+(expect (lambda () (loop repeat 10 collect :x)) :to-allocate-under 4096)
 (expect form :to-match-inline-snapshot "(:ok 42)")
 (let ((*snapshot-directory* #P"tests/__snapshots__/")
       (*snapshot-file-name* "snapshots.sexp"))
   (with-snapshot-updates
     (expect form :to-match-snapshot "suite/case"))
-  (expect form :to-match-snapshot "suite/case"))
+  (expect form :to-match-snapshot "suite/case")
+  (with-snapshot-updates
+    (expect '((:pc 0 :acc 0) (:pc 1 :acc 1))
+            :to-match-snapshot-sequence
+            "vm/run"))
+  (expect '((:pc 0 :acc 0) (:pc 1 :acc 1))
+          :to-match-snapshot-sequence
+          "vm/run"))
 (expect value :not :to-be nil)
 (expect-not value :to-be nil)
 (expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
 (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
+(expect.poll (lambda () (current-state job)) (:timeout-ms 200 :interval-ms 10) :to-be :ready)
 (expect.assertions 2)
 (expect.hasassertions)
-(|expect.hasAssertions|)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -230,21 +303,22 @@ assertion fails with `:matcher :resolves` and `:actual` containing `:state`,
 `:condition-type`, and `:message`. `expect.rejects` requires the thunk to
 signal a condition and then applies the matcher to that condition object; a
 normally returned value fails with `:matcher :rejects`.
-The canonical Common Lisp forms are `expect-resolves` and `expect-rejects`;
-the dotted Vitest aliases macro-expand into those exported forms.
+`expect.poll` repeatedly evaluates a zero-argument thunk until the matcher
+passes or the timeout expires. Polling failures report `:matcher :poll` with
+structured timeout metadata such as `:attempts`, `:timeout-ms`,
+`:interval-ms`, `:last-value`, and optional `:last-condition`.
+The canonical Common Lisp forms are `expect-resolves`, `expect-rejects`, and
+`expect-poll`; the dotted Vitest aliases macro-expand into those exported
+forms.
 
-`expect.assertions`, `expect.hasassertions`, and the exact escaped
-`|expect.hasAssertions|` alias are checked at the end of each test attempt and
-reset for retries and concurrent tests. Declaration forms do not count as
-assertions; executed `expect`, `expect-not`, smart assertions, and thunk
-aliases count once.
+`expect.assertions` and `expect.hasassertions` are checked at the end of each
+test attempt and reset for retries and concurrent tests. Declaration forms do
+not count as assertions; executed `expect`, `expect-not`, smart assertions,
+and thunk aliases count once.
 
 Dotted Vitest-shaped aliases use Common Lisp's actual unescaped reader spelling.
 JavaScript camelCase names are therefore lower-case in source, package exports,
-and metadata unless the symbol is explicitly escaped. `|expect.hasAssertions|`
-is exported as an exact camelCase compatibility alias for generators that carry
-Vitest spellings through verbatim. Prefer canonical hyphenated forms for
-generated Lisp.
+and metadata. Prefer canonical hyphenated forms for generated Lisp.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -265,6 +339,16 @@ updates inside a dynamic scope. For command-line usage,
 External snapshot failures report `:snapshot-key`, `:snapshot-file`, `:value`,
 `:reason`, and first-difference data through the normal structured assertion
 payload, so agents do not need to parse human-readable failure strings.
+`:to-match-snapshot-sequence` stores a list or non-string vector of replay
+states as deterministic `prefix[n]` snapshot keys, for example `vm/run[0]` and
+`vm/run[1]`. Snapshot update mode replaces all entries for that prefix, which
+prunes stale states. Verification fails on missing, mismatched, or unexpected
+extra stored states and adds `:snapshot-prefix`, `:snapshot-index`, and
+`:snapshot-count` to the structured payload.
+`snapshot-entries` returns the current external snapshot alist, and
+`snapshot-value` returns the serialized value plus a presence flag for one
+explicit key. These APIs are intended for replay tools and CI agents that need
+to inspect snapshot artifacts without depending on private file readers.
 
 Built-in matchers:
 
@@ -293,12 +377,13 @@ Built-in matchers:
 - `:to-be-less-than-or-equal`
 - `:to-throw`
 - `:to-run-under-ms`
-- `:to-cons-less-than`
+- `:to-allocate-under`
 - `:to-have-slot`
 - `:to-have-method-specialized-on`
 - `:to-expand-to`
 - `:to-match-inline-snapshot`
 - `:to-match-snapshot`
+- `:to-match-snapshot-sequence`
 - `:to-have-been-called`
 - `:to-have-been-called-times`
 - `:to-have-been-called-with`
@@ -405,7 +490,7 @@ inside the matcher:
 
 ```lisp
 (expect (lambda () (parse-integer "42")) :to-run-under-ms 5)
-(expect (lambda () (loop repeat 10 collect :x)) :to-cons-less-than 4096)
+(expect (lambda () (loop repeat 10 collect :x)) :to-allocate-under 4096)
 ```
 
 Each matcher executes its thunk once. If you assert both runtime and allocation,
@@ -559,6 +644,19 @@ literals, and `if` branch swaps. `report-mutations-sexp` and
 `report-mutations-json` emit stable, AI-readable mutation reports with killed,
 survived, errored, and score fields.
 
+Use `mutation-score-passes-p` or `assert-mutation-score` to turn mutation
+results into CI gates. A gate passes only when the score meets the threshold
+and there are no survived or errored mutants:
+
+```lisp
+(let ((results (cl-weave:run-mutations
+                '(+ 1 1)
+                (lambda (form mutation)
+                  (declare (ignore mutation))
+                  (= (eval form) 2)))))
+  (cl-weave:assert-mutation-score results 0.95))
+```
+
 ### Table Tests
 
 ```lisp
@@ -620,13 +718,17 @@ suite-level `describe.only.each`, `describe.concurrent.each`,
 `describe.sequential.each`, `describe.skip.each`, and `describe.todo.each`. The
 full Vitest-shaped surface also includes
 `it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
-`it.runIf`, `it.skip`, `it.skip-if`, `it.skipIf`, `it.todo`, `it.isolated`,
+`it.skip`, `it.skip-if`, `it.todo`, `it.isolated`,
 `it.property`, matching `test.*` aliases, suite-level `describe.concurrent`,
-`describe.sequential`, `describe.only`, `describe.run-if`, `describe.runIf`,
-`describe.skip`, `describe.skip-if`, `describe.skipIf`, `describe.todo`, plus
-`expect.not`. Fixture hooks intentionally keep canonical Lisp names only.
+`describe.sequential`, `describe.only`, `describe.run-if`,
+`describe.skip`, `describe.skip-if`, `describe.todo`, plus `expect.not`.
+Fixture hooks intentionally keep canonical Lisp names only.
 `docs/ai-contract.md` is the machine-readable normalization contract for
-agents.
+agents. Runtime metadata also exposes `referenceDocuments`, `citation`,
+`supportChannels`, `securityContacts`, `lifecycle`, `runtimeSupport`, and
+`releaseProcess` so external tools can discover canonical docs, citation
+metadata, support routing, disclosure paths, platform support, release
+policy, and project status without scraping prose.
 
 ### Conditional Runs
 
@@ -637,10 +739,10 @@ agents.
 
 (it-run-if (member :sbcl *features*)
     "uses SBCL allocation counters"
-  (expect (lambda () (list :ok)) :to-cons-less-than 4096))
+  (expect (lambda () (list :ok)) :to-allocate-under 4096))
 
-(it.runIf (member :sbcl *features*)
-    "uses the exact Vitest-shaped alias"
+(test-run-if (member :sbcl *features*)
+    "uses the test alias for conditional registration"
   (expect :ok :to-be :ok))
 
 (describe-run-if (member :linux *features*)
@@ -654,9 +756,7 @@ suites when the condition is true. `it-run-if`, `test-run-if`, and
 `describe-run-if` register skipped tests or suites when the condition is false.
 Conditions are evaluated while the test file registers tests; skipped branches
 emit ordinary `:skip` events with deterministic reasons, and their hooks and
-bodies are not executed. The same behavior is also exported through
-`it.skipIf`, `it.runIf`, `test.skipIf`, `test.runIf`, `describe.skipIf`, and
-`describe.runIf`.
+bodies are not executed.
 
 ### Property Tests
 
@@ -677,9 +777,13 @@ Built-in generators:
 
 - `(gen-integer :min -100 :max 100)`
 - `(gen-boolean)`
+- `(gen-character :alphabet "abc")`
 - `(gen-member '(:a :b :c))`
 - `(gen-map function generator :name :derived)`
 - `(gen-list generator :min-length 0 :max-length 8)`
+- `(gen-string :min-length 0 :max-length 16 :alphabet "abc")`
+- `(gen-vector generator :min-length 0 :max-length 8)`
+- `(gen-state-machine initial-state transition event-generator :min-length 0 :max-length 16)`
 - `(gen-one-of generator-a generator-b ...)`
 - `(gen-recursive base-generator builder :max-depth 4)`
 - `(gen-symbol :names '("x" "y") :package "CL-USER")`
@@ -692,11 +796,16 @@ Built-in generators:
 Generator combinators keep data and logic separate: generators describe how
 values are produced and shrunk, while `it-property` owns execution, failure
 capture, and reporting. `gen-list` shrinks both list structure and individual
-elements; `gen-recursive` gives the builder a self-referential generator for
-bounded S-expression and AST shapes; `gen-sexp` and `gen-form` provide common
-Lisp data and macro-expansion inputs without embedding runner logic in tests;
-`gen-tuple` shrinks each slot through its corresponding generator;
-`gen-such-that` keeps generated and shrunk values inside the predicate.
+elements; `gen-string` and `gen-vector` apply the same structural and element
+shrinking to sequence-heavy APIs; `gen-state-machine` generates bounded event
+streams and replayed state traces as `(:initial ... :events ... :states ...
+:final ...)`, shrinking the event stream while recomputing states through the
+same transition function; `gen-recursive` gives the builder a self-referential
+generator for bounded S-expression and AST shapes; `gen-sexp` and `gen-form`
+provide common Lisp data and macro-expansion inputs without embedding runner
+logic in tests; `gen-tuple` shrinks each slot through its corresponding
+generator; `gen-such-that` keeps generated and shrunk values inside the
+predicate.
 
 ```lisp
 (it-property "command shape is stable"
@@ -713,6 +822,22 @@ Lisp data and macro-expansion inputs without embedding runner logic in tests;
                      :max-depth 3
                      :max-arguments 2)))
   (expect form :to-satisfy (lambda (value) (or (atom value) (consp value)))))
+
+(it-property "state machine traces stay replayable"
+    ((trace (gen-state-machine
+             :idle
+             (lambda (state event)
+               (ecase event
+                 (:start :running)
+                 (:stop :idle)
+                 (:error :failed)))
+             (gen-member '(:start :stop :error))
+             :min-length 1
+             :max-length 5)))
+  (expect (getf trace :states) :to-satisfy
+          (lambda (states)
+            (= (length states) (1+ (length (getf trace :events))))))
+  (expect (getf trace :final) :to-be (first (last (getf trace :states)))))
 ```
 
 Use `*property-test-count*` and `*property-seed*` for dynamic REPL control, or
@@ -985,9 +1110,11 @@ perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENC
 List mode discovers selected tests without executing suite hooks or test
 bodies. It composes with focus, filtering, skipped suites, and todo suites, and
 emits `:run`, `:skip`, or `:todo` plan entries with `path`, `pathString`,
-`location`, `reason`, `focused`, `retry`, `timeout-ms`, and `concurrent`
-metadata. `location` records the macro source file when available; JSON emits
-`null` for manually constructed tests without source metadata.
+`location`, `reason`, `focused`, `retry`, `timeout-ms`, `concurrent`, `tags`,
+and `dependsOn` metadata. `location` records the macro source file when
+available; JSON emits `null` for manually constructed tests without source
+metadata. `tags` and `dependsOn` are descriptive metadata only; cl-weave does
+not infer filtering or dependency ordering from them.
 
 For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
 and exits with status `0`:
@@ -1011,7 +1138,8 @@ AI agents can also query plans as plain Lisp facts:
 ```
 
 `test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
-`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, `:tag`,
+`:depends-on`, and `:location`.
 `logic-where`, `logic-program`, `logic-run`, and `test-plan-where` keep data and
 logic separate: relations stay plain lists, while query and rule syntax stays in
 macros. Variables are symbols whose names start with `?`, clauses are matched
@@ -1139,14 +1267,15 @@ original function cells are restored with `unwind-protect`.
 
 ```lisp
 (it-isolated "ffi parser rejects invalid input"
-    (:systems ("my-project-tests") :timeout 5)
+    (:systems ("my-project-tests") :timeout 5 :keep-files :on-failure)
   (expect (parse-native-buffer #(0 1 2)) :to-equal :invalid))
 
 (let ((result (run-isolated
                '(error "native boundary failed")
                :systems '("my-project-tests")
                :package "MY-PROJECT/TESTS"
-               :timeout 5)))
+               :timeout 5
+               :keep-files :on-failure)))
   (expect (isolated-result-status result) :to-be :fail))
 ```
 
@@ -1154,8 +1283,10 @@ original function cells are restored with `unwind-protect`.
 exits or timeouts as normal structured assertion failures. Use it around FFI,
 native parser, and crash-boundary tests where the parent REPL or CI process
 must stay alive. `run-isolated` returns captured stdout/stderr strings in all
-cases. When `:keep-files t` is enabled, it also retains the generated script,
-stdout, stderr, and temporary HOME directory paths via
+cases. `:keep-files` accepts `nil`, `t`, or `:on-failure`; the last option keeps
+artifacts only for non-passing child processes. When files are retained, the
+generated script, stdout, stderr, and temporary HOME directory paths are exposed
+via
 `isolated-result-script-path`, `isolated-result-stdout-path`,
 `isolated-result-stderr-path`, and `isolated-result-home-path`. With the
 default `:keep-files nil`, those path accessors return `nil` and the temporary
@@ -1172,23 +1303,34 @@ artifacts are deleted before control returns to the parent process.
 (cl-weave:run-all :reporter :github)
 (cl-weave:run-all :reporter :junit)
 (cl-weave:run-all :reporter :json :name-filter "properties")
-(cl-weave:run-all :coverage t :coverage-output "cl-weave.coverage")
+(cl-weave:run-all :coverage t
+                  :coverage-output "cl-weave.coverage"
+                  :coverage-report-directory "cl-weave-coverage-report/")
 ```
 
 `run-all` returns true when the suite passed and false otherwise.
 
 Coverage support is optional and SBCL-specific. `run-all :coverage t` requires
-`sb-cover`, resets counters before execution by default, and saves a readable
-coverage state with `sb-cover:save-coverage-in-file` when `:coverage-output` is
-provided. Pass `:coverage-reset nil` to merge the run into existing counters.
-Projects remain responsible for loading code with SBCL coverage instrumentation;
-cl-weave only manages the test-run reset/save boundary.
+`sb-cover`, resets counters before execution by default, emits a populated HTML
+report with `sb-cover:report` when `:coverage-report-directory` is provided,
+and saves readable coverage state with `sb-cover:save-coverage-in-file` when
+`:coverage-output` is provided. Empty reports are rejected so CI cannot publish
+meaningless coverage artifacts. Pass `:coverage-reset nil` to merge the run
+into existing counters.
+
+When `CL_WEAVE_COVERAGE=1` is set, `scripts/run-tests.lisp` enables
+`sb-cover:store-coverage-data` before loading the project systems and forces a
+coverage-aware reload, so the generated HTML report reflects the current test
+run without extra wrapper code in the project under test.
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. The `:jsonl` reporter emits one
 JSON object per line for streaming CI logs and agent ingestion. These structured
 reporters include failed and errored path summaries for focused reruns. See
-`docs/ai-contract.md`.
+`docs/ai-contract.md`. The metadata root also advertises these canonical
+non-policy paths through `referenceDocuments` and `citation`, plus support
+and lifecycle contracts through `supportChannels`, `securityContacts`,
+`lifecycle`, `runtimeSupport`, and `releaseProcess`.
 
 `scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`, `ndjson`,
 `tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
@@ -1202,8 +1344,10 @@ global retry default and `CL_WEAVE_TEST_TIMEOUT_MS=N` or
 environment variables treat
 `0`, `false`, `no`, `off`, and `nil` as false. Set
 `CL_WEAVE_PASS_WITH_NO_TESTS=false` to fail CI when filters select no tests.
-Set `CL_WEAVE_COVERAGE=1` to wrap execution with SBCL `sb-cover`, and set
-`CL_WEAVE_COVERAGE_FILE=path` to save the coverage state as a CI artifact.
+Set `CL_WEAVE_COVERAGE=1` to wrap execution with SBCL `sb-cover`, set
+`CL_WEAVE_COVERAGE_REPORT_DIR=path/` to emit a populated HTML coverage report,
+and set `CL_WEAVE_COVERAGE_FILE=path` to save the coverage state as a CI
+artifact.
 Set `CL_WEAVE_SNAPSHOT_DIR`, `CL_WEAVE_SNAPSHOT_FILE`, and
 `CL_WEAVE_UPDATE_SNAPSHOTS=1` to control snapshot location and updates from CI.
 Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
@@ -1262,6 +1406,40 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 `CL_WEAVE_REPORTER=tap`, `CL_WEAVE_REPORTER=json`, or
 `CL_WEAVE_REPORTER=jsonl`.
 
+## Project Operations
+
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Adoption guide: [docs/adoption.md](docs/adoption.md)
+- AI contract: [docs/ai-contract.md](docs/ai-contract.md)
+- Issue reporting guide: [docs/issue-reporting.md](docs/issue-reporting.md)
+- Pull request guidance: [docs/pull-request-template.md](docs/pull-request-template.md)
+- Pull request form: [.github/pull_request_template.md](.github/pull_request_template.md)
+- Pull request queue: <https://github.com/takeokunn/cl-weave/pulls>
+- Bug report form: [.github/ISSUE_TEMPLATE/bug_report.md](.github/ISSUE_TEMPLATE/bug_report.md)
+- Feature request form: [.github/ISSUE_TEMPLATE/feature_request.md](.github/ISSUE_TEMPLATE/feature_request.md)
+- Issue template routing: [.github/ISSUE_TEMPLATE/config.yml](.github/ISSUE_TEMPLATE/config.yml)
+- Community health contract: [docs/community-health.md](docs/community-health.md)
+- Code ownership: [.github/CODEOWNERS](.github/CODEOWNERS)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+- Governance: [docs/governance.md](docs/governance.md)
+- Maintenance policy: [docs/maintenance-policy.md](docs/maintenance-policy.md)
+- Distribution policy: [docs/distribution-policy.md](docs/distribution-policy.md)
+- Support policy: [docs/support-policy.md](docs/support-policy.md)
+- Runtime support: [docs/runtime-support.md](docs/runtime-support.md)
+- Release process: [docs/release-process.md](docs/release-process.md)
+- Versioning policy: [docs/versioning-policy.md](docs/versioning-policy.md)
+- Project scope: [docs/project-scope.md](docs/project-scope.md)
+- Triage policy: [docs/triage-policy.md](docs/triage-policy.md)
+- Security reporting policy: [SECURITY.md](SECURITY.md)
+- Citation metadata: [CITATION.cff](CITATION.cff)
+- Issue tracker: <https://github.com/takeokunn/cl-weave/issues>
+- Release notes: [CHANGELOG.md](CHANGELOG.md)
+
+Runtime metadata mirrors these operations surfaces through `policyDocuments`,
+`referenceDocuments`, `citation`, `supportChannels`, `communityHealth`,
+`securityContacts`, `lifecycle`, `runtimeSupport`, and `releaseProcess` for
+agent-side OSS operations discovery.
+
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).

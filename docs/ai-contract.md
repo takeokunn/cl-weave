@@ -13,8 +13,9 @@ command loads the requested ASDF system and then emits JSON by default:
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
 ```
 
-Agents embedded in a Lisp process can call `(cl-weave:reporter-artifact-schemas)`
-to read the same artifact schema contracts without invoking the CLI.
+Agents embedded in a Lisp process can call `(cl-weave:framework-metadata)` to
+read the same root metadata and `(cl-weave:reporter-artifact-schemas)` to read
+the artifact schema contracts without invoking the CLI.
 
 The `mutations` artifact schema is also exposed there. Its JSON fields are
 `schemaVersion`, `kind`, `total`, `killed`, `survived`, `errored`, `score`,
@@ -23,14 +24,340 @@ and `results`. Registered mutation operators are advertised separately through
 
 The JSON root is stable. The example below is abridged: agents should treat the
 runtime `artifactSchemas` value as authoritative because it includes every
-structured artifact kind currently advertised by the loaded version.
+structured artifact kind currently advertised by the loaded version. Beyond
+runtime commands and reporters, the same root metadata also exposes
+`citation`, `distributionChannels`, `supportChannels`, `communityHealth`,
+`securityContacts`, `lifecycle`, `governance`, `runtimeSupport`,
+`releaseProcess`, `continuousIntegration`, and `policyDocuments` so agents
+can route issues, pull requests, compatibility-sensitive changes, and
+CI-aware automation through canonical maintainer surfaces.
+
+Agents should treat `distributionChannels` as the canonical install and run
+table. Each entry exposes `name`, `kind`, `installCommand`, `runCommand`,
+`scope`, and `references`, so tooling should prefer it over scraping README
+examples when deciding how to install or invoke `cl-weave`. The human-facing
+verification and scope policy for those channels lives in
+`docs/distribution-policy.md`.
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 22,
   "kind": "cl-weave-metadata",
   "version": "0.1.0",
-  "commands": ["run", "list", "watch", "metadata", "version", "help"],
+  "homepage": "https://github.com/takeokunn/cl-weave",
+  "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
+  "license": "MIT",
+  "policyDocuments": [
+    "CONTRIBUTING.md",
+    "CODE_OF_CONDUCT.md",
+    "SECURITY.md",
+    "docs/community-health.md",
+    "docs/distribution-policy.md",
+    "docs/governance.md",
+    "docs/issue-reporting.md",
+    "docs/maintenance-policy.md",
+    "docs/project-scope.md",
+    "docs/pull-request-template.md",
+    "docs/release-process.md",
+    "docs/runtime-support.md",
+    "docs/support-policy.md",
+    "docs/triage-policy.md",
+    "docs/versioning-policy.md"
+  ],
+  "referenceDocuments": [
+    {
+      "name": "readme",
+      "path": "README.md",
+      "description": "Primary user-facing guide and CLI reference."
+    },
+    {
+      "name": "citation",
+      "path": "CITATION.cff",
+      "description": "Canonical citation metadata for research, cataloging, and downstream attribution."
+    },
+    {
+      "name": "ai-contract",
+      "path": "docs/ai-contract.md",
+      "description": "Machine-readable contract and metadata normalization guide."
+    },
+    {
+      "name": "adoption-guide",
+      "path": "docs/adoption.md",
+      "description": "Migration guidance and downstream adoption plan."
+    },
+    {
+      "name": "release-notes",
+      "path": "CHANGELOG.md",
+      "description": "User-visible changes and release history."
+    },
+    {
+      "name": "license",
+      "path": "LICENSE",
+      "description": "Canonical project license text."
+    }
+  ],
+  "citation": {
+    "cffVersion": "1.2.0",
+    "message": "If you use cl-weave in research, tooling, or documentation, please cite the project using this metadata.",
+    "title": "cl-weave",
+    "authors": [
+      {
+        "name": "takeokunn"
+      }
+    ],
+    "license": "MIT",
+    "repositoryCode": "https://github.com/takeokunn/cl-weave",
+    "url": "https://github.com/takeokunn/cl-weave",
+    "version": "0.1.0",
+    "preferredCitationPath": "CITATION.cff"
+  },
+  "distributionChannels": [
+    {
+      "name": "source-self-test",
+      "kind": "source-checkout",
+      "installCommand": [],
+      "runCommand": ["sbcl", "--noinform", "--non-interactive", "--load", "scripts/run-tests.lisp"],
+      "scope": "Run the bundled self-test suite from a source checkout.",
+      "references": ["README.md", "docs/distribution-policy.md"]
+    },
+    {
+      "name": "nix-local-cli",
+      "kind": "nix",
+      "installCommand": ["nix", "profile", "install", "."],
+      "runCommand": ["nix", "run", ".", "--", "--help"],
+      "scope": "Install and run the packaged CLI from the current checkout.",
+      "references": ["README.md", "docs/distribution-policy.md"]
+    },
+    {
+      "name": "nix-remote-cli",
+      "kind": "nix",
+      "installCommand": ["nix", "profile", "install", "github:takeokunn/cl-weave"],
+      "runCommand": ["nix", "run", "github:takeokunn/cl-weave", "--", "--help"],
+      "scope": "Install and run the packaged CLI without cloning the repository.",
+      "references": ["README.md", "docs/distribution-policy.md"]
+    }
+  ],
+  "supportChannels": [
+    {
+      "name": "issue-tracker",
+      "kind": "github",
+      "target": "https://github.com/takeokunn/cl-weave/issues",
+      "scope": "Reproducible bugs, documentation gaps, and concrete feature requests."
+    },
+    {
+      "name": "pull-requests",
+      "kind": "github",
+      "target": "https://github.com/takeokunn/cl-weave/pulls",
+      "scope": "Validated fixes that are ready for review."
+    },
+    {
+      "name": "support-policy",
+      "kind": "document",
+      "target": "docs/support-policy.md",
+      "scope": "Canonical support boundaries, report contents, and escalation guidance."
+    }
+  ],
+  "communityHealth": [
+    {
+      "name": "bug-report-form",
+      "kind": "github-issue-template",
+      "path": ".github/ISSUE_TEMPLATE/bug_report.md",
+      "purpose": "Structured bug intake that routes reporters to the canonical issue reporting guide.",
+      "references": [
+        "docs/community-health.md",
+        "docs/issue-reporting.md"
+      ],
+      "requiredSections": [
+        "Summary",
+        "Reproduction",
+        "Expected Behavior",
+        "Actual Behavior",
+        "Validation",
+        "Additional Context"
+      ],
+      "contactLinks": []
+    },
+    {
+      "name": "feature-request-form",
+      "kind": "github-issue-template",
+      "path": ".github/ISSUE_TEMPLATE/feature_request.md",
+      "purpose": "Structured feature intake that reinforces project scope and validation expectations.",
+      "references": [
+        "docs/community-health.md",
+        "docs/project-scope.md",
+        "docs/support-policy.md"
+      ],
+      "requiredSections": [
+        "Problem",
+        "Proposed Change",
+        "Validation Plan",
+        "Scope Check",
+        "Compatibility Notes"
+      ],
+      "contactLinks": []
+    },
+    {
+      "name": "issue-template-config",
+      "kind": "github-issue-template-config",
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "purpose": "GitHub issue chooser configuration that redirects support and security traffic to canonical policies.",
+      "references": [
+        "docs/community-health.md",
+        "docs/support-policy.md",
+        "SECURITY.md",
+        "docs/issue-reporting.md"
+      ],
+      "requiredSections": [],
+      "contactLinks": [
+        {
+          "name": "Support policy",
+          "target": "https://github.com/takeokunn/cl-weave/blob/main/docs/support-policy.md",
+          "purpose": "Check whether the request belongs in issue tracking and what detail is required."
+        },
+        {
+          "name": "Security policy",
+          "target": "https://github.com/takeokunn/cl-weave/blob/main/SECURITY.md",
+          "purpose": "Report vulnerabilities through the private security contact path."
+        },
+        {
+          "name": "Issue reporting guide",
+          "target": "https://github.com/takeokunn/cl-weave/blob/main/docs/issue-reporting.md",
+          "purpose": "Review the canonical reproduction format before filing a bug."
+        }
+      ]
+    },
+    {
+      "name": "pull-request-template",
+      "kind": "github-pull-request-template",
+      "path": ".github/pull_request_template.md",
+      "purpose": "Default PR body that mirrors the canonical review checklist and compatibility prompts.",
+      "references": [
+        "docs/community-health.md",
+        "docs/pull-request-template.md"
+      ],
+      "requiredSections": [
+        "Summary",
+        "Validation",
+        "Compatibility Impact",
+        "Follow-up Risk"
+      ],
+      "contactLinks": []
+    },
+    {
+      "name": "codeowners",
+      "kind": "github-codeowners",
+      "path": ".github/CODEOWNERS",
+      "purpose": "Review ownership declaration for repository-wide changes.",
+      "references": [
+        "docs/community-health.md",
+        "docs/governance.md"
+      ],
+      "requiredSections": [],
+      "contactLinks": []
+    }
+  ],
+  "securityContacts": [
+    {
+      "name": "security-policy",
+      "kind": "document",
+      "target": "SECURITY.md",
+      "scope": "Private vulnerability reporting guidance and security handling policy."
+    }
+  ],
+  "lifecycle": {
+    "stage": "pre-1.0",
+    "status": "active",
+    "supportedLine": "main",
+    "supportDocument": "docs/support-policy.md",
+    "versioningDocument": "docs/versioning-policy.md",
+    "securityDocument": "SECURITY.md"
+  },
+  "governance": {
+    "policyDocument": "docs/governance.md",
+    "reviewOwnership": ".github/CODEOWNERS",
+    "maintainerResponsibilities": [
+      "Triaging issues and pull requests against the documented project scope and support boundaries.",
+      "Protecting compatibility expectations recorded in the versioning policy.",
+      "Keeping machine-readable metadata, release notes, and policy documents synchronized.",
+      "Requiring regression coverage for public-surface changes when practical.",
+      "Handling security-sensitive reports through the private SECURITY.md path."
+    ],
+    "decisionDocuments": [
+      "docs/project-scope.md",
+      "docs/support-policy.md",
+      "docs/triage-policy.md",
+      "docs/versioning-policy.md",
+      "docs/release-process.md"
+    ],
+    "releaseAuthority": "Maintainers cut releases from the validated default branch state only.",
+    "continuityExpectation": "When the maintainer set changes, update governance, linked policies, and machine-readable metadata in the same patch."
+  },
+  "runtimeSupport": {
+    "policyDocument": "docs/runtime-support.md",
+    "primaryImplementation": "SBCL",
+    "supportedTargets": [
+      {
+        "implementation": "SBCL",
+        "platforms": ["Linux", "macOS"],
+        "status": "supported"
+      }
+    ],
+    "bestEffortTargets": [
+      {
+        "implementation": "Other Common Lisp implementations",
+        "platforms": ["implementation-dependent"],
+        "status": "best-effort"
+      }
+    ],
+    "implementationSpecificFeatures": [
+      "it-isolated subprocess execution",
+      "coverage capture and reset/save integration",
+      "allocation assertions in CI-focused tests",
+      "MOP-dependent metadata and structural assertions"
+    ]
+  },
+  "releaseProcess": {
+    "policyDocument": "docs/release-process.md",
+    "releaseStage": "pre-1.0",
+    "checklist": [
+      "Run the full test suite.",
+      "Run nix flake check --print-build-logs when Nix is available.",
+      "Review CHANGELOG.md and summarize user-visible changes.",
+      "Check that README.md, CONTRIBUTING.md, SECURITY.md, and docs/maintenance-policy.md still match the current workflow.",
+      "Review docs/pull-request-template.md and .github/pull_request_template.md so release-bound changes still capture public-surface notes, validation commands, and follow-up risk in a consistent format.",
+      "Verify that cl-weave metadata still advertises the expected package links, reporter list, and schema versions.",
+      "Verify that docs/distribution-policy.md still matches the documented source and Nix install paths.",
+      "Confirm the release notes mention any intentional public-surface breaks or migration steps."
+    ],
+    "contractSyncRequirements": [
+      "Keep machine-readable metadata and human-facing documentation in sync.",
+      "Keep distributionChannels, README.md, and docs/distribution-policy.md synchronized when install paths change.",
+      "Update tests and docs/ai-contract.md when a machine-readable contract changes."
+    ]
+  },
+  "continuousIntegration": {
+    "policyDocument": "docs/release-process.md",
+    "provider": "github-actions",
+    "workflowPath": ".github/workflows/ci.yml",
+    "jobName": "nix",
+    "triggers": [
+      "pull_request",
+      "push:main",
+      "workflow_dispatch"
+    ],
+    "systems": [
+      "x86_64-linux",
+      "aarch64-darwin"
+    ],
+    "artifactBundle": "cl-weave-test-reports-${{ matrix.system }}",
+    "cacheProvider": "cachix",
+    "cacheModes": [
+      "pull-only",
+      "push-enabled"
+    ],
+    "qualityGateSource": "qualityGates"
+  },
+  "commands": ["run", "list", "watch", "doctor", "metadata", "version", "help"],
   "reporters": ["spec", "sexp", "json", "jsonl", "tap", "github", "junit"],
   "listReporters": ["spec", "sexp", "json", "jsonl"],
   "artifactSchemas": [
@@ -69,14 +396,126 @@ structured artifact kind currently advertised by the loaded version.
           "description": "Single test event payload."
         }
       ]
+    },
+    {
+      "kind": "test-plan-entry",
+      "commands": ["list"],
+      "reporters": ["jsonl"],
+      "schemaVersion": 2,
+      "streaming": true,
+      "fields": [
+        {
+          "name": "test.tags",
+          "kind": "array",
+          "required": true,
+          "description": "Compatibility declaration tags preserved as metadata."
+        },
+        {
+          "name": "test.dependsOn",
+          "kind": "array",
+          "required": true,
+          "description": "Compatibility declaration dependencies preserved as metadata only."
+        }
+      ]
+    },
+    {
+      "kind": "doctor-report",
+      "commands": ["doctor"],
+      "reporters": ["json", "sexp"],
+      "schemaVersion": 1,
+      "streaming": false,
+      "fields": [
+        {
+          "name": "status",
+          "kind": "string",
+          "required": true,
+          "description": "Overall self-diagnostic status: pass, warn, or fail."
+        },
+        {
+          "name": "runtime",
+          "kind": "object",
+          "required": true,
+          "description": "Implementation and working-directory details for the current process."
+        },
+        {
+          "name": "checks",
+          "kind": "array",
+          "required": true,
+          "description": "Named self-diagnostic checks with per-check status and details."
+        }
+      ]
     }
   ],
-  "capabilities": ["describe-it-dsl"],
+  "capabilities": ["vitest-dsl", "describe-it-dsl", "artifact-schemas", "mop-architecture-assertions"],
+  "capabilityMatrix": [
+    {
+      "name": "vitest-dsl",
+      "status": "implemented",
+      "summary": "Vitest-shaped hierarchical and table-driven test registration.",
+      "publicApis": ["describe", "it", "test", "describe-each", "it-concurrent", "it-isolated"],
+      "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
+      "documentation": ["README.md", "docs/ai-contract.md"]
+    },
+  ],
   "environment": ["CL_WEAVE_REPORTER"],
   "options": [
     {
       "name": "--filter",
-      "aliases": ["--testNamePattern"],
+      "aliases": [],
+      "commands": ["run", "list", "watch"],
+      "argument": "TEXT",
+      "valueKind": "test-name-pattern",
+      "choices": [],
+      "commandChoices": [],
+      "environment": ["CL_WEAVE_TEST_FILTER"],
+      "description": "Run or list tests whose Vitest-style path contains TEXT"
+    }
+  ],
+  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
+      "documentation": ["README.md", "docs/ai-contract.md"]
+    },
+  ],
+  "environment": ["CL_WEAVE_REPORTER"],
+  "options": [
+    {
+      "name": "--filter",
+      "aliases": [],
+      "commands": ["run", "list", "watch"],
+      "argument": "TEXT",
+      "valueKind": "test-name-pattern",
+      "choices": [],
+      "commandChoices": [],
+      "environment": ["CL_WEAVE_TEST_FILTER"],
+      "description": "Run or list tests whose Vitest-style path contains TEXT"
+    }
+  ],
+  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
+      "documentation": ["README.md", "docs/ai-contract.md"]
+    },
+  ],
+  "environment": ["CL_WEAVE_REPORTER"],
+  "options": [
+    {
+      "name": "--filter",
+      "aliases": [],
+      "commands": ["run", "list", "watch"],
+      "argument": "TEXT",
+      "valueKind": "test-name-pattern",
+      "choices": [],
+      "commandChoices": [],
+      "environment": ["CL_WEAVE_TEST_FILTER"],
+      "description": "Run or list tests whose Vitest-style path contains TEXT"
+    }
+  ],
+  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
+      "documentation": ["README.md", "docs/ai-contract.md"]
+    },
+  ],
+  "environment": ["CL_WEAVE_REPORTER"],
+  "options": [
+    {
+      "name": "--filter",
+      "aliases": [],
       "commands": ["run", "list", "watch"],
       "argument": "TEXT",
       "valueKind": "test-name-pattern",
@@ -105,6 +544,8 @@ structured artifact kind currently advertised by the loaded version.
 
 `--reporter sexp` prints the same data as a Lisp plist. `--reporter spec` is
 accepted as the default CLI reporter and normalized to JSON for this command.
+`doctor` accepts only `json` and `sexp`; `spec` is normalized to JSON there as
+well.
 `options[].argument` is the human-facing placeholder used in help text;
 `options[].valueKind` is the machine-facing value category agents should use
 when constructing commands. `options[].choices` lists finite accepted values for
@@ -113,7 +554,8 @@ options use an empty array. Boolean flags use `"boolean"` and keep
 `argument: null`.
 `options[].commandChoices` lists command-specific finite values for options
 whose accepted values differ by command, such as `--reporter`; each listed
-choice is a subset of `options[].choices`.
+choice is a subset of `options[].choices`. For example, `--reporter` accepts
+`json` and `sexp` for `doctor`, while `list` also accepts `spec` and `jsonl`.
 `artifactSchemas` lists every structured reporter artifact kind that agents can
 request or observe. `commands` lists every CLI command that can emit the shape;
 library-only artifacts use an empty array. `reporters` names the reporter
@@ -121,10 +563,16 @@ values that can emit the kind, `schemaVersion` is scoped to that artifact
 shape, and `streaming` tells agents whether to parse one complete payload or
 newline-delimited events. `fields` is a compact field map for planning parsers
 and validating generated CI integrations without hard-coding reporter
-internals. `watch --once` shares the run-result artifact contracts, so result
+internals. `doctor-report` is the canonical self-diagnostic artifact for
+runtime and environment checks, and it does not depend on loading a requested
+ASDF system. `watch --once` shares the run-result artifact contracts, so result
 schemas advertise both `run` and `watch`. Agents must not infer the complete
 artifact list from this document's shortened example; call `cl-weave metadata` and read
 `artifactSchemas` directly.
+`capabilityMatrix` expands high-level `capabilities` into implementation status,
+representative `publicApis`, validating `qualityGates`, and canonical
+`documentation` paths. Agents should use it as the feature-readiness map for
+adoption planning instead of inferring coverage from examples or file names.
 `qualityGates` lists CI-grade commands as argv vectors with explicit
 `timeoutSeconds` values and expected artifact paths. Agents should prefer these
 runtime gates over scraping README examples when deciding how to validate a
@@ -133,6 +581,42 @@ watch-mode resolution without entering a long-lived polling loop.
 `packageExports` lists public external symbols by package in lower-case CL reader
 spelling so agents can discover the supported DSL and runtime API without
 scraping `package.lisp`.
+`homepage`, `bugTracker`, and `license` are the canonical project source,
+support, and licensing links; agents should prefer them over ad hoc repository
+guesses when linking, filing issues, or summarizing project governance.
+`referenceDocuments` lists the canonical non-policy documents that external
+tools should read first for CLI usage, machine contracts, migration planning,
+release notes, and licensing. Agents should prefer these explicit paths over
+README section scraping when linking project materials.
+`supportChannels` identifies the public support surfaces and intended routing
+for bugs, contribution review, and support-boundary questions. Agents should
+use these entries before inventing repository URLs or ad hoc escalation paths.
+`securityContacts` identifies the canonical vulnerability disclosure surface.
+Agents should use these entries instead of filing public issues for security
+reports.
+`lifecycle` summarizes the current release stage and supported line, then
+points back to the support, versioning, and security documents that define the
+operational contract in prose.
+`governance` points at the canonical governance policy, review ownership file,
+maintainer responsibilities, decision documents, release authority, and
+continuity expectation for maintainer hand-offs. Agents should use it as the
+machine-readable routing contract for compatibility-sensitive changes instead
+of inferring governance from repository conventions.
+`runtimeSupport` identifies the primary supported implementation, the
+platform-level support matrix, and the implementation-specific features that
+depend on SBCL behaviour. Agents should consult it before assuming portability
+for isolated subprocess runs, coverage capture, allocation assertions, or
+MOP-shaped metadata checks.
+`releaseProcess` points at the canonical release policy, advertises the
+current release stage, and records the checklist plus documentation sync
+requirements that must hold when the machine-readable contract changes.
+`policyDocuments` lists the canonical policy and governance documents that
+describe maintainer authority, issue handling, release flow, support
+boundaries, and project scope. The example root mirrors the runtime metadata
+and should stay aligned with the CLI contract as new policy documents are
+added. For project scope, governance, issue handling, release flow, and
+compatibility expectations, agents should prefer the policy documents in
+`docs/` over README summaries.
 
 ## DSL Alias Contract
 
@@ -147,9 +631,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `describe.sequential` -> `describe-sequential`
 - `describe.sequential.each` -> `describe-sequential-each`
 - `describe.run-if` -> `describe-run-if`
-- `describe.runIf` -> `describe-run-if`
 - `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
-- `describe.skipIf` -> `describe-skip-if`
 - `describe.skip.each` -> `describe-skip-each`
 - `describe.todo.each` -> `describe-todo-each`
 - `it.each` -> `it-each`
@@ -164,9 +646,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `it.only` -> `it-only`
 - `it.only.each` -> `it-only-each`
 - `it.run-if` -> `it-run-if`
-- `it.runIf` -> `it-run-if`
 - `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
-- `it.skipIf` -> `it-skip-if`
 - `it.skip.each` -> `it-skip-each`
 - `it.todo.each` -> `it-todo-each`
 - `test` -> `it`
@@ -182,13 +662,10 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `test.only` -> `test-only`
 - `test.only.each` -> `test-only-each`
 - `test.run-if` -> `test-run-if`
-- `test.runIf` -> `test-run-if`
 - `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
-- `test.skipIf` -> `test-skip-if`
 - `test.skip.each` -> `test-skip-each`
 - `test.todo.each` -> `test-todo-each`
 - `expect.assertions` -> `expect-assertions`
-- `|expect.hasAssertions|` -> `expect-has-assertions`
 - `expect.hasassertions` -> `expect-has-assertions`
 - `expect.not` -> `expect-not`
 - `expect.extend` -> `expect-extend`
@@ -196,11 +673,7 @@ to the canonical hyphenated forms when reasoning about test plans:
 - `expect.rejects` -> `expect-rejects`
 Fixture hooks are exported as canonical Lisp forms: `before-all`, `after-all`,
 `before-each`, `around-each`, and `after-each`. Dotted Vitest-shaped aliases use
-Common Lisp's actual unescaped reader spelling. cl-weave exports both the
-canonical hyphenated conditional forms and the tighter Vitest-shaped camelCase
-spellings `skipIf` and `runIf`. For AI or code generators that preserve
-JavaScript spellings verbatim, `|expect.hasAssertions|` is also exported as an
-exact escaped symbol alias.
+Common Lisp's actual unescaped reader spelling.
 
 ## S-Expression Reporter
 
@@ -432,6 +905,19 @@ perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAP
 Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
 passed to `:to-match-snapshot`. They do not alter reporter schemas, so agents
 can compare reporter artifacts and snapshot artifacts independently.
+State replay snapshots use `:to-match-snapshot-sequence` with a list or
+non-string vector of states and one explicit prefix. The stored keys are
+deterministic `prefix[n]` entries such as `vm/run[0]` and `vm/run[1]`. Update
+mode replaces every existing entry for the prefix before writing the current
+sequence, so shortened replays prune stale state snapshots. Verification fails
+on missing or mismatched entries and also fails with `:reason
+:unexpected-snapshot` when a stored `prefix[n]` exists at or beyond the current
+state count.
+Lisp-side agents can use `snapshot-entries` to read the current snapshot alist
+and `snapshot-value` to retrieve one serialized snapshot value with a separate
+presence flag. Both functions respect `*snapshot-directory*` and
+`*snapshot-file-name*`, so CLI-driven and REPL-driven replay checks can share
+the same artifact location.
 
 Snapshot assertion failures use the normal `:assertion` payload. For missing
 snapshots, `:actual` and `:expected` contain `:snapshot-key`, `:snapshot-file`,
@@ -454,15 +940,22 @@ For mismatches, both sides include `:reason :snapshot-mismatch` and matching
             :difference (:line 1 :expected "(:ok 42)" :actual "(:ok 43)")))
 ```
 
+Sequence snapshot failures use `:matcher :to-match-snapshot-sequence` and add
+`:snapshot-prefix`, `:snapshot-index`, and `:snapshot-count` to both sides of
+the assertion payload. Unexpected stale entries report `:present nil` on the
+actual side and `:present t` plus the stored serialized value on the expected
+side.
+
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
-The coverage artifact is SBCL `sb-cover` state written with
-`sb-cover:save-coverage-in-file`. Agents should treat it as a sidecar file and
-continue to parse S-expression or JSON reporter output for test results.
+The coverage artifacts are a populated HTML report generated with
+`sb-cover:report` and an optional SBCL state sidecar written with
+`sb-cover:save-coverage-in-file`. Agents should treat them as sidecar artifacts
+and continue to parse S-expression or JSON reporter output for test results.
 
 ## Mutation Reports
 
@@ -489,9 +982,17 @@ Mutation operators expose stable metadata separately from mutation results:
                 (lambda (form mutation)
                   (declare (ignore mutation))
                   (= (eval form) 2)))))
+  (cl-weave:assert-mutation-score results 0.95)
   (cl-weave:report-mutations-sexp results *standard-output*)
   (cl-weave:report-mutations-json results *standard-output*))
 ```
+
+Mutation score gates are stricter than score-only checks. A passing gate
+requires a score greater than or equal to the requested threshold, zero
+survived mutants, and zero errored mutants. `mutation-score-passes-p` returns
+`(values pass-p summary)`. `assert-mutation-score` returns the summary on
+success or signals `mutation-score-failure` on failure. Agents can inspect
+`mutation-score-failure-summary` and `mutation-score-failure-min-score`.
 
 The S-expression mutation schema is:
 
@@ -566,7 +1067,7 @@ Skipped and todo events use TAP directives:
 
 ```tap
 ok 1 - parser > waits for fixture # SKIP fixture unavailable
-ok 2 - parser > handles unicode # TODO pending normalization pass
+ok 2 - parser > handles unicode
 ```
 
 TAP is intentionally a stream format. Agents that need stable field names,
@@ -656,10 +1157,10 @@ thunk when they fail. For example, a failing `:to-run-under-ms` assertion uses:
  :expected (:max-ms 0))
 ```
 
-`:to-cons-less-than` uses the same `:actual` shape and reports
-`(:max-bytes n)` as `:expected`. JSON reporters stringify these Lisp payloads in
-the existing `actual` and `expected` fields so agents can parse the measurement
-without scraping human-oriented output.
+`:to-allocate-under` uses the same `:actual` shape and reports `(:max-bytes n)`
+as `:expected`. JSON reporters stringify these Lisp payloads in the existing
+`actual` and `expected` fields so agents can parse the measurement without
+scraping human-oriented output.
 
 Negated matcher assertions use either explicit matcher syntax or Vitest-style
 DSL sugar:
@@ -867,16 +1368,11 @@ Agents can narrow execution without changing source files:
 format `suite > nested suite > case`. The command runner exposes the same
 contract through `CL_WEAVE_TEST_FILTER`.
 
-CLI flags use canonical kebab-case names and expose Vitest-shaped aliases for
-agent-generated commands: `--testNamePattern` maps to `--filter`,
-`--outputFile` maps to `--output`, `--watchInterval` maps to
-`--watch-interval`, `--coverageOutput` maps to `--coverage-output`,
-`--testTimeout` and `--testTimeoutMs` map to `--test-timeout-ms`,
-`--passWithNoTests` maps to `--pass-with-no-tests`, `--failWithNoTests` maps
-to `--fail-with-no-tests`, `--snapshotDir` maps to `--snapshot-dir`,
-`--snapshotFile` maps to `--snapshot-file`, `--maxWorkers` maps to
-`--max-workers`, and both `--update` and
-`--updateSnapshots` map to `--update-snapshots`.
+CLI flags use canonical kebab-case names only. Agent-generated commands must
+emit the canonical option names directly, for example `--filter`,
+`--output`, `--watch-interval`, `--coverage-output`, `--test-timeout-ms`,
+`--pass-with-no-tests`, `--fail-with-no-tests`, `--snapshot-dir`,
+`--snapshot-file`, `--max-workers`, and `--update-snapshots`.
 
 Filtering changes which events are emitted; it does not change the event shape
 or reporter schema versions. If no test matches, reporters emit zero events and
@@ -895,9 +1391,6 @@ Conditional registration macros keep the same reporter contract.
 events when their condition is true. `it-run-if`, `test-run-if`, and
 `describe-run-if` emit ordinary `:skip` events when their condition is false.
 The deterministic reasons are `"conditional skip"` and `"conditional run-if"`.
-`it.skipIf`, `it.runIf`, `test.skipIf`, `test.runIf`, `describe.skipIf`, and
-`describe.runIf` normalize to the same canonical hyphenated macros before
-registration.
 Conditions are evaluated while the test file registers tests; reporters do not
 add a new event field or schema version for conditional registration.
 
@@ -991,7 +1484,7 @@ The JSON test plan reporter prints one object:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "kind": "test-plan",
   "total": 1,
   "runnable": 1,
@@ -1007,7 +1500,9 @@ The JSON test plan reporter prints one object:
       "focused": false,
       "retry": 0,
       "timeoutMs": null,
-      "concurrent": false
+      "concurrent": false,
+      "tags": [],
+      "dependsOn": []
     }
   ]
 }
@@ -1017,7 +1512,7 @@ The S-expression test plan reporter uses the same data:
 
 ```lisp
 (:cl-weave/test-plan
- :schema-version 2
+ :schema-version 3
  :total 1
  :runnable 1
  :skipped 0
@@ -1031,7 +1526,9 @@ The S-expression test plan reporter uses the same data:
    :focused nil
    :retry 0
    :timeout-ms nil
-   :concurrent nil)))
+   :concurrent nil
+   :tags nil
+   :depends-on nil)))
 ```
 
 Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
@@ -1039,13 +1536,15 @@ Plan `status` is `:run`, `:skip`, or `:todo`; JSON uses `run`, `skip`, or
 execution. Suite-level skip and todo suppression produces selected descendant
 plan entries without running suite hooks or case bodies. `pathString` can be
 fed back to `CL_WEAVE_TEST_FILTER` for focused execution after discovery.
+`tags` and `dependsOn` preserve compatibility declaration metadata only; they do
+not imply tag filtering or dependency scheduling.
 
 The JSONL test plan reporter uses the same entry shape as JSON test plan
 `tests` entries:
 
 ```jsonl
 {"schemaVersion":1,"kind":"test-plan-start","total":1}
-{"schemaVersion":1,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false}}
+{"schemaVersion":2,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false,"tags":[],"dependsOn":[]}}
 {"schemaVersion":1,"kind":"test-plan-summary","total":1,"runnable":1,"skipped":0,"todos":0}
 ```
 
@@ -1060,6 +1559,8 @@ the Lisp-native logic layer:
 ;; => ((:test ("suite" "case"))
 ;;     (:status ("suite" "case") :run)
 ;;     (:retry ("suite" "case") 0)
+;;     (:tag ("suite" "case") :fast)
+;;     (:depends-on ("suite" "case") bootstrap)
 ;;     ...)
 
 (cl-weave:test-plan-where
@@ -1147,15 +1648,14 @@ final event status is `:fail`, `:condition` prints a `test-timeout`, and
 `before-each` / `around-each` / `after-each` contract as ordinary test attempts.
 
 Command runners can set a global timeout default with `--test-timeout-ms N`,
-`--test-timeout N`, `--testTimeout N`, `--testTimeoutMs N`,
-`CL_WEAVE_TEST_TIMEOUT_MS=N`, or `CL_WEAVE_TEST_TIMEOUT=N`. Local
-`:timeout-ms` wins over the global default. List mode and structured test-plan
-reporters expose the effective retry and timeout values after applying these
-defaults.
+`CL_WEAVE_TEST_TIMEOUT_MS=N`, or `CL_WEAVE_TEST_TIMEOUT=N`. Local `:timeout-ms`
+wins over the global default. List mode and structured test-plan reporters
+expose the effective retry and timeout values after applying these defaults,
+plus declaration `tags` and `dependsOn` metadata.
 
-Command runners can bound adjacent concurrent batches with `--max-workers N`,
-`--maxWorkers N`, or `CL_WEAVE_MAX_WORKERS=N`. List mode remains
-discovery-only and does not consume the worker setting.
+Command runners can bound adjacent concurrent batches with `--max-workers N` or
+`CL_WEAVE_MAX_WORKERS=N`. List mode remains discovery-only and does not consume
+the worker setting.
 
 `:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
 parallel execution with adjacent concurrent cases. `describe-concurrent` /
@@ -1234,8 +1734,8 @@ Agents can discover declared source files before choosing a focused run:
 `run-all` after ASDF loading:
 
 ```lisp
-(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :pass-with-no-tests t)
-(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :pass-with-no-tests t :once t)
+(cl-weave:run-system "my-project-tests" :reporter :json :name-filter "parser" :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :coverage-report-directory "my-project-tests-coverage-report/" :pass-with-no-tests t)
+(cl-weave:watch-system "my-project-tests" :reporter :json :shard '(1 2) :order :random :seed 12345 :bail 1 :coverage t :coverage-output "my-project-tests.coverage" :coverage-report-directory "my-project-tests-coverage-report/" :pass-with-no-tests t :once t)
 ```
 
 `watch-system` writes status lines to `:status-stream`, which defaults to
@@ -1267,9 +1767,15 @@ generator data, value production, shrinking, and property execution;
 `src/dsl.lisp` only expands `it-property` into that runner. `gen-map`,
 `gen-one-of`, `gen-recursive`, `gen-tuple`, and `gen-such-that` only affect
 generated values and shrink candidates before the same `assertion-failure`
-payload is reported. `gen-symbol`, `gen-keyword`, `gen-sexp`, and `gen-form`
-are convenience generators for Lisp-native property tests and macro-expansion
-inputs.
+payload is reported. `gen-character`, `gen-string`, and `gen-vector` cover
+sequence-heavy APIs with bounded lengths and shrink candidates. `gen-symbol`,
+`gen-keyword`, `gen-sexp`, and `gen-form` are convenience generators for
+Lisp-native property tests and macro-expansion inputs. `gen-state-machine`
+accepts an initial state, a `(state event)` transition function, an event
+generator, and bounded event length options. It returns a plist with `:initial`,
+`:events`, `:states`, and `:final`; shrinking shrinks only the event stream and
+then deterministically recomputes states. The same seed, case index, generated
+values, and minimal payload contract applies to state-machine traces.
 
 Property CI controls are strict. `CL_WEAVE_PROPERTY_TESTS` must parse as a
 positive integer, and `CL_WEAVE_PROPERTY_SEED` must parse as an integer. Invalid
@@ -1284,7 +1790,7 @@ declared ASDF systems before evaluating the body.
 
 ```lisp
 (it-isolated "native boundary"
-    (:systems ("my-project-tests") :timeout 5)
+    (:systems ("my-project-tests") :timeout 5 :keep-files :on-failure)
   (expect (call-native) :to-be :ok))
 ```
 
@@ -1303,9 +1809,11 @@ declared ASDF systems before evaluating the body.
  :home-path "/tmp/cl-weave-isolated-....home/")
 ```
 
-The path accessors are populated only when `:keep-files t` is enabled. With the
-default `:keep-files nil`, the subprocess artifacts are removed before the
-parent process regains control and the path slots are `nil`.
+The path accessors are populated only when files are retained. `:keep-files`
+accepts `nil`, `t`, or `:on-failure`; `:on-failure` keeps artifacts for
+`:fail` and `:timeout` results while still deleting successful child-process
+artifacts. With the default `:keep-files nil`, the subprocess artifacts are
+removed before the parent process regains control and the path slots are `nil`.
 
 When `it-isolated` fails, the assertion matcher is `:isolated` and the payload
 keeps the child process diagnostics:

@@ -18,10 +18,6 @@
      (progn
        (expect.hasassertions)
        (expect t)))
-    ("|expect.hasAssertions|"
-     (progn
-       (|expect.hasAssertions|)
-       (expect t)))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
     ("to-be-one-of list" (expect :ready :to-be-one-of '(:pending :ready :done)))
@@ -172,6 +168,39 @@
     ("expect.resolves" (expect.resolves (lambda () 42) :to-be 42))
     ("expect.rejects condition type"
      (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error))
+    ("expect.poll eventually matches"
+     (let ((attempt 0))
+       (expect.poll (lambda ()
+                      (incf attempt))
+         (:timeout-ms 200 :interval-ms 0)
+         :to-be 3)))
+    ("expect.poll times out after a slow pass"
+     (handler-case
+         (progn
+           (expect.poll (lambda ()
+                          (sleep 0.01)
+                          :ready)
+             (:timeout-ms 0 :interval-ms 0)
+             :to-be :ready)
+           (error "Expected expect.poll to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+           (expect (getf actual :attempts) :to-be 1)
+           (expect (getf actual :timeout-ms) :to-be 0)
+           (expect (getf actual :interval-ms) :to-be 0)
+           (expect (getf actual :last-value) :to-be :ready)
+           (let ((last-assertion (getf actual :last-assertion)))
+             (expect (getf last-assertion :matcher) :to-be :to-be)
+             (expect (getf last-assertion :actual) :to-be :ready)
+             (expect (getf last-assertion :expected) :to-equal '(:ready))
+             (expect (getf last-assertion :pass) :to-be-truthy))))))
+    ("expect.poll without explicit options"
+     (let ((attempt 0))
+       (expect.poll (lambda ()
+                      (incf attempt))
+         :to-be 1)))
     ("expect.resolves rejected thunk payload"
      (handler-case
          (progn
@@ -199,14 +228,91 @@
            (expect (getf actual :state) :to-be :resolved)
            (expect (getf actual :value) :to-be :ok)
            (expect expected :to-equal '(:state :rejected))))))
+    ("expect.poll timeout payload"
+     (handler-case
+         (progn
+           (let ((attempt 0))
+             (expect.poll (lambda ()
+                            (incf attempt)
+                            :pending)
+               (:timeout-ms 0 :interval-ms 0)
+               :to-be :ready))
+           (error "Expected expect.poll to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail))
+                (last-assertion (getf actual :last-assertion)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+           (expect (getf actual :attempts) :to-be 1)
+           (expect (getf actual :timeout-ms) :to-be 0)
+           (expect (getf actual :interval-ms) :to-be 0)
+           (expect (getf actual :last-value) :to-be :pending)
+           (expect (getf last-assertion :matcher) :to-be :to-be)
+           (expect (getf last-assertion :actual) :to-be :pending)
+           (expect (getf last-assertion :expected) :to-equal '(:ready))
+           (expect expected :to-equal '(:state :pass))))))
+    ("expect.poll rejects unsupported option keys"
+     (handler-case
+         (progn
+           (expect.poll (lambda () :ok)
+             (:timeout-ms 0 :bogus 1)
+             :to-be :ok)
+           (error "Expected expect.poll to fail."))
+       (simple-error (condition)
+         (expect (simple-condition-format-control condition)
+                 :to-contain
+                 "unsupported keys"))))
+    ("expect.poll records thrown conditions in timeout payload"
+     (handler-case
+         (progn
+           (expect.poll (lambda () (error "boom"))
+             (:timeout-ms 0 :interval-ms 0)
+             :to-be :ready)
+           (error "Expected expect.poll to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (report (getf actual :last-condition)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+           (expect (getf report :state) :to-be :rejected)
+           (expect (getf report :condition-type) :to-be 'simple-error)
+           (expect (getf report :message) :to-match "boom")))))
     ("to-run-under-ms" (expect (lambda () (+ 1 1)) :to-run-under-ms 1000))
-    ("to-cons-less-than"
-     (expect (lambda () nil) :to-cons-less-than most-positive-fixnum))
+    ("to-allocate-under"
+     (expect (lambda () nil) :to-allocate-under most-positive-fixnum))
     ("to-have-slot symbol" (expect 'sample-widget :to-have-slot 'name))
     ("to-have-slot instance"
      (expect (make-instance 'sample-widget :name "ok") :to-have-slot 'state))
     ("to-have-method-specialized-on"
      (expect #'render-widget :to-have-method-specialized-on '(sample-widget t)))
+    ("to-have-slot failure reports normalized payload"
+     (handler-case
+         (progn
+           (expect 'sample-widget :to-have-slot 'missing-slot)
+           (error "Expected expect to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-have-slot)
+           (expect actual :to-equal '(:class sample-widget :slots (name state)))
+            (expect expected :to-equal '(:slot missing-slot))))))
+    ("to-have-method-specialized-on failure reports normalized payload"
+     (handler-case
+         (progn
+           (expect #'render-widget-mode :to-have-method-specialized-on '(missing t))
+           (error "Expected expect to fail."))
+       (cl-weave:assertion-failure (condition)
+         (let* ((detail (cl-weave::failure-detail condition))
+                (actual (cl-weave::assertion-detail-actual detail))
+                (expected (cl-weave::assertion-detail-expected detail)))
+           (expect (cl-weave::assertion-detail-matcher detail)
+                   :to-be
+                   :to-have-method-specialized-on)
+           (expect (getf actual :methods) :to-contain-equal '(sample-widget t))
+           (expect (getf actual :methods) :to-contain-equal '((eql :preview) t))
+            (expect expected :to-equal '(:specializers (missing t))))))
     ("to-throw rejects non-throwing thunk"
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
@@ -222,6 +328,51 @@
        (cl-weave:with-snapshot-updates
          (expect '(:ok 42) :to-match-snapshot "matcher external snapshot"))
        (expect '(:ok 42) :to-match-snapshot "matcher external snapshot")))
+    ("to-match-snapshot-sequence"
+     (let* ((snapshot-root (make-test-temporary-directory "snapshot-sequence"))
+            (cl-weave::*snapshot-directory* snapshot-root)
+            (cl-weave::*snapshot-file-name* "sequence.snapshots"))
+       (unwind-protect
+            (progn
+              (cl-weave:with-snapshot-updates
+                (expect #((:pc 0 :acc 0) (:pc 1 :acc 1))
+                        :to-match-snapshot-sequence
+                        "vm/run"))
+              (expect '((:pc 0 :acc 0) (:pc 1 :acc 1))
+                      :to-match-snapshot-sequence
+                      "vm/run")
+              (multiple-value-bind (value present-p)
+                  (cl-weave:snapshot-value "vm/run[1]")
+                (expect value :to-equal "(:pc 1 :acc 1)")
+                (expect present-p :to-be-truthy)))
+         (uiop:delete-directory-tree snapshot-root
+                                     :validate t
+                                     :if-does-not-exist :ignore))))
+    ("snapshot inspection API reads external snapshot artifacts"
+     (let* ((snapshot-root (make-test-temporary-directory "snapshot-api"))
+            (cl-weave::*snapshot-directory* snapshot-root)
+            (cl-weave::*snapshot-file-name* "api.snapshots")
+            (key "snapshot-api-entry"))
+       (unwind-protect
+            (progn
+              (cl-weave:with-snapshot-updates
+                (expect '(:state :ready :attempt 2) :to-match-snapshot key))
+              (expect (cl-weave:snapshot-entries)
+                      :to-contain-equal
+                      (cons key "(:state :ready :attempt 2)"))
+              (multiple-value-bind (value present-p)
+                  (cl-weave:snapshot-value key)
+                (expect value :to-equal "(:state :ready :attempt 2)")
+                (expect present-p :to-be-truthy))
+              (multiple-value-bind (value present-p)
+                  (cl-weave:snapshot-value "missing-snapshot-key")
+                (expect value :to-be-null)
+                (expect present-p :to-be-falsy))
+              (expect (lambda () (cl-weave:snapshot-value :not-a-string))
+                      :to-throw))
+         (uiop:delete-directory-tree snapshot-root
+                                     :validate t
+                                     :if-does-not-exist :ignore))))
     ("to-match-snapshot rejects missing snapshots"
      (let ((cl-weave::*snapshot-directory* (test-snapshot-directory "cl-weave-core-snapshots"))
            (cl-weave::*snapshot-file-name* "missing.snapshots")
@@ -232,7 +383,7 @@
     ("not" (expect 1 :not :to-be 2))
     ("expect-not" (expect-not 1 :to-be 2))
     ("expect.extend matcher" (expect 5 :to-be-odd))
-    ("extend-expect matcher" (expect 5 :to-be-between 1 10)))
+     ("extend-expect matcher" (expect 5 :to-be-between 1 10))))
 
   (it "signals assertion-failure with structured data"
     (handler-case
@@ -244,6 +395,18 @@
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
+
+  (it "signals assertion-failure when expect.poll receives a non-callable"
+    (handler-case
+        (progn
+          (expect.poll :not-a-function (:timeout-ms 0 :interval-ms 0) :to-be :ok)
+          (error "Expected expect.poll to fail."))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+          (expect (getf actual :callable) :to-be-falsy)
+          (expect (getf actual :value) :to-be :not-a-function)))))
 
   (it "reports contain-equal matcher failures with structured data"
     (handler-case
@@ -440,6 +603,82 @@
                                     :validate t
                                     :if-does-not-exist :ignore))))
 
+  (it "reports external snapshot sequence mismatches with state context"
+    (let* ((snapshot-root (make-test-temporary-directory "sequence-mismatch"))
+           (cl-weave::*snapshot-directory* snapshot-root)
+           (cl-weave::*snapshot-file-name* "sequence-mismatch.snapshots")
+           (prefix "vm/mismatch"))
+      (unwind-protect
+           (progn
+             (cl-weave:with-snapshot-updates
+               (expect '((:pc 0 :acc 0) (:pc 1 :acc 1))
+                       :to-match-snapshot-sequence
+                       prefix))
+             (handler-case
+                 (progn
+                   (expect '((:pc 0 :acc 0) (:pc 1 :acc 99))
+                           :to-match-snapshot-sequence
+                           prefix)
+                   (expect nil :to-be-truthy))
+               (cl-weave:assertion-failure (condition)
+                 (let* ((detail (cl-weave::failure-detail condition))
+                        (actual (cl-weave::assertion-detail-actual detail))
+                        (expected (cl-weave::assertion-detail-expected detail))
+                        (difference (getf actual :difference)))
+                   (expect (cl-weave::assertion-detail-matcher detail)
+                           :to-be
+                           :to-match-snapshot-sequence)
+                   (expect (getf actual :snapshot-prefix) :to-equal prefix)
+                   (expect (getf actual :snapshot-key) :to-equal "vm/mismatch[1]")
+                   (expect (getf actual :snapshot-index) :to-be 1)
+                   (expect (getf actual :snapshot-count) :to-be 2)
+                   (expect (getf actual :reason) :to-be :snapshot-mismatch)
+                   (expect (getf actual :value) :to-equal "(:pc 1 :acc 99)")
+                   (expect (getf expected :value) :to-equal "(:pc 1 :acc 1)")
+                   (expect difference :to-equal (getf expected :difference))
+                   (expect (getf difference :line) :to-be 1)
+                   (expect (getf difference :expected) :to-equal "(:pc 1 :acc 1)")
+                   (expect (getf difference :actual) :to-equal "(:pc 1 :acc 99)")))))
+        (uiop:delete-directory-tree snapshot-root
+                                    :validate t
+                                    :if-does-not-exist :ignore))))
+
+  (it "reports external snapshot sequence length drift"
+    (let* ((snapshot-root (make-test-temporary-directory "sequence-extra"))
+           (cl-weave::*snapshot-directory* snapshot-root)
+           (cl-weave::*snapshot-file-name* "sequence-extra.snapshots")
+           (prefix "vm/extra"))
+      (unwind-protect
+           (progn
+             (cl-weave:with-snapshot-updates
+               (expect '((:pc 0 :acc 0) (:pc 1 :acc 1))
+                       :to-match-snapshot-sequence
+                       prefix))
+             (handler-case
+                 (progn
+                   (expect '((:pc 0 :acc 0))
+                           :to-match-snapshot-sequence
+                           prefix)
+                   (expect nil :to-be-truthy))
+               (cl-weave:assertion-failure (condition)
+                 (let* ((detail (cl-weave::failure-detail condition))
+                        (actual (cl-weave::assertion-detail-actual detail))
+                        (expected (cl-weave::assertion-detail-expected detail)))
+                   (expect (cl-weave::assertion-detail-matcher detail)
+                           :to-be
+                           :to-match-snapshot-sequence)
+                   (expect (getf actual :snapshot-prefix) :to-equal prefix)
+                   (expect (getf actual :snapshot-key) :to-equal "vm/extra[1]")
+                   (expect (getf actual :snapshot-index) :to-be 1)
+                   (expect (getf actual :snapshot-count) :to-be 1)
+                   (expect (getf actual :reason) :to-be :unexpected-snapshot)
+                   (expect (getf actual :present) :to-be-falsy)
+                   (expect (getf expected :present) :to-be-truthy)
+                   (expect (getf expected :value) :to-equal "(:pc 1 :acc 1)")))))
+        (uiop:delete-directory-tree snapshot-root
+                                    :validate t
+                                    :if-does-not-exist :ignore))))
+
   (it "supports public custom matchers with structured failure data"
     (expect 4 :to-be-even)
     (handler-case
@@ -488,7 +727,9 @@
            (sorted-names (sort (copy-list names) #'string< :key #'symbol-name))
            (even (cl-weave:matcher-metadata :to-be-even))
            (odd (cl-weave:matcher-metadata :to-be-odd))
-           (between (cl-weave:matcher-metadata :to-be-between)))
+           (between (cl-weave:matcher-metadata :to-be-between))
+           (slot (cl-weave:matcher-metadata :to-have-slot))
+           (method (cl-weave:matcher-metadata :to-have-method-specialized-on)))
       (expect names :to-equal sorted-names)
       (expect names :to-contain :to-be)
       (expect even :to-equal
@@ -499,7 +740,13 @@
                 :description "Passes when ACTUAL is an odd integer."))
       (expect between :to-equal
               '(:name :to-be-between
-                :description "Passes when ACTUAL is within the inclusive numeric range."))))
+                :description "Passes when ACTUAL is within the inclusive numeric range."))
+      (expect slot :to-equal
+              '(:name :to-have-slot
+                :description "Passes when ACTUAL names a class that defines the EXPECTED slot."))
+      (expect method :to-equal
+              '(:name :to-have-method-specialized-on
+                :description "Passes when ACTUAL names a generic function with a method specialized on the EXPECTED specializers."))))
 
   (it "signals smart assertion failures with operand values"
     (handler-case
@@ -529,4 +776,20 @@
           (expect actual :to-contain :bytes-consed)
           (expect actual :to-contain :values)
           (expect (cl-weave::assertion-detail-expected detail)
-                  :to-equal '(:max-ms 0)))))))
+                  :to-equal '(:max-ms 0))))))
+
+  (it "reports allocation measurements in assertion failures"
+    (handler-case
+        (progn
+          (expect (lambda () (list :allocated)) :to-allocate-under 0)
+          (expect nil :to-be-truthy))
+      (cl-weave:assertion-failure (condition)
+        (let* ((detail (cl-weave::failure-detail condition))
+               (actual (cl-weave::assertion-detail-actual detail)))
+          (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-allocate-under)
+          (expect actual :to-contain :elapsed-ms)
+          (expect actual :to-contain :elapsed-seconds)
+          (expect actual :to-contain :bytes-consed)
+          (expect actual :to-contain :values)
+          (expect (cl-weave::assertion-detail-expected detail)
+                  :to-equal '(:max-bytes 0)))))))
