@@ -33,19 +33,17 @@ documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 - `describe` / `it` hierarchical test DSL
 - `expect` matcher assertions with readable failure reports
 - smart S-expression assertions that capture operand values
-- `it-each` / `test-each` and `describe-each` compile-time table tests
-- Vitest-shaped `it.*`, `test.*`, `describe.*`, `expect.not`,
-  `expect.resolves`, `expect.rejects`, `expect.assertions`,
-  `expect.hasassertions`, and mock aliases
-  using Common Lisp reader spelling
+- `it-each` and `describe-each` compile-time table tests
+- canonical hyphenated variants such as `it-only`, `describe-concurrent`,
+  `expect-not`, `expect-resolves`, and `expect-assertions`
 - `it-property` deterministic property tests with shrinking
 - form-level mutation testing with macro-defined operators
 - `it-isolated` subprocess tests for FFI and crash boundaries
 - `before-all` / `after-all`, `before-each` / `after-each`, and CPS `around-each` dynamic fixtures
-- `describe-skip` / `it-skip` / `test-skip` skipped suites and cases
+- `describe-skip` / `it-skip` skipped suites and cases
 - `describe-skip-if` / `it-skip-if` and `run-if` conditional registration
 - `describe-only` / `it-only` focused runs
-- `describe-todo` / `it-todo` / `test-todo` todo suites and cases
+- `describe-todo` / `it-todo` todo suites and cases
 - Vitest-style test name filtering for focused local and CI runs
 - Vitest-style test discovery list mode for AI agents and CI tooling
 - AI-friendly CLI metadata for typed/enumerated options, artifact schemas with field maps, capability matrix, package exports, policy documents, matchers, mutations, MOP architecture assertions, and aliases
@@ -53,8 +51,8 @@ documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 - Vitest-style deterministic sequence ordering for flaky-test reproduction
 - Vitest-style `:bail` execution control for fast-fail CI runs
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
-- Vitest-style `it-concurrent` / `test-concurrent` / `describe-concurrent` parallel execution modes
-- Vitest-style `it-fails` / `test-fails` expected-failure cases
+- Vitest-style `it-concurrent` / `describe-concurrent` parallel execution modes
+- Vitest-style `it-fails` expected-failure cases
 - FiveAM-style migration guidance for the native suite DSL
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
@@ -62,7 +60,7 @@ documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 - Vitest-style mock functions with call history assertions
 - ASDF system definitions
 - ASDF-aware system runner and watch mode
-- spec, S-expression, JSON, JSONL/NDJSON, TAP, GitHub Actions, and JUnit XML reporters
+- spec, S-expression, JSON, JSONL, TAP, GitHub Actions, and JUnit XML reporters
 - non-zero process exit on failure for CI
 - safe dynamic global function mocking with `with-mocked-functions`
 
@@ -110,11 +108,11 @@ nix run github:takeokunn/cl-weave -- --help
 nix profile install github:takeokunn/cl-weave
 ```
 
-The packaged CLI is Vitest-shaped and intended for local use, CI, and AI
+The packaged CLI is intended for local use, CI, and AI
 agents:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --testTimeout 10000
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
@@ -148,8 +146,8 @@ perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --report
 ```
 
 The metadata payload advertises CLI commands, typed options, finite choices,
-command-specific choices, environment variables, CI quality gates,
-Vitest-shaped aliases, public package exports, matchers, mutation operators,
+command-specific choices, environment variables, CI quality gates, public
+package exports, matchers, mutation operators,
 `mop-architecture-assertions`, `capabilityMatrix`, `artifactSchemas`, and
 `distributionChannels`.
 For runtime self-diagnostics, `doctor --reporter json` emits a structured
@@ -206,7 +204,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
@@ -283,11 +281,11 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
           "vm/run"))
 (expect value :not :to-be nil)
 (expect-not value :to-be nil)
-(expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
-(expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
-(expect.poll (lambda () (current-state job)) (:timeout-ms 200 :interval-ms 10) :to-be :ready)
-(expect.assertions 2)
-(expect.hasassertions)
+(expect-resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
+(expect-rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
+(expect-poll (lambda () (current-state job)) (:timeout-ms 200 :interval-ms 10) :to-be :ready)
+(expect-assertions 2)
+(expect-has-assertions)
 ```
 
 With matcher syntax, `expect` captures the original S-expression and reports
@@ -296,29 +294,21 @@ reporters. `expect-not` is Vitest-style sugar for matcher assertions that
 should fail when the underlying matcher passes; it uses the same structured
 failure payload as `(expect value :not matcher ...)`.
 
-`expect.resolves` and `expect.rejects` adapt Vitest's promise assertion shape
-to Lisp thunks. `expect.resolves` runs a zero-argument function and applies the
+`expect-resolves` and `expect-rejects` express asynchronous-style assertions
+with Lisp thunks. `expect-resolves` runs a zero-argument function and applies the
 matcher to its primary returned value. If the thunk signals a condition, the
 assertion fails with `:matcher :resolves` and `:actual` containing `:state`,
-`:condition-type`, and `:message`. `expect.rejects` requires the thunk to
+`:condition-type`, and `:message`. `expect-rejects` requires the thunk to
 signal a condition and then applies the matcher to that condition object; a
 normally returned value fails with `:matcher :rejects`.
-`expect.poll` repeatedly evaluates a zero-argument thunk until the matcher
+`expect-poll` repeatedly evaluates a zero-argument thunk until the matcher
 passes or the timeout expires. Polling failures report `:matcher :poll` with
 structured timeout metadata such as `:attempts`, `:timeout-ms`,
 `:interval-ms`, `:last-value`, and optional `:last-condition`.
-The canonical Common Lisp forms are `expect-resolves`, `expect-rejects`, and
-`expect-poll`; the dotted Vitest aliases macro-expand into those exported
-forms.
-
-`expect.assertions` and `expect.hasassertions` are checked at the end of each
+`expect-assertions` and `expect-has-assertions` are checked at the end of each
 test attempt and reset for retries and concurrent tests. Declaration forms do
 not count as assertions; executed `expect`, `expect-not`, smart assertions,
 and thunk aliases count once.
-
-Dotted Vitest-shaped aliases use Common Lisp's actual unescaped reader spelling.
-JavaScript camelCase names are therefore lower-case in source, package exports,
-and metadata. Prefer canonical hyphenated forms for generated Lisp.
 
 With no matcher, `expect` treats the form as a smart assertion. Predicate forms
 using `=`, `/=`, `<`, `<=`, `>`, `>=`, `eql`, `equal`, `equalp`, `string=`, or
@@ -422,7 +412,7 @@ and `:message` in `:actual`, plus the normalized throw matcher in `:expected`:
           (search "user" (princ-to-string condition))))
 ```
 
-Custom matchers use `defmatcher`, `expect.extend`, or the data-driven
+Custom matchers use `defmatcher` or the data-driven
 `extend-expect`. Each matcher receives the evaluated actual value and the
 remaining expected operands as a list. Return the pass boolean, then optional
 reported actual and expected values for structured reporters:
@@ -439,10 +429,10 @@ reported actual and expected values for structured reporters:
 (expect '(:status 201 :body "created") :to-have-status 201)
 ```
 
-Vitest-style bulk registration keeps related domain matchers together:
+Macro-based bulk registration keeps related domain matchers together:
 
 ```lisp
-(cl-weave:expect.extend
+(cl-weave:expect-extend
   (:to-be-cache-hit (response expected)
     "Checks that a response plist came from cache."
     (declare (ignore expected))
@@ -666,12 +656,6 @@ and there are no survived or errored mutants:
     (left right total)
   (expect (+ left right) :to-be total))
 
-(test-each ((2 3 5)
-            (5 8 13))
-    "also adds ~A and ~A"
-    (left right total)
-  (expect (+ left right) :to-be total))
-
 (describe-each ((:json "application/json")
                 (:sexp "application/s-expression"))
     "~A reporter"
@@ -679,50 +663,39 @@ and there are no survived or errored mutants:
   (it "declares its content type"
     (expect content-type :to-satisfy #'stringp)))
 
-(describe.each ((:json "application/json"))
-    "Vitest-shaped ~A reporter"
+(describe-each ((:json "application/json"))
+    "~A reporter with fixtures"
     (reporter content-type)
   (before-each
     (setf (gethash :content-type *test-context*) content-type))
-  (it.each ((:ok :ok))
+  (it-each ((:ok :ok))
       "runs generated case ~A"
       (actual expected)
     (expect actual :to-be expected)))
 
-(test.only.each ((1 2 3))
+(it-only-each ((1 2 3))
     "focuses generated case ~A and ~A"
     (left right total)
   (expect (+ left right) :to-be total))
 
-(it.skip.each ((:slow :case))
+(it-skip-each ((:slow :case))
     "skips generated case ~A"
     (kind label)
   "blocked by upstream"
   (expect (list kind label) :to-equal '(:slow :case)))
 
-(it.todo.each ((:parser :stream) (:ffi :crash-boundary))
+(it-todo-each ((:parser :stream) (:ffi :crash-boundary))
     "documents generated todo ~A"
     (area label)
   "needs design")
 ```
 
-`it-each` and `test-each` expand into independent `it` forms at macro expansion
-time. `describe-each` expands into independent `describe` forms, so nested
-fixtures and cases keep the same semantics as hand-written suites. Dot aliases
-such as `it.each`, `test.each`, and `describe.each` macro-expand through the
-canonical hyphenated forms. Table aliases compose with the Vitest-shaped
-modifiers: `it.only.each`, `it.concurrent.each`, `it.sequential.each`,
-`it.fails.each`, `it.skip.each`, `it.todo.each`, the matching `test.*.each`
-aliases, and
-suite-level `describe.only.each`, `describe.concurrent.each`,
-`describe.sequential.each`, `describe.skip.each`, and `describe.todo.each`. The
-full Vitest-shaped surface also includes
-`it.concurrent`, `it.sequential`, `it.fails`, `it.only`, `it.run-if`,
-`it.skip`, `it.skip-if`, `it.todo`, `it.isolated`,
-`it.property`, matching `test.*` aliases, suite-level `describe.concurrent`,
-`describe.sequential`, `describe.only`, `describe.run-if`,
-`describe.skip`, `describe.skip-if`, `describe.todo`, plus `expect.not`.
-Fixture hooks intentionally keep canonical Lisp names only.
+`it-each` expands into independent `it` forms at macro expansion time.
+`describe-each` expands into independent `describe` forms, so nested
+fixtures and cases keep the same semantics as hand-written suites. Table forms
+compose with canonical modifiers such as `it-only-each`,
+`it-concurrent-each`, `it-sequential-each`, `it-fails-each`, `it-skip-each`,
+and `it-todo-each`. Fixture hooks use the canonical Lisp names.
 `docs/ai-contract.md` is the machine-readable normalization contract for
 agents. Runtime metadata also exposes `referenceDocuments`, `citation`,
 `supportChannels`, `securityContacts`, `lifecycle`, `runtimeSupport`, and
@@ -741,19 +714,15 @@ policy, and project status without scraping prose.
     "uses SBCL allocation counters"
   (expect (lambda () (list :ok)) :to-allocate-under 4096))
 
-(test-run-if (member :sbcl *features*)
-    "uses the test alias for conditional registration"
-  (expect :ok :to-be :ok))
-
 (describe-run-if (member :linux *features*)
     "linux-only integration"
   (it "checks a platform boundary"
     (expect :ok :to-be :ok)))
 ```
 
-`it-skip-if`, `test-skip-if`, and `describe-skip-if` register skipped tests or
-suites when the condition is true. `it-run-if`, `test-run-if`, and
-`describe-run-if` register skipped tests or suites when the condition is false.
+`it-skip-if` and `describe-skip-if` register skipped tests or suites when the
+condition is true. `it-run-if` and `describe-run-if` register skipped tests or
+suites when the condition is false.
 Conditions are evaluated while the test file registers tests; skipped branches
 emit ordinary `:skip` events with deterministic reasons, and their hooks and
 bodies are not executed.
@@ -917,7 +886,6 @@ Use `with-continuation-values` when the continuation carries multiple values:
     (expect :unreachable :to-be :reachable)))
 
 (it-skip "documents a pending case" "waiting for upstream behavior")
-(test-skip "alias for it-skip")
 ```
 
 Skipped suites report selected descendant cases as `:skip` without running suite
@@ -935,8 +903,7 @@ hooks or test bodies. Skipped cases use the same event status and do not fail
   (expect (+ 40 2) :to-be 42))
 
 (it-todo "documents a missing edge case" "needs property generator")
-(test-todo "alias for it-todo")
-(test.todo.each ((:ast) (:ffi))
+(it-todo-each ((:ast) (:ffi))
     "documents future coverage for ~A"
     (area)
   "needs generator")
@@ -945,7 +912,7 @@ hooks or test bodies. Skipped cases use the same event status and do not fail
   (it "documents the expected shape"
     (expect :draft :to-be :stable)))
 
-(describe.todo.each ((:json) (:sexp))
+(describe-todo-each ((:json) (:sexp))
     "future ~A reporter"
     (reporter)
   "needs snapshot contract"
@@ -964,7 +931,7 @@ hooks or test bodies. Todo cases use the same event status and do not fail
 (it "eventually observes an external state" (:retry 2 :timeout-ms 500)
   (expect (probe-state) :to-be :ready))
 
-(test "alias with the same options" (:retry 1)
+(it "supports retry options" (:retry 1)
   (expect (+ 20 22) :to-be 42))
 
 (it-fails "documents a known parser bug" (:retry 1)
@@ -977,15 +944,15 @@ case if a single attempt exceeds the configured wall-clock budget. Timeout
 failures are reported as `test-timeout` conditions.
 
 CLI and CI runs can set suite-wide defaults with `--retry`,
-`CL_WEAVE_RETRY`, `--test-timeout-ms`, `--test-timeout`, `--testTimeout`,
-`CL_WEAVE_TEST_TIMEOUT_MS`, `CL_WEAVE_TEST_TIMEOUT`, `--max-workers`,
-`--maxWorkers`, or `CL_WEAVE_MAX_WORKERS`. Per-test options take priority over
+`CL_WEAVE_RETRY`, `--test-timeout-ms`, `CL_WEAVE_TEST_TIMEOUT_MS`,
+`CL_WEAVE_TEST_TIMEOUT`, `--max-workers`, or `CL_WEAVE_MAX_WORKERS`. Per-test
+options take priority over
 global defaults, so `:retry 0` disables a global retry budget for one case,
 `:timeout-ms` replaces the global per-attempt timeout, and `--max-workers`
 bounds adjacent concurrent worker batches.
 
-`it-fails` and `test-fails` invert one runnable case: any assertion failure,
-error, or timeout is reported as `:pass`; an unexpectedly passing body is
+`it-fails` inverts one runnable case: any assertion failure, error, or timeout
+is reported as `:pass`; an unexpectedly passing body is
 reported as `:fail` with `expected-failure-missed`.
 
 ### Interactive Restarts
@@ -1002,7 +969,7 @@ Every runnable attempt installs Common Lisp restarts while the body and
 ```
 
 `continue-test` records the current attempt as `:pass`, `skip-test` records it
-as `:skip` with an optional reason, and `retry-test` reruns the attempt without
+as `:skip` with an optional reason, and `retry-test` reruns the attempt while
 consuming the configured `:retry` budget. If no handler or debugger invokes a
 restart, CI behavior is unchanged and the original failure, error, or timeout is
 reported normally.
@@ -1013,23 +980,23 @@ reported normally.
 (it-concurrent "fetches account metadata" (:timeout-ms 1000)
   (expect (fetch-account) :to-satisfy #'account-ready-p))
 
-(test "uses option form when macros generate cases" (:concurrent t :retry 1)
+(it "uses option form when macros generate cases" (:concurrent t :retry 1)
   (expect (probe-cache) :to-be :warm))
 
-(describe.concurrent "parallel-safe API checks"
+(describe-concurrent "parallel-safe API checks"
   (it "fetches account" (expect (fetch-account) :to-satisfy #'account-ready-p))
-  (it.sequential "uses shared rate-limit bucket"
+  (it-sequential "uses shared rate-limit bucket"
     (expect (probe-rate-limit) :to-be :available)))
 ```
 
-`it-concurrent`, `test-concurrent`, and `(:concurrent t)` mark a case as safe
+`it-concurrent` and `(:concurrent t)` mark a case as safe
 to run beside adjacent concurrent cases. `describe-concurrent` /
-`describe.concurrent` applies the same execution mode to descendants, and
-`it-sequential` / `it.sequential` opts a single case back out. Report order
+`describe-concurrent` applies the same execution mode to descendants, and
+`it-sequential` opts a single case back out. Report order
 stays deterministic: events are emitted in the selected definition order. When
 `:bail` is enabled, concurrent batching is disabled so fast-fail behavior
-remains exact. `run-all :max-workers N`, `--max-workers N`, `--maxWorkers N`,
-and `CL_WEAVE_MAX_WORKERS=N` bound the number of worker threads used for each
+remains exact. `run-all :max-workers N`, `--max-workers N`, and
+`CL_WEAVE_MAX_WORKERS=N` bound the number of worker threads used for each
 adjacent concurrent batch.
 
 ### Filtering
@@ -1226,34 +1193,30 @@ selected and executed before the runner stopped.
 (with-mocked-functions (((symbol-function 'now) (lambda () 0)))
   (expect (now) :to-be 0))
 
-(let ((spy (vi.spyon 'now)))
-  (vi.mockreturnvalue spy 42)
+(let ((spy (spy-on 'now)))
+  (mock-return-value spy 42)
   (expect (now) :to-be 42)
-  (vi.mockrestore spy))
+  (mock-restore spy))
 ```
 
-`make-mock-function` creates an inspectable function object. `vi.fn` is the
-Vitest-shaped alias for the same constructor. `mock-function-p`,
-`vi.ismockfunction`, and `vi.mocked` test whether a value is a registered
-cl-weave mock without signalling on non-functions. `mock-calls` returns a copy
+`make-mock-function` creates an inspectable function object. `mock-function-p`
+tests whether a value is a registered cl-weave mock without signalling on
+non-functions. `mock-calls` returns a copy
 of the recorded argument lists, `mock-results` returns return/throw reports,
-and `clear-mock`
-or `vi.mockclear` resets both histories for one mock. `reset-mock` or
-`vi.mockreset` resets histories and replaces that mock's implementation with
+and `clear-mock` resets both histories for one mock. `reset-mock` resets
+histories and replaces that mock's implementation with
 the default no-op function.
-`mock-implementation` and `vi.mockimplementation` replace an existing mock's
-active implementation. `mock-return-value` and `vi.mockreturnvalue` pin a
-single return value, while `mock-return-values` and `vi.mockreturnvalues` pin
+`mock-implementation` replaces an existing mock's active implementation.
+`mock-return-value` pins a single return value, while `mock-return-values` pin
 Common Lisp multiple values.
-`clear-all-mocks` and `vi.clearallmocks` reset histories for every registered
-mock without replacing their implementations; `reset-all-mocks` and
-`vi.resetallmocks` apply the reset behavior to every registered mock.
-`spy-on` and `vi.spyon` replace a symbol's function cell with a registered mock
-that calls the original function by default. `mock-restore` /
-`vi.mockrestore` restore that function cell when it is still bound to the spy,
+`clear-all-mocks` resets histories for every registered mock without replacing
+their implementations; `reset-all-mocks` applies the reset behavior to every
+registered mock. `spy-on` replaces a symbol's function cell with a registered mock
+that calls the original function by default. `mock-restore` restores that
+function cell when it is still bound to the spy,
 reset the spy history, and restore the spy implementation to the original
-function. `restore-all-mocks` and `vi.restoreallmocks` apply that behavior to
-every active spy while leaving regular `vi.fn` mocks untouched.
+function. `restore-all-mocks` applies that behavior to every active spy while
+leaving regular mocks untouched.
 `:to-have-returned-with` accepts Common Lisp multiple values as matcher
 operands, for example
 `(expect mock :to-have-returned-with :ok 42)`. Nth mock matchers use one-based
@@ -1319,9 +1282,15 @@ meaningless coverage artifacts. Pass `:coverage-reset nil` to merge the run
 into existing counters.
 
 When `CL_WEAVE_COVERAGE=1` is set, `scripts/run-tests.lisp` enables
-`sb-cover:store-coverage-data` before loading the project systems and forces a
-coverage-aware reload, so the generated HTML report reflects the current test
-run without extra wrapper code in the project under test.
+`sb-cover:store-coverage-data` while loading the product system, then disables
+instrumentation before loading the test system. This keeps test helpers out of
+the measured code while forcing a coverage-aware product reload.
+
+Run `scripts/run-coverage-gate.sh` for the CI coverage contract. It requires
+every Lisp file under `src/` to be present in the SB-COVER report and requires
+aggregate product expression and branch coverage to reach 100%. Missing source
+measurements or a lower rate fail the command. The gate writes its
+machine-readable result to `cl-weave-coverage-summary.json`.
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. The `:jsonl` reporter emits one
@@ -1332,7 +1301,7 @@ non-policy paths through `referenceDocuments` and `citation`, plus support
 and lifecycle contracts through `supportChannels`, `securityContacts`,
 `lifecycle`, `runtimeSupport`, and `releaseProcess`.
 
-`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`, `ndjson`,
+`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`,
 `tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
 `CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
 discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus positive
@@ -1356,12 +1325,11 @@ line-oriented CI logs, `github` for GitHub Actions annotations, and `junit`
 when a CI service should ingest test results as XML. List mode supports `spec`,
 `sexp`, `json`, and `jsonl`.
 
-The CLI keeps kebab-case flags as the canonical Lisp spelling and exposes
-Vitest-shaped aliases for agents and JavaScript-adjacent CI templates:
-`--testNamePattern`, `--watchInterval`, `--coverageOutput`,
-`--outputFile`, `--testTimeout`, `--testTimeoutMs`, `--passWithNoTests`,
-`--failWithNoTests`, `--snapshotDir`, `--snapshotFile`, `--maxWorkers`,
-`--update`, and `--updateSnapshots`.
+The CLI uses kebab-case flags consistently, including `--test-name-pattern`,
+`--watch-interval`, `--coverage-output`, `--output-file`,
+`--test-timeout-ms`, `--pass-with-no-tests`, `--fail-with-no-tests`,
+`--snapshot-dir`, `--snapshot-file`, `--max-workers`, and
+`--update-snapshots`.
 
 ### ASDF System Runner and Watch Mode
 

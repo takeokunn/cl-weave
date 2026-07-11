@@ -64,17 +64,15 @@ should move directly onto the native suite DSL:
 
 - `describe`
 - `it`
-- `test`
 - `describe-each`
 - `it-each`
-- `test-each`
 - `before-all`
 - `before-each`
 - `around-each`
 - `after-each`
 - `after-all`
 - `expect`
-- `expect.not`
+- `expect-not`
 - `run`
 - `explain!`
 - `results-status`
@@ -111,8 +109,8 @@ compatibility:
 - `with-restored-hash-table`
 - `with-cleared-hash-table`
 
-Predicate-style helper aliases remain exported as thin matcher wrappers for
-suites migrating from assertion-per-predicate frameworks:
+Predicate-style assertion macros are part of the native API for concise type
+and value checks:
 
 - `is-equal`
 - `is-not-equal`
@@ -168,7 +166,7 @@ replacement, dynamic binding restoration, and hash-table snapshot/reset flows
 can migrate directly onto `cl-weave` without preserving a downstream wrapper
 layer.
 
-The compatibility layer intentionally stops at generic testing semantics.
+The native migration surface intentionally stops at generic testing semantics.
 Project-specific helpers, such as compiler assertions or domain fixtures,
 should remain in the downstream project and call `cl-weave` assertions
 internally during migration.

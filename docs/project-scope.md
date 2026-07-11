@@ -11,7 +11,8 @@ and migration from adjacent ecosystems.
 - Deterministic reporters and structured machine-readable output.
 - Snapshot, property, mutation, and isolation helpers that fit the existing
   runner model.
-- Compatibility shims for incremental migration when they reduce adoption risk.
+- Explicit migration documentation for replaced APIs, without runtime aliases
+  or wrappers.
 - Machine-readable metadata that lets tooling discover supported commands,
   reporter schemas, and project links without scraping prose.
 

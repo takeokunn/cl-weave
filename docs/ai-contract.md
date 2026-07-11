@@ -451,8 +451,8 @@ verification and scope policy for those channels lives in
     {
       "name": "vitest-dsl",
       "status": "implemented",
-      "summary": "Vitest-shaped hierarchical and table-driven test registration.",
-      "publicApis": ["describe", "it", "test", "describe-each", "it-concurrent", "it-isolated"],
+      "summary": "Hierarchical and table-driven test registration.",
+      "publicApis": ["describe", "it", "describe-each", "it-concurrent", "it-isolated"],
       "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
       "documentation": ["README.md", "docs/ai-contract.md"]
     },
@@ -535,7 +535,6 @@ verification and scope policy for those channels lives in
       "description": "Run the complete Nix flake validation suite."
     }
   ],
-  "vitestAliases": [{"alias": "it.each", "canonical": "it-each"}],
   "packageExports": [{"name": "cl-weave", "exports": ["describe", "expect", "it"]}],
   "matchers": [{"name": "to-be", "description": null}],
   "mutationOperators": [{"name": "arithmetic-operator", "description": "..."}]
@@ -618,62 +617,12 @@ added. For project scope, governance, issue handling, release flow, and
 compatibility expectations, agents should prefer the policy documents in
 `docs/` over README summaries.
 
-## DSL Alias Contract
+## DSL Naming Contract
 
-Vitest-shaped aliases are source-level macros only. Agents may normalize them
-to the canonical hyphenated forms when reasoning about test plans:
-
-- `describe.each` -> `describe-each`
-- `describe.only` -> `describe-only`
-- `describe.only.each` -> `describe-only-each`
-- `describe.concurrent` -> `describe-concurrent`
-- `describe.concurrent.each` -> `describe-concurrent-each`
-- `describe.sequential` -> `describe-sequential`
-- `describe.sequential.each` -> `describe-sequential-each`
-- `describe.run-if` -> `describe-run-if`
-- `describe.skip` / `describe.skip-if` / `describe.todo` -> canonical skip and todo suite macros
-- `describe.skip.each` -> `describe-skip-each`
-- `describe.todo.each` -> `describe-todo-each`
-- `it.each` -> `it-each`
-- `it.concurrent` -> `it-concurrent`
-- `it.concurrent.each` -> `it-concurrent-each`
-- `it.sequential` -> `it-sequential`
-- `it.sequential.each` -> `it-sequential-each`
-- `it.isolated` -> `it-isolated`
-- `it.property` -> `it-property`
-- `it.fails` -> `it-fails`
-- `it.fails.each` -> `it-fails-each`
-- `it.only` -> `it-only`
-- `it.only.each` -> `it-only-each`
-- `it.run-if` -> `it-run-if`
-- `it.skip` / `it.skip-if` / `it.todo` -> canonical skip and todo macros
-- `it.skip.each` -> `it-skip-each`
-- `it.todo.each` -> `it-todo-each`
-- `test` -> `it`
-- `test.each` -> `test-each`
-- `test.concurrent` -> `test-concurrent`
-- `test.concurrent.each` -> `test-concurrent-each`
-- `test.sequential` -> `test-sequential`
-- `test.sequential.each` -> `test-sequential-each`
-- `test.isolated` -> `test-isolated`
-- `test.property` -> `test-property`
-- `test.fails` -> `test-fails`
-- `test.fails.each` -> `test-fails-each`
-- `test.only` -> `test-only`
-- `test.only.each` -> `test-only-each`
-- `test.run-if` -> `test-run-if`
-- `test.skip` / `test.skip-if` / `test.todo` -> canonical skip and todo macros
-- `test.skip.each` -> `test-skip-each`
-- `test.todo.each` -> `test-todo-each`
-- `expect.assertions` -> `expect-assertions`
-- `expect.hasassertions` -> `expect-has-assertions`
-- `expect.not` -> `expect-not`
-- `expect.extend` -> `expect-extend`
-- `expect.resolves` -> `expect-resolves`
-- `expect.rejects` -> `expect-rejects`
-Fixture hooks are exported as canonical Lisp forms: `before-all`, `after-all`,
-`before-each`, `around-each`, and `after-each`. Dotted Vitest-shaped aliases use
-Common Lisp's actual unescaped reader spelling.
+The public DSL uses canonical Common Lisp hyphenated names. Agents should emit
+forms such as `describe-each`, `it-concurrent`, `it-todo-each`,
+`expect-not`, and `expect-resolves` directly. Fixture hooks are exported as
+`before-all`, `after-all`, `before-each`, `around-each`, and `after-each`.
 
 ## S-Expression Reporter
 
@@ -715,13 +664,13 @@ For assertion failures, `:assertion` contains:
 ```
 
 Custom matchers registered with `cl-weave:defmatcher`,
-`cl-weave:expect.extend`, or `cl-weave:extend-expect` use the same assertion
+`cl-weave:expect-extend`, or `cl-weave:extend-expect` use the same assertion
 payload. The matcher keyword is stored in `:matcher`; the optional second and
 third return values become `:actual` and `:expected`, which lets AI agents read
 domain-specific failure data without parsing human messages.
 
 Custom matcher definitions may attach a human-readable description as data.
-`defmatcher` and `expect.extend` read a leading string in the body.
+`defmatcher` and `expect-extend` read a leading string in the body.
 `extend-expect` accepts either a trailing string or `:description string`.
 Agents can inspect the registry without macroexpanding test files:
 
@@ -772,28 +721,25 @@ Mock function matchers report call and result histories in `:actual`:
 ```
 
 Thrown mock calls use `(:type :throw :condition-type simple-error :message "...")`.
-`vi.fn` is a Vitest-shaped alias for `make-mock-function`; both constructors
-produce the same mock function contract and result history shape.
-`mock-function-p`, `vi.ismockfunction`, and `vi.mocked` return true only for
+`make-mock-function` produces the documented mock function contract and result
+history shape. `mock-function-p` returns true only for
 registered cl-weave mock functions and return false, not an error, for other
 values.
-`mock-implementation` and `vi.mockimplementation` mutate the implementation of
-an existing mock and return that mock. `mock-return-value` /
-`vi.mockreturnvalue` and `mock-return-values` / `vi.mockreturnvalues` are
+`mock-implementation` mutates the implementation of an existing mock and
+returns that mock. `mock-return-value` and `mock-return-values` are
 constant return setters for single and Common Lisp multiple values.
-`clear-mock` and `vi.mockclear` clear one registered mock history while
+`clear-mock` clears one registered mock history while
 preserving its implementation.
-`clear-all-mocks` and `vi.clearallmocks` clear every registered mock history
+`clear-all-mocks` clears every registered mock history
 while preserving mock implementations.
-`reset-mock` and `vi.mockreset` clear one mock history and replace its
-implementation with the default no-op function. `reset-all-mocks` and
-`vi.resetallmocks` apply that reset behavior to every registered mock.
-`spy-on` and `vi.spyon` replace a symbol function cell with a registered mock
-whose default implementation calls the original function. `mock-restore` /
-`vi.mockrestore` restore the function cell only when it is still bound to that
+`reset-mock` clears one mock history and replaces its implementation with the
+default no-op function. `reset-all-mocks` applies that reset behavior to every
+registered mock. `spy-on` replaces a symbol function cell with a registered mock
+whose default implementation calls the original function. `mock-restore`
+restores the function cell only when it is still bound to that
 spy, clear the spy history, and restore the spy implementation to the original
-function. `restore-all-mocks` and `vi.restoreallmocks` restore active spies
-without resetting regular `vi.fn` mocks.
+function. `restore-all-mocks` restores active spies without resetting regular
+mocks.
 Return-value matchers compare their operands with the recorded Common Lisp
 multiple values list. Ordered mock matchers use one-based indices:
 `:to-have-been-nth-called-with` reports `(:index n :arguments (...))`, and
@@ -871,8 +817,7 @@ It prints one JSON object per line:
 
 `test-event.event` uses the same object shape as JSON result `events` entries.
 `test-results-summary` uses the same counts and rerun path summaries as the JSON
-result root object. The alias `CL_WEAVE_REPORTER=ndjson` selects the same
-reporter as `jsonl`.
+result root object. Set `CL_WEAVE_REPORTER=jsonl` to select this reporter.
 
 Assertion payloads are now structured JSON values when the underlying Common
 Lisp data can be represented directly. Property lists become camelCase JSON
@@ -949,12 +894,14 @@ side.
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
 ```
 
-The coverage artifacts are a populated HTML report generated with
-`sb-cover:report` and an optional SBCL state sidecar written with
-`sb-cover:save-coverage-in-file`. Agents should treat them as sidecar artifacts
+The gate instruments product sources but not the test system. It fails when any
+Lisp file under `src/` is absent from the SB-COVER report or aggregate product
+expression and branch coverage is below 100%. Its artifacts are a populated
+HTML report, an SBCL state sidecar, and
+`cl-weave-coverage-summary.json`. Agents should treat them as sidecar artifacts
 and continue to parse S-expression or JSON reporter output for test results.
 
 ## Mutation Reports
@@ -1175,15 +1122,14 @@ set `:negated t` in the assertion detail and preserve the raw matcher result in
 `:pass`, so agents can tell that the matcher itself succeeded but the negated
 expectation failed.
 
-Vitest-style resolving and rejecting assertions use Lisp thunks instead of
-JavaScript promises:
+Resolving and rejecting assertions use Lisp thunks:
 
 ```lisp
-(expect.resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
-(expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
+(expect-resolves (lambda () (fetch-account)) :to-satisfy #'account-ready-p)
+(expect-rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error)
 ```
 
-`expect.resolves` applies the matcher to the thunk's primary value. If the
+`expect-resolves` applies the matcher to the thunk's primary value. If the
 thunk signals a condition first, the assertion detail uses:
 
 ```lisp
@@ -1194,7 +1140,7 @@ thunk signals a condition first, the assertion detail uses:
  :expected (:state :resolved))
 ```
 
-`expect.rejects` applies the matcher to the condition object. If the thunk
+`expect-rejects` applies the matcher to the condition object. If the thunk
 returns normally, the assertion detail uses:
 
 ```lisp
@@ -1387,9 +1333,9 @@ cases are emitted as ordinary `:skip` or `:todo` events with the suite reason in
 suppressed.
 
 Conditional registration macros keep the same reporter contract.
-`it-skip-if`, `test-skip-if`, and `describe-skip-if` emit ordinary `:skip`
-events when their condition is true. `it-run-if`, `test-run-if`, and
-`describe-run-if` emit ordinary `:skip` events when their condition is false.
+`it-skip-if` and `describe-skip-if` emit ordinary `:skip` events when their
+condition is true. `it-run-if` and `describe-run-if` emit ordinary `:skip`
+events when their condition is false.
 The deterministic reasons are `"conditional skip"` and `"conditional run-if"`.
 Conditions are evaluated while the test file registers tests; reporters do not
 add a new event field or schema version for conditional registration.
@@ -1424,9 +1370,9 @@ Agents can reproduce order-dependent failures without changing source files:
 ```
 
 The command runner exposes the same contract through
-`CL_WEAVE_SEQUENCE=random` and `CL_WEAVE_SEQUENCE_SEED=N`. Accepted order values
-are `defined`, `random`, and `shuffle`; `shuffle` is an alias for `random`.
-`:defined` is the default. When `CL_WEAVE_SEQUENCE_SEED` is explicitly set, it
+`CL_WEAVE_SEQUENCE=random` and `CL_WEAVE_SEQUENCE_SEED=N`. `random` is the only
+accepted explicit order value; omitting the option preserves definition order.
+When `CL_WEAVE_SEQUENCE_SEED` is explicitly set, it
 must be a positive integer so failed CI runs can be reproduced from logs without
 ambiguous seed parsing.
 
@@ -1627,10 +1573,10 @@ Case options are passed as a keyword plist immediately after the case name:
 (it-concurrent "parallel-safe case" (:timeout-ms 500)
   (expect (probe-independent-service) :to-be :ready))
 
-(describe.concurrent "parallel-safe suite"
+(describe-concurrent "parallel-safe suite"
   (it "inherits concurrent mode"
     (expect (probe-independent-service) :to-be :ready))
-  (it.sequential "uses shared state"
+  (it-sequential "uses shared state"
     (expect (probe-shared-state) :to-be :ready)))
 ```
 
@@ -1657,10 +1603,10 @@ Command runners can bound adjacent concurrent batches with `--max-workers N` or
 `CL_WEAVE_MAX_WORKERS=N`. List mode remains discovery-only and does not consume
 the worker setting.
 
-`:concurrent t`, `it-concurrent`, and `test-concurrent` mark a case as safe for
+`:concurrent t` and `it-concurrent` mark a case as safe for
 parallel execution with adjacent concurrent cases. `describe-concurrent` /
-`describe.concurrent` applies the same mode to descendants, while
-`it-sequential`, `test-sequential`, and the dot aliases opt individual cases out.
+`describe-concurrent` applies the same mode to descendants, while
+`it-sequential` opts individual cases out.
 Reporter schemas continue to expose the effective mode as the stable
 `concurrent` boolean. Event arrays and test-plan arrays remain in selected
 definition order. `:bail` disables concurrent batching to keep fast-fail
@@ -1668,8 +1614,7 @@ semantics exact.
 
 ## Expected Failure Contract
 
-`it-fails` and `test-fails` register ordinary runnable cases with the same
-option plist as `it`.
+`it-fails` registers ordinary runnable cases with the same option plist as `it`.
 
 ```lisp
 (it-fails "documents a known parser bug" (:retry 1 :timeout-ms 500)
@@ -1703,7 +1648,7 @@ same CI behavior described above.
 
 ## Table-Driven Macro Expansion
 
-`it-each`, `test-each`, and `describe-each` are compile-time expansion helpers,
+`it-each` and `describe-each` are compile-time expansion helpers,
 not runtime loop constructs.
 
 ```lisp
@@ -1714,7 +1659,7 @@ not runtime loop constructs.
   (expect (+ left right) :to-be total))
 ```
 
-`it-each` and `test-each` emit independent `it` registrations. `describe-each`
+`it-each` emits independent `it` registrations. `describe-each`
 emits independent `describe` registrations, and the generated suite bodies use
 the same fixture, assertion, filtering, and reporter contracts as hand-written
 suites.
@@ -1764,7 +1709,7 @@ index needed for focused reproduction:
 
 Generator combinators do not create new event types. `src/property.lisp` owns
 generator data, value production, shrinking, and property execution;
-`src/dsl.lisp` only expands `it-property` into that runner. `gen-map`,
+`src/registration.lisp` only expands `it-property` into that runner. `gen-map`,
 `gen-one-of`, `gen-recursive`, `gen-tuple`, and `gen-such-that` only affect
 generated values and shrink candidates before the same `assertion-failure`
 payload is reported. `gen-character`, `gen-string`, and `gen-vector` cover
