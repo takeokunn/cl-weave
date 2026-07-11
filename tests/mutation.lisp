@@ -287,6 +287,7 @@
 (describe "mutation public records"
   (it "exposes operator names and descriptions"
     (let ((operator (cl-weave::mutation-operator-named :arithmetic-operator)))
+      (expect (typep operator 'cl-weave::mutation-operator) :to-be-truthy)
       (expect (cl-weave:mutation-operator-name operator)
               :to-be
               :arithmetic-operator)
@@ -302,6 +303,8 @@
                     :mutation mutation
                     :status :errored
                     :condition condition)))
+      (expect (typep mutation 'cl-weave:mutation) :to-be-truthy)
+      (expect (typep result 'cl-weave:mutation-result) :to-be-truthy)
       (expect (cl-weave:mutation-result-mutation result) :to-be mutation)
       (expect (cl-weave:mutation-result-status result) :to-be :errored)
       (expect (cl-weave:mutation-result-condition result) :to-be condition))))
