@@ -97,20 +97,35 @@
              2147483648))
   (mod (property-rng-state rng) limit))
 
+(defun integer-shrink-candidates (value min max)
+  (declare (type integer value min max))
+  (loop for candidate in (list 0 min (truncate value 2))
+        when (and (integerp candidate)
+                  (<= min candidate max))
+          collect candidate into candidates
+        finally (return (remove-duplicates candidates :test #'eql))))
+
+(defun make-integer-producer (min max)
+  (declare (type integer min max))
+  (lambda (rng)
+    (+ min (property-random-below rng (1+ (- max min))))))
+
+(defun make-integer-shrinker (min max)
+  (declare (type integer min max))
+  (lambda (value)
+    (integer-shrink-candidates value min max)))
+
 (defun gen-integer (&key (min -100) (max 100))
+  (check-type min integer)
+  (check-type max integer)
   (when (> min max)
     (error "cl-weave: gen-integer requires MIN <= MAX, got ~S and ~S." min max))
-  (make-property-generator
-   :name :integer
-   :produce (lambda (rng)
-              (+ min (property-random-below rng (1+ (- max min)))))
-   :shrink (lambda (value)
-             (remove-duplicates
-              (remove-if-not
-               (lambda (candidate)
-                 (and (integerp candidate) (<= min candidate max)))
-               (list 0 min (truncate value 2)))
-              :test #'eql))))
+  (locally
+      (declare (notinline make-integer-producer make-integer-shrinker))
+    (make-property-generator
+     :name :integer
+     :produce (make-integer-producer min max)
+     :shrink (make-integer-shrinker min max))))
 
 (defun gen-boolean ()
   (make-property-generator

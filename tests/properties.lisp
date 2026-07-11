@@ -1,6 +1,24 @@
 (in-package #:cl-weave/tests)
 
 (describe "properties"
+  (it "validates integer generator bounds"
+    (expect (lambda () (gen-integer :min 0.5)) :to-throw 'type-error)
+    (expect (lambda () (gen-integer :max "10")) :to-throw 'type-error)
+    (expect (lambda () (gen-integer :min 2 :max 1))
+            :to-throw "MIN <= MAX"))
+
+  (it "keeps integer production and shrinking within bounds"
+    (let* ((singleton (gen-integer :min 5 :max 5))
+           (positive (gen-integer :min 2 :max 10))
+           (negative (gen-integer :min -10 :max -2))
+           (rng (cl-weave::make-property-rng :state 1)))
+      (expect (funcall (cl-weave::property-generator-produce singleton) rng)
+              :to-be 5)
+      (expect (funcall (cl-weave::property-generator-shrink positive) 8)
+              :to-equal '(2 4))
+      (expect (funcall (cl-weave::property-generator-shrink negative) -8)
+              :to-equal '(-10 -4))))
+
   (it-property "checks integer addition commutativity"
       ((left (gen-integer :min -20 :max 20))
        (right (gen-integer :min -20 :max 20)))
