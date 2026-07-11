@@ -133,9 +133,22 @@
         (list :timeout-ms timeout-ms
               :interval-ms interval-ms)))))
 
-(defun elapsed-internal-time-ms (started-at)
-  (/ (* (- (get-internal-real-time) started-at) 1000)
-     internal-time-units-per-second))
+(define-record-class poll-state
+  (deadline timeout-ms interval-ms attempts last-value last-condition last-detail))
+
+(defun milliseconds-to-internal-time (milliseconds)
+  (/ (* milliseconds internal-time-units-per-second) 1000))
+
+(defun make-initial-poll-state (timeout-ms interval-ms)
+  (make-poll-state
+   :deadline (+ (get-internal-real-time)
+                (milliseconds-to-internal-time timeout-ms))
+   :timeout-ms timeout-ms
+   :interval-ms interval-ms
+   :attempts 0))
+
+(defun poll-deadline-reached-p (state)
+  (>= (get-internal-real-time) (poll-state-deadline state)))
 
 (defun poll-last-assertion-report (detail)
   (list :matcher (assertion-detail-matcher detail)
@@ -144,71 +157,84 @@
         :negated (assertion-detail-negated detail)
         :pass (assertion-detail-pass detail)))
 
-(defun signal-expect-poll-timeout (form timeout-ms interval-ms attempts last-value last-condition last-detail)
+(defun signal-expect-poll-timeout (form state)
   (signal-assertion-failure
    (make-assertion-detail
     :form form
     :matcher :poll
     :actual (append
-             (list :attempts attempts
-                   :timeout-ms timeout-ms
-                   :interval-ms interval-ms
-                   :last-value last-value)
-             (when last-condition
-               (list :last-condition (rejected-thunk-report last-condition)))
-             (when last-detail
-               (list :last-assertion (poll-last-assertion-report last-detail))))
+             (list :attempts (poll-state-attempts state)
+                   :timeout-ms (poll-state-timeout-ms state)
+                   :interval-ms (poll-state-interval-ms state)
+                   :last-value (poll-state-last-value state))
+             (when (poll-state-last-condition state)
+               (list :last-condition
+                     (rejected-thunk-report (poll-state-last-condition state))))
+             (when (poll-state-last-detail state)
+               (list :last-assertion
+                     (poll-last-assertion-report (poll-state-last-detail state)))))
     :expected '(:state :pass)
     :negated nil
     :pass nil)))
+
+(defun call-poll-thunk/k (callable pass-k reject-k)
+  (multiple-value-bind (accepted-p result)
+      (handler-case
+          (values t (funcall callable))
+        (condition (condition)
+          (values nil condition)))
+    (funcall (if accepted-p pass-k reject-k) result)))
+
+(defun assess-poll-value/k (value expectation form pass-k retry-k)
+  (multiple-value-bind (pass detail)
+      (handler-case
+          (assert-expectation value expectation form)
+        (assertion-failure (condition)
+          (values nil (failure-detail condition))))
+    (funcall (if pass pass-k retry-k) detail)))
+
+(defun poll-step/k (callable expectation form state pass-k retry-k timeout-k)
+  (incf (poll-state-attempts state))
+  (call-poll-thunk/k
+   callable
+   (lambda (value)
+     (setf (poll-state-last-value state) value
+           (poll-state-last-condition state) nil)
+     (assess-poll-value/k
+      value expectation form
+      (lambda (detail)
+        (setf (poll-state-last-detail state) detail)
+        (if (poll-deadline-reached-p state)
+            (funcall timeout-k state)
+            (funcall pass-k value)))
+      (lambda (detail)
+        (setf (poll-state-last-detail state) detail)
+        (if (poll-deadline-reached-p state)
+            (funcall timeout-k state)
+            (funcall retry-k state)))))
+   (lambda (condition)
+     (setf (poll-state-last-condition state) condition)
+     (if (poll-deadline-reached-p state)
+         (funcall timeout-k state)
+         (funcall retry-k state)))))
 
 (defun call-polling-expectation-thunk (thunk expectation options form)
   (let* ((callable (ensure-expect-thunk thunk :poll form))
          (normalized-options (normalize-expect-poll-options options form))
          (timeout-ms (getf normalized-options :timeout-ms))
          (interval-ms (getf normalized-options :interval-ms))
-         (started-at (get-internal-real-time))
-         (attempts 0)
-         (last-value nil)
-         (last-condition nil)
-         (last-detail nil)
-         (passed-p nil))
+         (state (make-initial-poll-state timeout-ms interval-ms)))
     (loop
-      do (incf attempts)
-        (handler-case
-            (let ((value (funcall callable)))
-              (setf last-value value
-                    last-condition nil)
-              (handler-case
-                  (multiple-value-bind (pass detail)
-                      (assert-expectation value expectation form)
-                    (setf last-detail detail
-                          passed-p pass))
-                (assertion-failure (condition)
-                  (setf last-detail (failure-detail condition)
-                        passed-p nil)))
-              (when (>= (elapsed-internal-time-ms started-at) timeout-ms)
-                (signal-expect-poll-timeout form
-                                            timeout-ms
-                                            interval-ms
-                                            attempts
-                                            last-value
-                                            last-condition
-                                            last-detail))
-              (when passed-p
-                (return value)))
-           (condition (condition)
-             (setf last-condition condition)))
-         (when (>= (elapsed-internal-time-ms started-at) timeout-ms)
-           (signal-expect-poll-timeout form
-                                       timeout-ms
-                                       interval-ms
-                                       attempts
-                                       last-value
-                                       last-condition
-                                       last-detail))
+      (poll-step/k
+       callable expectation form state
+       (lambda (value)
+         (return-from call-polling-expectation-thunk value))
+       (lambda (next-state)
+         (declare (ignore next-state))
          (when (plusp interval-ms)
-           (sleep (/ interval-ms 1000.0))))))
+           (sleep (/ interval-ms 1000.0))))
+       (lambda (timed-out-state)
+         (signal-expect-poll-timeout form timed-out-state))))))
 
 (defun rejected-thunk-report (condition)
   (list :state :rejected
@@ -249,4 +275,3 @@
             :expected '(:state :rejected)
             :negated nil
             :pass nil))))))
-
