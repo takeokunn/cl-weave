@@ -1,6 +1,28 @@
 (in-package #:cl-weave/tests)
 
 (describe "retry and timeout"
+  (it "keeps the test continuation inside the platform timeout boundary"
+    (let* ((continuation-calls 0)
+           (suite (cl-weave::make-suite :name "timeout continuation"))
+           (test (cl-weave::make-test-case
+                  :name "single continuation"
+                  :function (lambda () :completed)))
+           (cl-weave::*platform-capabilities* '(:timeout))
+           (cl-weave::*platform-timeout-caller*
+             (lambda (timeout callable continue)
+               (declare (ignore timeout))
+               (funcall continue (funcall callable)))))
+      (expect
+       (cl-weave::call-test-case-with-timeout/k
+        suite
+        test
+        1.0
+        (lambda ()
+          (incf continuation-calls)
+          :continued))
+       :to-be :continued)
+      (expect continuation-calls :to-be 1)))
+
   (it "retries failing tests until they pass"
     (let* ((attempts 0)
            (test (cl-weave::make-test-case

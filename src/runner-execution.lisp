@@ -212,8 +212,8 @@
 (defun call-test-case-with-timeout/k (suite test timeout continue)
   (call-with-platform-timeout/k
    timeout
-   (lambda () (call-test-case/k suite test #'identity))
-   continue))
+   (lambda () (call-test-case/k suite test continue))
+   #'identity))
 
 (defun expected-failure-case-p (test)
   (test-case-expected-failure-reason test))
