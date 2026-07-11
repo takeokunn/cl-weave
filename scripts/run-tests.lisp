@@ -384,6 +384,7 @@
                          :timeout-ms test-timeout-ms
                          :bail (requested-bail)
                          :coverage coverage
+                         :coverage-reset (not coverage)
                          :coverage-output coverage-output
                          :coverage-report-directory coverage-report-directory
                          :pass-with-no-tests (requested-pass-with-no-tests)

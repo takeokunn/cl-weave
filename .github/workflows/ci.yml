@@ -116,6 +116,7 @@ jobs:
             cl-weave-events.jsonl
             cl-weave.coverage
             cl-weave-coverage-report/
+            cl-weave-coverage-summary.json
             cl-weave-cli-results.json
             cl-weave-metadata.json
             cl-weave-plan.json
