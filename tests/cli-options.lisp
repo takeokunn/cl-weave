@@ -340,4 +340,63 @@
       (expect observed
               :to-equal (list #P"tmp/__snapshots__/" "cli.snapshots" t))))
 
+  (it "generates CLI data and field operations from one schema"
+    (let* ((expansion
+             (macroexpand-1
+              '(cl-weave/cli::define-cli-options
+                 (:fields value (items '() :type list))
+                 (:options
+                  (:flag "--value" :kind :value :field :value)
+                  (:flag "--item" :kind :collection :field :items))
+                 (:environment
+                  (:flag "--value" :kind :value :field :value)))))
+           (definitions (rest expansion)))
+      (expect (first expansion) :to-be 'progn)
+      (dolist (name '(defstruct defparameter defun))
+        (expect (find name definitions :key #'first) :not :to-be nil))
+      (expect (count 'defparameter definitions :key #'first) :to-be 2)
+      (expect (count 'defun definitions :key #'first) :to-be 2)))
+
+  (it "rejects invalid CLI schemas during macroexpansion"
+    (dolist
+        (case
+         (list
+          (list
+           '(cl-weave/cli::define-cli-options
+              (:fields value)
+              (:options
+               (:flag "--value" :kind :value :field :value)
+               (:flag "--value" :kind :flag :field :value))
+              (:environment))
+           "Duplicate command-line CLI flag")
+          (list
+           '(cl-weave/cli::define-cli-options
+              (:fields value)
+              (:options)
+              (:environment
+               (:flag "--value" :kind :value :field :value)
+               (:flag "--value" :kind :truthy :field :value)))
+           "Duplicate environment CLI flag")
+          (list
+           '(cl-weave/cli::define-cli-options
+              (:fields value)
+              (:options (:flag "--missing" :kind :value :field :missing))
+              (:environment))
+           "Unknown CLI option field")
+          (list
+           '(cl-weave/cli::define-cli-options
+              (:fields value)
+              (:options (:flag "--value" :kind :stream :field :value))
+              (:environment))
+           "Unknown command-line CLI option kind")
+          (list
+           '(cl-weave/cli::define-cli-options
+              (:fields value)
+              (:options)
+              (:environment (:flag "--value" :kind :stream :field :value)))
+           "Unknown environment CLI option kind")))
+      (expect (lambda () (macroexpand-1 (first case)))
+              :to-throw
+              (second case))))
+
 )

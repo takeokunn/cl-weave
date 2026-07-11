@@ -7,41 +7,129 @@
   (:report (lambda (condition stream)
              (write-string (cli-error-message condition) stream))))
 
-(defstruct (cli-options (:constructor make-cli-options))
-  (command :run :type keyword)
-  (systems '() :type list)
-  (load-files '() :type list)
-  (reporter :spec :type keyword)
-  name-filter
-  output-file
-  list
-  watch
-  watch-once
-  (watch-interval 0.5)
-  bail
-  (retry 0)
-  test-timeout-ms
-  max-workers
-  shard
-  (order nil :type (or null keyword))
-  seed
-  coverage
-  coverage-output
-  (pass-with-no-tests t)
-  snapshot-directory
-  snapshot-file
-  update-snapshots
-  version
-  help)
+(defmacro define-cli-options (&body clauses)
+  (labels ((clause (name)
+             (or (assoc name clauses)
+                 (error "DEFINE-CLI-OPTIONS requires a ~S clause." name)))
+           (field-name (definition)
+             (if (consp definition) (first definition) definition))
+           (validate-specs (specs namespace fields allowed-kinds)
+             (let ((flags '()))
+               (dolist (spec specs)
+                 (let ((flag (getf spec :flag))
+                       (field (getf spec :field))
+                       (kind (getf spec :kind)))
+                   (unless (and (stringp flag) (plusp (length flag)))
+                     (error "~A CLI spec requires a non-empty string :FLAG: ~S"
+                            namespace spec))
+                   (when (member flag flags :test #'string=)
+                     (error "Duplicate ~A CLI flag: ~A" namespace flag))
+                   (push flag flags)
+                   (unless (member field fields)
+                     (error "Unknown CLI option field ~S in ~A spec ~S"
+                            field namespace flag))
+                   (unless (member kind allowed-kinds)
+                     (error "Unknown ~A CLI option kind ~S in spec ~S"
+                            namespace kind flag)))))))
+    (let* ((field-definitions (rest (clause :fields)))
+           (option-specs (rest (clause :options)))
+           (environment-specs (rest (clause :environment)))
+           (fields (mapcar (lambda (definition)
+                             (intern (symbol-name (field-name definition)) :keyword))
+                           field-definitions))
+           (collection-fields
+             (remove-duplicates
+              (loop for spec in option-specs
+                    when (eq (getf spec :kind) :collection)
+                      collect (getf spec :field)))))
+      (when (/= (length clauses) 3)
+        (error "DEFINE-CLI-OPTIONS accepts only :FIELDS, :OPTIONS, and :ENVIRONMENT."))
+      (validate-specs option-specs "command-line" fields
+                      '(:flag :collection :value :optional-value))
+      (validate-specs environment-specs "environment" fields '(:value :truthy))
+      `(progn
+         (defstruct (cli-options (:constructor make-cli-options))
+           ,@field-definitions)
+         (defparameter *cli-option-specs* ',option-specs)
+         (defparameter *cli-environment-specs* ',environment-specs)
+         (defun set-cli-option-field (options field value)
+           (ecase field
+             ,@(loop for field in fields
+                     for accessor = (intern (format nil "CLI-OPTIONS-~A" field)
+                                            (find-package '#:cl-weave/cli))
+                     collect `(,field (setf (,accessor options) value))))
+           options)
+         (defun push-cli-option-field (options field value)
+           (ecase field
+             ,@(loop for field in collection-fields
+                     for accessor = (intern (format nil "CLI-OPTIONS-~A" field)
+                                            (find-package '#:cl-weave/cli))
+                     collect `(,field (push value (,accessor options)))))
+           options)))))
 
-(defvar *cli-option-specs* '())
-(defvar *cli-environment-specs* '())
-
-(defmacro define-cli-option-data (&body specs)
-  `(defparameter *cli-option-specs* ',specs))
-
-(defmacro define-cli-environment-data (&body specs)
-  `(defparameter *cli-environment-specs* ',specs))
+(define-cli-options
+  (:fields
+   (command :run :type keyword)
+   (systems '() :type list)
+   (load-files '() :type list)
+   (reporter :spec :type keyword)
+   name-filter output-file list watch watch-once
+   (watch-interval 0.5)
+   bail
+   (retry 0)
+   test-timeout-ms max-workers shard
+   (order nil :type (or null keyword))
+   seed coverage coverage-output
+   (pass-with-no-tests t)
+   snapshot-directory snapshot-file update-snapshots version help)
+  (:options
+   (:flag "--help" :kind :flag :field :help)
+   (:flag "--version" :kind :flag :field :version)
+   (:flag "--list" :kind :flag :field :list :command :list)
+   (:flag "--watch" :kind :flag :field :watch :command :watch)
+   (:flag "--once" :kind :flag :field :watch-once)
+   (:flag "--coverage" :kind :flag :field :coverage)
+   (:flag "--pass-with-no-tests" :kind :flag :field :pass-with-no-tests)
+   (:flag "--fail-with-no-tests" :kind :flag :field :pass-with-no-tests :value nil)
+   (:flag "--update-snapshots" :kind :flag :field :update-snapshots)
+   (:flag "--system" :kind :collection :field :systems)
+   (:flag "--load" :kind :collection :field :load-files)
+   (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
+   (:flag "--filter" :kind :value :field :name-filter)
+   (:flag "--output" :kind :value :field :output-file)
+   (:flag "--watch-interval" :kind :value :field :watch-interval :parser parse-positive-number)
+   (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
+   (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms :parser parse-positive-integer)
+   (:flag "--max-workers" :kind :value :field :max-workers :parser parse-positive-integer)
+   (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
+   (:flag "--sequence" :kind :value :field :order :parser parse-sequence-order-option)
+   (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
+   (:flag "--coverage-output" :kind :value :field :coverage-output)
+   (:flag "--snapshot-dir" :kind :value :field :snapshot-directory :parser parse-pathname-option)
+   (:flag "--snapshot-file" :kind :value :field :snapshot-file)
+   (:flag "--bail" :kind :optional-value :field :bail :parser parse-bail-option :default "true"))
+  (:environment
+   (:flag "--system" :kind :value :field :systems :parser parse-system-list-option)
+   (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
+   (:flag "--filter" :kind :value :field :name-filter)
+   (:flag "--output" :kind :value :field :output-file)
+   (:flag "--watch-interval" :kind :value :field :watch-interval :parser parse-positive-number)
+   (:flag "--bail" :kind :value :field :bail :parser parse-bail-option)
+   (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
+   (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms :parser parse-positive-integer)
+   (:flag "--max-workers" :kind :value :field :max-workers :parser parse-positive-integer)
+   (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
+   (:flag "--sequence" :kind :value :field :order :parser parse-sequence-order-option)
+   (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
+   (:flag "--coverage-output" :kind :value :field :coverage-output)
+   (:flag "--pass-with-no-tests" :kind :value :field :pass-with-no-tests :parser parse-boolean)
+   (:flag "--snapshot-dir" :kind :value :field :snapshot-directory :parser parse-pathname-option)
+   (:flag "--snapshot-file" :kind :value :field :snapshot-file)
+   (:flag "--list" :kind :truthy :field :list :command :list)
+   (:flag "--watch" :kind :truthy :field :watch :command :watch)
+   (:flag "--once" :kind :truthy :field :watch-once)
+   (:flag "--coverage" :kind :truthy :field :coverage)
+   (:flag "--update-snapshots" :kind :truthy :field :update-snapshots)))
 
 (defun cli-option-spec (flag)
   (find flag *cli-option-specs* :key (lambda (entry) (getf entry :flag))
@@ -50,41 +138,6 @@
 (defun cli-environment-spec (flag)
   (find flag *cli-environment-specs* :key (lambda (entry) (getf entry :flag))
         :test #'string=))
-
-(defun set-cli-option-field (options field value)
-  (ecase field
-    (:command (setf (cli-options-command options) value))
-    (:systems (setf (cli-options-systems options) value))
-    (:load-files (setf (cli-options-load-files options) value))
-    (:reporter (setf (cli-options-reporter options) value))
-    (:name-filter (setf (cli-options-name-filter options) value))
-    (:output-file (setf (cli-options-output-file options) value))
-    (:list (setf (cli-options-list options) value))
-    (:watch (setf (cli-options-watch options) value))
-    (:watch-once (setf (cli-options-watch-once options) value))
-    (:watch-interval (setf (cli-options-watch-interval options) value))
-    (:bail (setf (cli-options-bail options) value))
-    (:retry (setf (cli-options-retry options) value))
-    (:test-timeout-ms (setf (cli-options-test-timeout-ms options) value))
-    (:max-workers (setf (cli-options-max-workers options) value))
-    (:shard (setf (cli-options-shard options) value))
-    (:order (setf (cli-options-order options) value))
-    (:seed (setf (cli-options-seed options) value))
-    (:coverage (setf (cli-options-coverage options) value))
-    (:coverage-output (setf (cli-options-coverage-output options) value))
-    (:pass-with-no-tests (setf (cli-options-pass-with-no-tests options) value))
-    (:snapshot-directory (setf (cli-options-snapshot-directory options) value))
-    (:snapshot-file (setf (cli-options-snapshot-file options) value))
-    (:update-snapshots (setf (cli-options-update-snapshots options) value))
-    (:version (setf (cli-options-version options) value))
-    (:help (setf (cli-options-help options) value)))
-  options)
-
-(defun push-cli-option-field (options field value)
-  (ecase field
-    (:systems (push value (cli-options-systems options)))
-    (:load-files (push value (cli-options-load-files options))))
-  options)
 
 (defun apply-cli-option-command (options spec)
   (let ((command (getf spec :command)))
@@ -181,7 +234,7 @@
 
 (defun parse-reporter (value)
   (let ((normalized (string-downcase value)))
-    (or (loop for reporter in cl-weave::*run-reporters*
+    (or (loop for reporter in (cl-weave:run-reporters)
               when (string= normalized (string-downcase (symbol-name reporter)))
                 return reporter)
         (error 'cli-error
@@ -258,68 +311,6 @@
   (if (and (first rest) (not (option-token-p (first rest))))
       (values (first rest) (rest rest))
       (values default rest)))
-
-(define-cli-option-data
-  (:flag "--help" :kind :flag :field :help)
-  (:flag "--version" :kind :flag :field :version)
-  (:flag "--list" :kind :flag :field :list :command :list)
-  (:flag "--watch" :kind :flag :field :watch :command :watch)
-  (:flag "--once" :kind :flag :field :watch-once)
-  (:flag "--coverage" :kind :flag :field :coverage)
-  (:flag "--pass-with-no-tests" :kind :flag :field :pass-with-no-tests)
-  (:flag "--fail-with-no-tests" :kind :flag :field :pass-with-no-tests :value nil)
-  (:flag "--update-snapshots" :kind :flag :field :update-snapshots)
-  (:flag "--system" :kind :collection :field :systems)
-  (:flag "--load" :kind :collection :field :load-files)
-  (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
-  (:flag "--filter" :kind :value :field :name-filter)
-  (:flag "--output" :kind :value :field :output-file)
-  (:flag "--watch-interval" :kind :value :field :watch-interval
-   :parser parse-positive-number)
-  (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
-  (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms
-   :parser parse-positive-integer)
-  (:flag "--max-workers" :kind :value :field :max-workers
-   :parser parse-positive-integer)
-  (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
-  (:flag "--sequence" :kind :value :field :order
-   :parser parse-sequence-order-option)
-  (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
-  (:flag "--coverage-output" :kind :value :field :coverage-output)
-  (:flag "--snapshot-dir" :kind :value :field :snapshot-directory
-   :parser parse-pathname-option)
-  (:flag "--snapshot-file" :kind :value :field :snapshot-file)
-  (:flag "--bail" :kind :optional-value :field :bail
-   :parser parse-bail-option :default "true"))
-
-(define-cli-environment-data
-  (:flag "--system" :kind :value :field :systems :parser parse-system-list-option)
-  (:flag "--reporter" :kind :value :field :reporter :parser parse-reporter-option)
-  (:flag "--filter" :kind :value :field :name-filter)
-  (:flag "--output" :kind :value :field :output-file)
-  (:flag "--watch-interval" :kind :value :field :watch-interval
-   :parser parse-positive-number)
-  (:flag "--bail" :kind :value :field :bail :parser parse-bail-option)
-  (:flag "--retry" :kind :value :field :retry :parser parse-non-negative-integer)
-  (:flag "--test-timeout-ms" :kind :value :field :test-timeout-ms
-   :parser parse-positive-integer)
-  (:flag "--max-workers" :kind :value :field :max-workers
-   :parser parse-positive-integer)
-  (:flag "--shard" :kind :value :field :shard :parser parse-shard-option)
-  (:flag "--sequence" :kind :value :field :order
-   :parser parse-sequence-order-option)
-  (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
-  (:flag "--coverage-output" :kind :value :field :coverage-output)
-  (:flag "--pass-with-no-tests" :kind :value :field :pass-with-no-tests
-   :parser parse-boolean)
-  (:flag "--snapshot-dir" :kind :value :field :snapshot-directory
-   :parser parse-pathname-option)
-  (:flag "--snapshot-file" :kind :value :field :snapshot-file)
-  (:flag "--list" :kind :truthy :field :list :command :list)
-  (:flag "--watch" :kind :truthy :field :watch :command :watch)
-  (:flag "--once" :kind :truthy :field :watch-once)
-  (:flag "--coverage" :kind :truthy :field :coverage)
-  (:flag "--update-snapshots" :kind :truthy :field :update-snapshots))
 
 (defun apply-cli-option (options flag rest inline-p)
   (let ((spec (cli-option-spec flag)))
