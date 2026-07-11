@@ -41,7 +41,16 @@
              (remove-duplicates
               (loop for spec in option-specs
                     when (eq (getf spec :kind) :collection)
-                      collect (getf spec :field)))))
+                      collect (getf spec :field))))
+           (field-accessors
+             (loop for field in fields
+                   collect
+                   (cons field
+                         (intern (format nil "CLI-OPTIONS-~A" field)
+                                 (find-package '#:cl-weave/cli)))))
+           (collection-accessors
+             (loop for field in collection-fields
+                   collect (assoc field field-accessors))))
       (when (/= (length clauses) 3)
         (error "DEFINE-CLI-OPTIONS accepts only :FIELDS, :OPTIONS, and :ENVIRONMENT."))
       (validate-specs option-specs "command-line" fields
@@ -53,18 +62,18 @@
          (defparameter *cli-option-specs* ',option-specs)
          (defparameter *cli-environment-specs* ',environment-specs)
          (defun set-cli-option-field (options field value)
-           (ecase field
-             ,@(loop for field in fields
-                     for accessor = (intern (format nil "CLI-OPTIONS-~A" field)
-                                            (find-package '#:cl-weave/cli))
-                     collect `(,field (setf (,accessor options) value))))
+           (let ((accessor (cdr (assoc field ',field-accessors))))
+             (unless accessor
+               (error "Unknown CLI option field: ~S" field))
+             (funcall (fdefinition (list 'setf accessor)) value options))
            options)
          (defun push-cli-option-field (options field value)
-           (ecase field
-             ,@(loop for field in collection-fields
-                     for accessor = (intern (format nil "CLI-OPTIONS-~A" field)
-                                            (find-package '#:cl-weave/cli))
-                     collect `(,field (push value (,accessor options)))))
+           (let ((accessor (cdr (assoc field ',collection-accessors))))
+             (unless accessor
+               (error "Unknown collection CLI option field: ~S" field))
+             (funcall (fdefinition (list 'setf accessor))
+                      (cons value (funcall accessor options))
+                      options))
            options)))))
 
 (define-cli-options
