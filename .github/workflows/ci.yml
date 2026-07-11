@@ -59,17 +59,17 @@ jobs:
       - name: Run JSON reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run JSONL reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run coverage artifact
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_COVERAGE=1 CL_WEAVE_COVERAGE_FILE=cl-weave.coverage CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/ sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command sh scripts/run-coverage-gate.sh
 
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
@@ -99,12 +99,12 @@ jobs:
       - name: Run filtered smoke test
         timeout-minutes: 2
         run: |
-          nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Run JUnit reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 
       - name: Upload test reports
         if: always()

@@ -17,9 +17,7 @@
       ((or (null reporter) (string= reporter "") (string-equal reporter "spec")) :spec)
       ((string-equal reporter "sexp") :sexp)
       ((string-equal reporter "json") :json)
-      ((or (string-equal reporter "jsonl")
-           (string-equal reporter "ndjson"))
-       :jsonl)
+      ((string-equal reporter "jsonl") :jsonl)
       ((string-equal reporter "tap") :tap)
       ((string-equal reporter "github") :github)
       ((string-equal reporter "junit") :junit)
@@ -172,9 +170,9 @@
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_SEQUENCE")))
     (cond
-      ((or (null value) (string= value "") (string-equal value "defined")) :defined)
-      ((or (string-equal value "random") (string-equal value "shuffle")) :random)
-      (t (error "cl-weave: CL_WEAVE_SEQUENCE must be defined, random, or shuffle: ~A" value))))
+      ((or (null value) (string= value "")) :defined)
+      ((string-equal value "random") :random)
+      (t (error "cl-weave: CL_WEAVE_SEQUENCE must be random: ~A" value))))
   #-sbcl
   :defined)
 
@@ -291,17 +289,31 @@
   #-sbcl
   nil)
 
+(defun disable-coverage-compilation ()
+  #+sbcl
+  (let* ((package (or (find-package :sb-cover)
+                      (error "SB-COVER package is unavailable.")))
+         (quality (or (find-symbol "STORE-COVERAGE-DATA" package)
+                      (error "SB-COVER:STORE-COVERAGE-DATA is unavailable."))))
+    (proclaim (list 'optimize (list quality 0)))
+    t)
+  #-sbcl
+  nil)
+
 (defun load-project-systems (&key coverage)
   (register-project-systems)
   (cond
     (coverage
      (enable-coverage-compilation)
      (asdf:load-system "cl-weave" :force t)
+     ;; Test code exercises the product but must not contribute to its score.
+     (disable-coverage-compilation)
      (asdf:load-system "cl-weave-tests" :force t))
     (t
      (asdf:load-system "cl-weave")
      (asdf:load-system "cl-weave-tests"))))
 
+#-cl-weave-direct-load
 (load-project-systems :coverage (requested-coverage-p))
 
 #+sbcl

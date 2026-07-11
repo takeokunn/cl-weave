@@ -39,12 +39,12 @@
                   ${toString timeoutSeconds} \
                   ${lib.escapeShellArgs command}
                 ${lib.concatMapStringsSep "\n" (artifact:
-                  "test -f ${lib.escapeShellArg artifact}") artifacts}
+                  "test -e ${lib.escapeShellArg artifact}") artifacts}
               '';
               installPhase = ''
                 mkdir -p "$out"
                 ${lib.concatMapStringsSep "\n" (artifact:
-                  "cp ${lib.escapeShellArg artifact} \"$out/\"") artifacts}
+                  "cp -R ${lib.escapeShellArg artifact} \"$out/\"") artifacts}
               '';
             };
         in
@@ -53,7 +53,7 @@
             name = "cl-weave-test";
             timeoutSeconds = 360;
             command = [
-              "sbcl" "--noinform" "--non-interactive"
+              "sbcl" "--dynamic-space-size" "4096" "--noinform" "--non-interactive"
               "--load" "scripts/run-tests.lisp"
             ];
           };
@@ -65,7 +65,7 @@
               "env"
               "CL_WEAVE_REPORTER=json"
               "CL_WEAVE_OUTPUT_FILE=cl-weave-results.json"
-              "sbcl" "--noinform" "--non-interactive"
+              "sbcl" "--dynamic-space-size" "4096" "--noinform" "--non-interactive"
               "--load" "scripts/run-tests.lisp"
             ];
             artifacts = [ "cl-weave-results.json" ];
@@ -78,23 +78,29 @@
               "env"
               "CL_WEAVE_REPORTER=jsonl"
               "CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl"
-              "sbcl" "--noinform" "--non-interactive"
+              "sbcl" "--dynamic-space-size" "4096" "--noinform" "--non-interactive"
               "--load" "scripts/run-tests.lisp"
             ];
             artifacts = [ "cl-weave-events.jsonl" ];
           };
 
           coverage-artifact = mkCheck {
-            name = "cl-weave-coverage-artifact";
+            name = "cl-weave-coverage-gate";
             timeoutSeconds = 360;
             command = [
-              "env"
-              "CL_WEAVE_COVERAGE=1"
-              "CL_WEAVE_COVERAGE_FILE=cl-weave.coverage"
-              "sbcl" "--noinform" "--non-interactive"
-              "--load" "scripts/run-tests.lisp"
+              "sh" "scripts/run-coverage-gate.sh"
             ];
-            artifacts = [ "cl-weave.coverage" ];
+            artifacts = [
+              "cl-weave.coverage"
+              "cl-weave-coverage-summary.json"
+              "cl-weave-coverage-report"
+            ];
+          };
+
+          coverage-gate-unit = mkCheck {
+            name = "cl-weave-coverage-gate-unit";
+            timeoutSeconds = 30;
+            command = [ "perl" "scripts/test-coverage-gate.pl" ];
           };
 
           cli-json-results = mkCheck {
@@ -168,7 +174,7 @@
             command = [
               "env"
               "CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring"
-              "sbcl" "--noinform" "--non-interactive"
+              "sbcl" "--dynamic-space-size" "4096" "--noinform" "--non-interactive"
               "--load" "scripts/run-tests.lisp"
             ];
           };
@@ -180,7 +186,7 @@
               "env"
               "CL_WEAVE_REPORTER=junit"
               "CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml"
-              "sbcl" "--noinform" "--non-interactive"
+              "sbcl" "--dynamic-space-size" "4096" "--noinform" "--non-interactive"
               "--load" "scripts/run-tests.lisp"
             ];
             artifacts = [ "cl-weave-junit.xml" ];
@@ -201,7 +207,7 @@
             #!${pkgs.runtimeShell}
             set -eu
             export CL_SOURCE_REGISTRY="$out/share/common-lisp/source//:\''${CL_SOURCE_REGISTRY:-}"
-            exec ${pkgs.sbcl}/bin/sbcl --noinform --non-interactive \\
+            exec ${pkgs.sbcl}/bin/sbcl --dynamic-space-size 4096 --noinform --non-interactive \\
               --eval '(require :asdf)' \\
               --eval '(asdf:initialize-output-translations (quote (:output-translations (t (:home ".cache" "common-lisp" :implementation)) :ignore-inherited-configuration)))' \\
               --eval '(asdf:load-system :cl-weave)' \\
