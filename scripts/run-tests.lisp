@@ -1,7 +1,4 @@
 (require :asdf)
-#.(progn
-    (load (merge-pathnames "src/package.lisp" (truename ".")))
-    nil)
 
 (defun project-root ()
   (truename "."))
@@ -9,8 +6,8 @@
 (defun register-project-systems ()
   (let ((root (project-root)))
     (pushnew root asdf:*central-registry* :test #'equal)
-    (load (merge-pathnames "cl-weave.asd" root))
-    (load (merge-pathnames "cl-weave-tests.asd" root))
+    (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
+    (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
     root))
 
 (defun requested-reporter ()
@@ -296,16 +293,14 @@
 
 (defun load-project-systems (&key coverage)
   (register-project-systems)
-  (when coverage
-    (enable-coverage-compilation))
-  (let ((loaded-local-systems (make-hash-table :test #'equal)))
-    (dolist (system '("cl-weave" "cl-weave-tests"))
-      (unless (gethash system loaded-local-systems)
-        (setf (gethash system loaded-local-systems) t)
-        (dolist (source-file (cl-weave::local-project-system-source-files system))
-          (let* ((source-path (merge-pathnames source-file (cl-weave::local-project-system-root system)))
-                 (fasl-path (compile-file source-path)))
-            (load fasl-path)))))))
+  (cond
+    (coverage
+     (enable-coverage-compilation)
+     (asdf:load-system "cl-weave" :force t)
+     (asdf:load-system "cl-weave-tests" :force t))
+    (t
+     (asdf:load-system "cl-weave")
+     (asdf:load-system "cl-weave-tests"))))
 
 (load-project-systems :coverage (requested-coverage-p))
 
