@@ -254,4 +254,22 @@
       (expect evaluated :to-equal '(1 2 3))
       (expect (property-shrink-limit-steps limit) :to-be 2)))
 
+  (it "trampolines a full shrink budget without stack growth"
+    (let ((cl-weave:*property-shrink-max-steps* 1000)
+          (evaluations 0)
+          (generator
+            (cl-weave::make-property-generator
+             :name :deep-shrink
+             :produce (lambda (rng) (declare (ignore rng)) 1000)
+             :shrink (lambda (value)
+                       (when (plusp value)
+                         (list (1- value)))))))
+      (expect (cl-weave::shrink-property-values
+               (list generator) '(1000)
+               (lambda (value)
+                 (incf evaluations)
+                 (error "failure at ~S" value)))
+              :to-equal '(0))
+      (expect evaluations :to-be 1001)))
+
 )

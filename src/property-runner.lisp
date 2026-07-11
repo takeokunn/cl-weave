@@ -24,6 +24,16 @@
   (declare (ignore original candidate))
   nil)
 
+(defstruct (property-shrink-bounce
+            (:constructor make-property-shrink-bounce (thunk)))
+  (thunk nil :type function :read-only t))
+
+(defun trampoline-property-shrink (step)
+  (loop while (property-shrink-bounce-p step)
+        do (setf step
+                 (funcall (property-shrink-bounce-thunk step)))
+        finally (return step)))
+
 (defun property-shrink-state-with-attempt (state steps)
   (make-property-shrink-state
    :original (property-shrink-state-original state)
@@ -73,9 +83,11 @@
               (call-property-shrink-candidate/k
                attempted-state index (first candidates) accept
                (lambda (rejected-state)
-                 (try-property-shrink-candidates/k
-                  rejected-state index (rest candidates)
-                  accept reject complete))))))))
+                 (make-property-shrink-bounce
+                  (lambda ()
+                    (try-property-shrink-candidates/k
+                     rejected-state index (rest candidates)
+                     accept reject complete))))))))))
 
 (defun advance-property-shrink/k
     (state generators index accept complete)
@@ -87,15 +99,20 @@
         (try-property-shrink-candidates/k
          state index candidates accept
          (lambda (rejected-state)
-           (advance-property-shrink/k
-            rejected-state (rest generators) (1+ index) accept complete))
+           (make-property-shrink-bounce
+            (lambda ()
+              (advance-property-shrink/k
+               rejected-state (rest generators) (1+ index)
+               accept complete))))
          complete))))
 
 (defun shrink-property-state/k (state generators complete)
   (advance-property-shrink/k
    state generators 0
    (lambda (accepted-state)
-     (shrink-property-state/k accepted-state generators complete))
+     (make-property-shrink-bounce
+      (lambda ()
+        (shrink-property-state/k accepted-state generators complete))))
    complete))
 
 (defun shrink-property-values (generators values function &optional original-condition)
@@ -109,10 +126,11 @@
            :steps 0
            :max-steps
            (ensure-property-shrink-max-steps *property-shrink-max-steps*))))
-    (shrink-property-state/k
-     state generators
-     (lambda (final-state)
-       (property-shrink-state-current final-state)))))
+    (trampoline-property-shrink
+     (shrink-property-state/k
+      state generators
+      (lambda (final-state)
+        (property-shrink-state-current final-state))))))
 
 (defun signal-property-failure (names form values minimal seed case-index condition)
   (signal-assertion-failure
