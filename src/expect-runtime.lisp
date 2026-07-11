@@ -213,7 +213,8 @@
             (funcall timeout-k state)
             (funcall retry-k state)))))
    (lambda (condition)
-     (setf (poll-state-last-condition state) condition)
+     (setf (poll-state-last-condition state) condition
+           (poll-state-last-detail state) nil)
      (if (poll-deadline-reached-p state)
          (funcall timeout-k state)
          (funcall retry-k state)))))

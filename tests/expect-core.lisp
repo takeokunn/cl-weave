@@ -272,14 +272,21 @@
     ("expect-poll records thrown conditions in timeout payload"
      (handler-case
          (progn
-           (expect-poll (lambda () (error "boom"))
-             (:timeout-ms 0 :interval-ms 0)
-             :to-be :ready)
+           (let ((attempt 0))
+             (expect-poll (lambda ()
+                            (if (= (incf attempt) 1)
+                                :pending
+                                (progn
+                                  (sleep 0.1)
+                                  (error "boom"))))
+               (:timeout-ms 50 :interval-ms 0)
+               :to-be :ready))
            (error "Expected expect-poll to fail."))
        (cl-weave:assertion-failure (condition)
          (with-assertion-detail (detail condition actual)
            (let ((report (getf actual :last-condition)))
              (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+             (expect (getf actual :last-assertion) :to-be nil)
              (expect (getf report :state) :to-be :rejected)
              (expect (getf report :condition-type) :to-be 'simple-error)
              (expect (getf report :message) :to-match "boom"))))))
