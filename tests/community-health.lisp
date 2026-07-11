@@ -1,5 +1,13 @@
 (in-package #:cl-weave/tests)
 
+(defun expect-document-fragments (document fragments &key normalize)
+  (dolist (fragment fragments)
+    (expect document
+            :to-contain
+            (if normalize
+                (normalize-markdown-text fragment)
+                fragment))))
+
 (describe "community health"
   (it "keeps OSS operations documents discoverable"
     (let ((root (uiop:getcwd))
@@ -410,26 +418,24 @@
                             '("../SECURITY.md"
                               "../.github/CODEOWNERS")))
         (expect document :to-contain path))
-      (dolist (phrase '("triaging issues and pull requests against"
-                        "support-policy.md"
-                        "versioning-policy.md"
-                        "machine-readable metadata, release notes, and policy documents in sync"
-                        "regression coverage for public-surface changes"
-                        "private reporting path"
-                        "Maintainers cut releases from the validated default branch state only."
-                        "If the active maintainer set changes"
-                        "machine-readable metadata in the same patch."
-                        "public CLI behavior"
-                        "reporter shapes"
-                        "exported symbols"))
-        (expect document :to-contain phrase))
-      (dolist (phrase '("review ownership"
-                        "release responsibility"
-                        "docs/governance.md"))
-        (expect contributing :to-contain phrase))
-      (dolist (phrase '("*"
-                        "@"))
-        (expect codeowners :to-contain phrase))))
+      (expect-document-fragments
+       document
+       '("triaging issues and pull requests against"
+         "support-policy.md"
+         "versioning-policy.md"
+         "machine-readable metadata, release notes, and policy documents in sync"
+         "regression coverage for public-surface changes"
+         "private reporting path"
+         "Maintainers cut releases from the validated default branch state only."
+         "If the active maintainer set changes"
+         "machine-readable metadata in the same patch."
+         "public CLI behavior"
+         "reporter shapes"
+         "exported symbols"))
+      (expect-document-fragments
+       contributing
+       '("review ownership" "release responsibility" "docs/governance.md"))
+      (expect-document-fragments codeowners '("*" "@"))))
 
   (it "keeps the release-process document synchronized with release metadata"
     (let* ((metadata (cl-weave/cli::framework-metadata))

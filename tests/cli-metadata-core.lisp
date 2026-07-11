@@ -1,5 +1,18 @@
 (in-package #:cl-weave/tests)
 
+(defun expect-text-contract (text required &optional forbidden)
+  (dolist (fragment required)
+    (expect text :to-contain fragment))
+  (dolist (fragment forbidden)
+    (expect text :not :to-contain fragment)))
+
+(defun expect-json-field-contracts-documented (document field-tables)
+  (dolist (fields field-tables)
+    (dolist (field fields)
+      (destructuring-bind (metadata-key json-key writer) field
+        (declare (ignore metadata-key writer))
+        (expect document :to-contain json-key)))))
+
 (describe "cli metadata"
   (it "prints AI-friendly framework metadata"
     (let ((options (cl-weave/cli::parse-cli-arguments
@@ -10,71 +23,31 @@
               :to-equal '("cl-weave-tests"))
       (let ((output (with-output-to-string (stream)
                       (cl-weave/cli::report-framework-metadata options stream))))
-        (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")
-        (expect output :to-contain "\"schemaVersion\":22")
-        (expect output :to-contain "\"homepage\"")
-        (expect output :to-contain "\"bugTracker\"")
-        (expect output :to-contain "\"commands\"")
-        (expect output :to-contain "\"metadata\"")
-        (expect output :to-contain "\"artifactSchemas\"")
-        (expect output :to-contain "\"kind\":\"test-results\"")
-        (expect output :to-contain "\"schemaVersion\":6")
-        (expect output :to-contain "\"fields\"")
-        (expect output :to-contain "\"name\":\"events\"")
-        (expect output :to-contain "\"kind\":\"array\"")
-        (expect output :to-contain "\"required\":true")
-        (expect output :to-contain "\"kind\":\"test-plan\"")
-        (expect output :to-contain "\"schemaVersion\":2")
-        (expect output :to-contain "\"streaming\":true")
-        (expect output :to-contain "\"qualityGates\"")
-        (expect output :to-contain "\"capabilityMatrix\"")
-        (expect output :to-contain "\"citation\"")
-        (expect output :to-contain "\"cffVersion\":\"1.2.0\"")
-        (expect output :to-contain "\"distributionChannels\"")
-        (expect output :to-contain "\"name\":\"source-self-test\"")
-        (expect output :to-contain "\"installCommand\":[]")
-        (expect output :to-contain
-                "\"runCommand\":[\"sbcl\",\"--noinform\",\"--non-interactive\",\"--load\",\"scripts\\/run-tests.lisp\"]")
-        (expect output :to-contain "\"governance\"")
-        (expect output :to-contain "\"policyDocument\":\"docs\\/governance.md\"")
-        (expect output :to-contain "\"reviewOwnership\":\".github\\/CODEOWNERS\"")
-        (expect output :to-contain "\"maintainerResponsibilities\"")
-        (expect output :to-contain "\"decisionDocuments\"")
-        (expect output :to-contain "\"name\":\"vitest-dsl\"")
-        (expect output :to-contain "\"publicApis\"")
-        (expect output :to-contain "\"qualityGates\":[\"flake-check\",\"filtered-smoke\",\"plan-artifact\"]")
-        (expect output :to-contain "\"documentation\":[\"README.md\",\"docs\\/ai-contract.md\"]")
-        (expect output :to-contain "\"name\":\"flake-check\"")
-        (expect output :to-contain "\"command\":[\"nix\",\"flake\",\"check\",\"--print-build-logs\"]")
-        (expect output :to-contain "\"timeoutSeconds\":600")
-        (expect output :to-contain "\"name\":\"ai-metadata-artifact\"")
-        (expect output :to-contain "\"cl-weave-metadata.json\"")
-        (expect output :to-contain "\"name\":\"tap-artifact\"")
-        (expect output :to-contain "\"Verify TAP output for line-oriented CI logs.\"")
-        (expect output :to-contain "\"name\":\"filtered-smoke\"")
-        (expect output :to-contain "\"CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring\"")
-        (expect output :to-contain "\"options\"")
-        (expect output :to-contain "\"listReporters\"")
-        (expect output :to-contain "\"valueKind\"")
-        (expect output :to-contain "\"commandChoices\"")
-        (expect output :to-contain "\"name\":\"--reporter\"")
-        (expect output :to-contain "\"command\":\"metadata\"")
-        (expect output :to-contain "\"choices\":[\"json\",\"sexp\"]")
-        (expect output :to-contain "\"--filter\"")
-        (expect output :not :to-contain "\"--testNamePattern\"")
-        (expect output :to-contain "\"CL_WEAVE_TEST_FILTER\"")
-        (expect output :to-contain "\"--update-snapshots\"")
-        (expect output :not :to-contain "\"--updateSnapshots\"")
-        (expect output :to-contain "\"matchers\"")
-        (expect output :to-contain "\"to-be-even\"")
-        (expect output :to-contain "\"mutationOperators\"")
-        (expect output :to-contain "\"arithmetic-operator\"")
-        (expect output :to-contain "\"packageExports\"")
-        (expect output :to-contain "\"cl-weave\"")
-        (expect output :to-contain "\"DESCRIBE\"")
-        (expect output :to-contain "\"EXPECT\"")
-        (expect output :to-contain "\"expect-has-assertions\"")
-        (expect output :not :to-contain "\"vitestAliases\""))))
+        (expect-text-contract
+         output
+         '("\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":22"
+           "\"homepage\"" "\"bugTracker\"" "\"commands\"" "\"metadata\""
+           "\"artifactSchemas\"" "\"kind\":\"test-results\"" "\"schemaVersion\":6"
+           "\"fields\"" "\"name\":\"events\"" "\"kind\":\"array\"" "\"required\":true"
+           "\"kind\":\"test-plan\"" "\"schemaVersion\":2" "\"streaming\":true"
+           "\"qualityGates\"" "\"capabilityMatrix\"" "\"citation\"" "\"cffVersion\":\"1.2.0\""
+           "\"distributionChannels\"" "\"name\":\"source-self-test\"" "\"installCommand\":[]"
+           "\"runCommand\":[\"sbcl\",\"--noinform\",\"--non-interactive\",\"--load\",\"scripts\\/run-tests.lisp\"]"
+           "\"governance\"" "\"policyDocument\":\"docs\\/governance.md\""
+           "\"reviewOwnership\":\".github\\/CODEOWNERS\"" "\"maintainerResponsibilities\""
+           "\"decisionDocuments\"" "\"name\":\"vitest-dsl\"" "\"publicApis\""
+           "\"qualityGates\":[\"flake-check\",\"filtered-smoke\",\"plan-artifact\"]"
+           "\"documentation\":[\"README.md\",\"docs\\/ai-contract.md\"]" "\"name\":\"flake-check\""
+           "\"command\":[\"nix\",\"flake\",\"check\",\"--print-build-logs\"]" "\"timeoutSeconds\":600"
+           "\"name\":\"ai-metadata-artifact\"" "\"cl-weave-metadata.json\"" "\"name\":\"tap-artifact\""
+           "\"Verify TAP output for line-oriented CI logs.\"" "\"name\":\"filtered-smoke\""
+           "\"CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring\""
+           "\"options\"" "\"listReporters\"" "\"valueKind\"" "\"commandChoices\""
+           "\"name\":\"--reporter\"" "\"command\":\"metadata\"" "\"choices\":[\"json\",\"sexp\"]"
+           "\"--filter\"" "\"CL_WEAVE_TEST_FILTER\"" "\"--update-snapshots\"" "\"matchers\""
+           "\"to-be-even\"" "\"mutationOperators\"" "\"arithmetic-operator\"" "\"packageExports\""
+           "\"cl-weave\"" "\"DESCRIBE\"" "\"EXPECT\"" "\"expect-has-assertions\"")
+         '("\"--testNamePattern\"" "\"--updateSnapshots\"" "\"vitestAliases\"")))))
 
   (it "allows Lisp-native metadata output"
     (let ((options (cl-weave/cli::parse-cli-arguments
@@ -173,46 +146,18 @@
   (it "keeps the AI contract synchronized with metadata root fields"
     (let ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
                                                  (uiop:getcwd)))))
-      (dolist (field cl-weave/cli::*framework-metadata-json-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-capability-matrix-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-reference-document-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-citation-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-citation-author-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-distribution-channel-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-community-health-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-community-health-contact-link-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-governance-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))
-      (dolist (field cl-weave/cli::*json-continuous-integration-fields*)
-        (destructuring-bind (metadata-key json-key writer) field
-          (declare (ignore metadata-key writer))
-          (expect docs :to-contain json-key)))))
+      (expect-json-field-contracts-documented
+       docs
+       (list cl-weave/cli::*framework-metadata-json-fields*
+             cl-weave/cli::*json-capability-matrix-fields*
+             cl-weave/cli::*json-reference-document-fields*
+             cl-weave/cli::*json-citation-fields*
+             cl-weave/cli::*json-citation-author-fields*
+             cl-weave/cli::*json-distribution-channel-fields*
+             cl-weave/cli::*json-community-health-fields*
+             cl-weave/cli::*json-community-health-contact-link-fields*
+             cl-weave/cli::*json-governance-fields*
+             cl-weave/cli::*json-continuous-integration-fields*))))
 
   (it "keeps the AI contract example version synchronized with the CLI version"
     (let* ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
@@ -507,4 +452,3 @@
                (expect output :to-contain "\"continuousIntegration\""))))
         (when (probe-file output-file)
           (delete-file output-file)))))
-
