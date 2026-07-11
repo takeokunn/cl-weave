@@ -5,12 +5,36 @@
       (values (first body) (rest body))
       (values default-reason body)))
 
+(defun registration-proper-list-p (value)
+  (handler-case
+      (progn (length value) t)
+    (type-error () nil)))
+
 (defun suite-registration-form (name forms options)
   `(register-suite ,name (lambda () ,@forms) ,@options))
 
-(defun suite-each-cases (cases name bindings forms target)
+(defun validate-suite-each-syntax (cases name bindings target)
+  (unless (registration-proper-list-p cases)
+    (error "~S requires CASES to be a literal proper list, got ~S." target cases))
+  (unless (stringp name)
+    (error "~S requires NAME to be a literal format string, got ~S." target name))
+  (unless (registration-proper-list-p bindings)
+    (error "~S requires BINDINGS to be a literal proper list, got ~S." target bindings))
   (loop for case in cases
-        collect `(,target ,(apply #'format nil name case)
+        for index from 0
+        unless (registration-proper-list-p case)
+          do (error "~S case ~D must be a literal proper list, got ~S." target index case))
+  (values))
+
+(defun suite-each-cases (cases name bindings forms target)
+  (validate-suite-each-syntax cases name bindings target)
+  (loop for case in cases
+        for index from 0
+        collect `(,target ,(handler-case
+                               (apply #'format nil name case)
+                             (error (condition)
+                               (error "~S case ~D does not match format string ~S: ~A"
+                                      target index name condition)))
                    (destructuring-bind ,bindings ',case
                      ,@forms))))
 
@@ -84,7 +108,16 @@
   (loop for (candidate nil) on plist by #'cddr
         thereis (eq candidate key)))
 
+(defun ensure-unique-option-keys (options)
+  (loop with seen = '()
+        for (key nil) on options by #'cddr
+        when (member key seen)
+          do (error "Duplicate test option ~S." key)
+        do (push key seen))
+  options)
+
 (defun test-registration-options (options)
+  (ensure-unique-option-keys options)
   (loop for (key nil) on options by #'cddr
         unless (member key '(:retry :timeout-ms :execution-mode))
           do (error "Unknown test option ~S." key))
@@ -115,7 +148,18 @@
                   ,@(source-location-option)))
 
 (defun test-options-with-registration-options (options prefix-options)
-  (append prefix-options (test-registration-options options)))
+  (let* ((registration-options (test-registration-options options))
+         (fixed-mode (getf prefix-options :execution-mode))
+         (requested-mode (getf registration-options :execution-mode)))
+    (when (and fixed-mode requested-mode (not (eql fixed-mode requested-mode)))
+      (error "Execution mode ~S conflicts with fixed mode ~S."
+             requested-mode fixed-mode))
+    (append prefix-options
+            (if fixed-mode
+                (loop for (key value) on registration-options by #'cddr
+                      unless (eq key :execution-mode)
+                        append (list key value))
+                registration-options))))
 
 (defmacro it (test-name &body body)
   (multiple-value-bind (options forms) (split-test-body body)
@@ -224,22 +268,34 @@
      ,@(suite-each-cases cases test-name bindings body 'it-fails)))
 
 (defmacro it-skip-each (cases test-name bindings &body body)
-  (declare (ignore bindings))
+  (validate-suite-each-syntax cases test-name bindings 'it-skip-each)
   (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")
-    (declare (ignore forms))
+    (when forms
+      (error "IT-SKIP-EACH does not accept a test body; only an optional reason string is allowed."))
     `(progn
        ,@(loop for case in cases
                collect `(it-skip ,(apply #'format nil test-name case) ,reason)))))
 
 (defmacro it-todo-each (cases test-name bindings &body body)
-  (declare (ignore bindings))
+  (validate-suite-each-syntax cases test-name bindings 'it-todo-each)
   (multiple-value-bind (reason forms) (split-reasoned-body body "todo")
-    (declare (ignore forms))
+    (when forms
+      (error "IT-TODO-EACH does not accept a test body; only an optional reason string is allowed."))
     `(progn
        ,@(loop for case in cases
                collect `(it-todo ,(apply #'format nil test-name case) ,reason)))))
 
 (defmacro it-property (name bindings &body body)
+  (unless (registration-proper-list-p bindings)
+    (error "IT-PROPERTY requires BINDINGS to be a literal proper list, got ~S." bindings))
+  (loop for binding in bindings
+        for index from 0
+        unless (and (registration-proper-list-p binding)
+                    (= (length binding) 2)
+                    (symbolp (first binding))
+                    (first binding))
+          do (error "IT-PROPERTY binding ~D must have the form (NAME GENERATOR), got ~S."
+                    index binding))
   (let ((names (mapcar #'first bindings))
         (generators (mapcar #'second bindings)))
     `(it ,name

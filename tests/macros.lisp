@@ -176,6 +176,43 @@
                     (expect :ok :to-be :ok))))
               :to-throw)))
 
+  (it "validates registration macro syntax at expansion time"
+    (dolist (case '(((it "duplicate" (:retry 1 :retry 2) t)
+                     "Duplicate test option")
+                    ((it-concurrent "conflict" (:execution-mode :sequential) t)
+                     "conflicts with fixed mode")
+                    ((it-skip-each ((1)) "skip ~A" (value) "reason" value)
+                     "does not accept a test body")
+                    ((it-todo-each ((1)) "todo ~A" (value) (print value))
+                     "does not accept a test body")
+                    ((it-property "bad" ((value)) value)
+                     "must have the form (NAME GENERATOR)")
+                    ((describe-each dynamic-cases "suite ~A" (value) value)
+                     "literal proper list")
+                    ((describe-each ((1)) dynamic-name (value) value)
+                     "literal format string")
+                    ((describe-each (not-a-case) "suite ~A" (value) value)
+                     "case 0 must be a literal proper list")))
+      (destructuring-bind (form message-fragment) case
+        (handler-case
+            (progn
+              (macroexpand-1 form)
+              (error "Expected macro expansion to reject ~S." form))
+          (error (condition)
+            (expect (princ-to-string condition)
+                    :to-satisfy
+                    (lambda (message)
+                      (search message-fragment message))))))))
+
+  (it "normalizes a repeated fixed execution mode"
+    (let ((expansion (macroexpand-1
+                      '(it-concurrent "parallel"
+                           (:execution-mode :concurrent :retry 1)
+                         t))))
+      (expect (loop for tail on expansion
+                    count (eq (first tail) :execution-mode))
+              :to-be 1)))
+
   (it "restores replaced functions and bindings after temporary mutation"
     (expect (sample-size '(a b c)) :to-be 3)
     (with-replaced-function (sample-size (lambda (value)
