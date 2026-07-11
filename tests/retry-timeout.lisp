@@ -220,4 +220,30 @@
                     (cl-weave::root-suite)
                     test))))
           (expect attempts :to-be expected-attempts)
-          (expect (cl-weave::test-event-status event) :to-be expected-status))))))
+          (expect (cl-weave::test-event-status event) :to-be expected-status)))))
+
+  (it "uses the same continuation path for automatic and interactive retries"
+    (dolist (interactive-p '(nil t))
+      (let* ((attempts 0)
+             (test (cl-weave::make-test-case
+                    :name "continuation retry"
+                    :retry 1
+                    :function (lambda ()
+                                (incf attempts)
+                                (expect attempts :to-be 2))))
+             (run (lambda ()
+                    (if interactive-p
+                        (handler-bind
+                            ((assertion-failure
+                               (lambda (condition)
+                                 (declare (ignore condition))
+                                 (invoke-restart 'retry-test))))
+                          (cl-weave::run-test-case/interactively
+                           (cl-weave::root-suite)
+                           test))
+                        (cl-weave::run-test-case
+                         (cl-weave::root-suite)
+                         test))))
+             (event (funcall run)))
+        (expect attempts :to-be 2)
+        (expect (cl-weave::test-event-status event) :to-be :pass)))))
