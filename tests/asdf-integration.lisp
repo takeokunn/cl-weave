@@ -1,12 +1,53 @@
 (in-package #:cl-weave/tests)
 
 (describe "asdf integration"
+  (it "resolves the runtime source directory from the loaded ASDF system"
+    (expect (cl-weave::runtime-source-directory)
+            :to-equal
+            (asdf:system-relative-pathname "cl-weave" "src/")))
+
+  (it "tracks local systems loaded during a run"
+    (let ((loaded-systems nil))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::local-project-system-p)
+            (lambda (system)
+              (declare (ignore system))
+              t))
+           ((symbol-function 'cl-weave::load-local-system)
+            (lambda (system loaded-systems-table)
+              (setf (gethash system loaded-systems-table) t)
+              (push loaded-systems-table loaded-systems)
+              t))
+           ((symbol-function 'cl-weave:run-all)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              t)))
+        (expect (cl-weave:run-system "cl-weave-tests") :to-be-truthy)
+        (expect (length loaded-systems) :to-be 1)
+        (expect (gethash "cl-weave-tests" (first loaded-systems))
+                :to-be-truthy))))
+
+  (it "clears registered tests before each watched system reload"
+    (let ((suite-counts nil))
+      (labels ((mock-run-system (system &rest arguments)
+                 (declare (ignore system arguments))
+                 (cl-weave::register-suite "watched" (lambda () nil))
+                 (push (length (cl-weave::suite-children
+                                (cl-weave::root-suite)))
+                       suite-counts)
+                 t))
+        (with-mocked-functions
+            (((symbol-function 'cl-weave:run-system) #'mock-run-system))
+          (cl-weave::run-watched-system "watched")
+          (cl-weave::run-watched-system "watched")))
+      (expect suite-counts :to-equal '(1 1))))
+
   (it "collects source files from ASDF systems"
     (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))
       (expect files :to-satisfy
               (lambda (paths)
                 (some (lambda (pathname)
-                        (search "src/runner.lisp" (namestring pathname)))
+                        (search "src/runner-api.lisp" (namestring pathname)))
                       paths)))
       (expect files :to-satisfy
               (lambda (paths)
@@ -95,7 +136,7 @@
   (it "skips reruns when watch sees no changed files"
     (let ((calls nil))
       (with-mocked-functions
-          (((symbol-function 'cl-weave:run-system)
+          (((symbol-function 'cl-weave::run-watched-system)
             (lambda (&rest arguments)
               (push arguments calls)
               (error "run-system should not be called when nothing changed"))))
@@ -117,7 +158,7 @@
   (it "returns failure in once mode when the watched run fails"
     (multiple-value-bind (next-state continuep)
         (with-mocked-functions
-            (((symbol-function 'cl-weave:run-system)
+            (((symbol-function 'cl-weave::run-watched-system)
               (lambda (&rest arguments)
                 (declare (ignore arguments))
                 nil)))

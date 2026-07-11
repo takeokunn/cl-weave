@@ -57,15 +57,13 @@
         (it-run-if nil "run-if false"
           (setf ran :run-if-false))
         (it-skip-if nil "skip-if false"
-          (setf ran :skip-if-false))
-        (test-run-if t "test-run-if true"
-          (setf ran :test-run-if-true)))
+          (setf ran :skip-if-false)))
       (let ((events (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status events)
-                :to-equal '(:skip :skip :pass :pass))
+                :to-equal '(:skip :skip :pass))
         (expect (mapcar #'cl-weave::test-event-reason events)
-                :to-equal '("conditional skip" "conditional run-if" nil nil))
-        (expect ran :to-be :test-run-if-true))))
+                :to-equal '("conditional skip" "conditional run-if" nil))
+        (expect ran :to-be :skip-if-false))))
 
   (it "registers conditional suites as skipped or runnable groups"
     (let ((root (cl-weave::make-suite :name "root"))

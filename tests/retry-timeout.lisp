@@ -105,11 +105,11 @@
         (expect (mapcar #'cl-weave:test-plan-entry-timeout-ms plan)
                 :to-equal '(100 25)))))
 
-  (it "fails a test when expect.assertions count is not met"
+  (it "fails a test when expect-assertions count is not met"
     (let* ((test (cl-weave::make-test-case
                   :name "missing assertion"
                   :function (lambda ()
-                              (expect.assertions 2)
+                              (expect-assertions 2)
                               (expect :only :to-be :only))))
            (event (cl-weave::run-test-case (cl-weave::root-suite) test))
            (assertion (cl-weave::test-event-assertion event)))
@@ -118,11 +118,11 @@
       (expect (cl-weave::assertion-detail-actual assertion) :to-be 1)
       (expect (cl-weave::assertion-detail-expected assertion) :to-be 2)))
 
-  (it "fails a test when expect.hasassertions observes no assertions"
+  (it "fails a test when expect-has-assertions observes no assertions"
     (let* ((test (cl-weave::make-test-case
                   :name "missing assertions"
                   :function (lambda ()
-                              (expect.hasassertions))))
+                              (expect-has-assertions))))
            (event (cl-weave::run-test-case (cl-weave::root-suite) test))
            (assertion (cl-weave::test-event-assertion event)))
       (expect (cl-weave::test-event-status event) :to-be :fail)
@@ -137,7 +137,7 @@
                   :retry 1
                   :function (lambda ()
                               (incf attempts)
-                              (expect.assertions 1)
+                              (expect-assertions 1)
                               (if (= attempts 1)
                                   (progn
                                     (expect :first :to-be :first)
@@ -186,21 +186,38 @@
       (expect (cl-weave::test-event-status event) :to-be :skip)
       (expect (cl-weave::test-event-reason event) :to-equal "patched interactively")))
 
-  (it "exposes a restart that retries without consuming configured retries"
-    (let* ((attempts 0)
-           (retried nil)
-           (test (cl-weave::make-test-case
-                  :name "retry from failure"
-                  :retry 0
-                  :function (lambda ()
-                              (incf attempts)
-                              (expect attempts :to-be 2))))
-           (event (handler-bind ((assertion-failure
-                                   (lambda (condition)
-                                     (declare (ignore condition))
-                                     (unless retried
-                                       (setf retried t)
-                                       (invoke-restart 'retry-test)))))
-                    (cl-weave::run-test-case/interactively (cl-weave::root-suite) test))))
-      (expect attempts :to-be 2)
-      (expect (cl-weave::test-event-status event) :to-be :pass))))
+  (it "allows warnings and notification conditions to continue"
+    (dolist (test-function
+             (list (lambda ()
+                     (warn "nonfatal warning"))
+                   (lambda ()
+                     (signal (make-condition 'simple-condition
+                                             :format-control "notification")))))
+      (let* ((test (cl-weave::make-test-case
+                    :name "non-error condition"
+                    :function test-function))
+             (event (handler-bind ((warning #'muffle-warning))
+                      (cl-weave::run-test-case (cl-weave::root-suite) test))))
+        (expect (cl-weave::test-event-status event) :to-be :pass))))
+
+  (it "charges interactive retries to the configured retry budget"
+    (dolist (case '((1 2 :pass)
+                    (0 1 :error)))
+      (destructuring-bind (retry expected-attempts expected-status) case
+        (let* ((attempts 0)
+               (test (cl-weave::make-test-case
+                      :name "retry from failure"
+                      :retry retry
+                      :function (lambda ()
+                                  (incf attempts)
+                                  (expect attempts :to-be 2))))
+               (event
+                 (handler-bind ((assertion-failure
+                                  (lambda (condition)
+                                    (declare (ignore condition))
+                                    (invoke-restart 'retry-test))))
+                   (cl-weave::run-test-case/interactively
+                    (cl-weave::root-suite)
+                    test))))
+          (expect attempts :to-be expected-attempts)
+          (expect (cl-weave::test-event-status event) :to-be expected-status))))))

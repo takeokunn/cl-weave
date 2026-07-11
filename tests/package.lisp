@@ -40,19 +40,6 @@
    #:continue-test
    #:defmatcher
    #:defmutation-operator
-   #:describe.concurrent
-   #:describe.concurrent.each
-   #:describe.each
-   #:describe.only
-   #:describe.only.each
-   #:describe.run-if
-   #:describe.sequential
-   #:describe.sequential.each
-   #:describe.skip
-   #:describe.skip.each
-   #:describe.skip-if
-   #:describe.todo
-   #:describe.todo.each
    #:describe-concurrent
    #:describe-concurrent-each
    #:describe-each
@@ -68,19 +55,12 @@
    #:describe-todo-each
    #:extend-expect
    #:expect
-   #:expect.assertions
    #:expect-assertions
-   #:expect.extend
    #:expect-extend
-   #:expect.hasassertions
    #:expect-has-assertions
-   #:expect.not
    #:expect-not
-   #:expect.poll
    #:expect-poll
-   #:expect.rejects
    #:expect-rejects
-   #:expect.resolves
    #:expect-resolves
    #:fail
    #:finishes
@@ -134,38 +114,21 @@
    #:is-type
    #:is-zero
    #:it
-   #:it.concurrent
-   #:it.concurrent.each
-   #:it.each
    #:it-concurrent
    #:it-concurrent-each
    #:it-each
-   #:it.fails
-   #:it.fails.each
    #:it-fails
    #:it-fails-each
-   #:it.isolated
    #:it-isolated
-   #:it.property
    #:it-property
-   #:it.only
-   #:it.only.each
    #:it-only
    #:it-only-each
-   #:it.run-if
    #:it-run-if
-   #:it.sequential
-   #:it.sequential.each
    #:it-sequential
    #:it-sequential-each
-   #:it.skip
-   #:it.skip.each
    #:it-skip
    #:it-skip-each
-   #:it.skip-if
    #:it-skip-if
-   #:it.todo
-   #:it.todo.each
    #:it-todo
    #:it-todo-each
    #:isolated-result-exit-code
@@ -179,6 +142,13 @@
    #:list-mutation-operators
    #:logic-program
    #:logic-query
+   #:logic-search-exhausted
+   #:logic-search-exhausted-limit
+   #:logic-search-exhausted-partial-results
+   #:logic-search-exhausted-pending
+   #:logic-search-exhausted-steps
+   #:increase-limit
+   #:return-partial-results
    #:logic-run
    #:logic-variable-p
    #:logic-where
@@ -194,19 +164,6 @@
    #:spy-on
    #:with-continuation-result
    #:with-continuation-values
-   #:vi.clearallmocks
-   #:vi.fn
-   #:vi.ismockfunction
-   #:vi.mocked
-   #:vi.mockclear
-   #:vi.mockimplementation
-   #:vi.mockreset
-   #:vi.mockrestore
-   #:vi.mockreturnvalue
-   #:vi.mockreturnvalues
-   #:vi.resetallmocks
-   #:vi.restoreallmocks
-   #:vi.spyon
    #:mock-calls
    #:mock-results
    #:mutation-form
@@ -231,43 +188,8 @@
    #:signals
    #:skip
    #:skip-test
-   #:test
-   #:test.concurrent
-   #:test.concurrent.each
-   #:test.each
-   #:test-concurrent
-   #:test-concurrent-each
-   #:test-each
-   #:test.fails
-   #:test.fails.each
-   #:test-fails
-   #:test-fails-each
-   #:test.isolated
-   #:test-isolated
-   #:test.only
-   #:test.only.each
-   #:test-only
-   #:test-only-each
-   #:test.property
-   #:test-property
    #:test-plan-facts
    #:test-plan-where
-   #:test.run-if
-   #:test-run-if
-   #:test.sequential
-   #:test.sequential.each
-   #:test-sequential
-   #:test-sequential-each
-   #:test.skip
-   #:test.skip.each
-   #:test-skip
-   #:test-skip-each
-   #:test.skip-if
-   #:test-skip-if
-   #:test.todo
-   #:test.todo.each
-   #:test-todo
-   #:test-todo-each
    #:with-cleared-hash-table
    #:with-replaced-function
    #:with-restored-binding

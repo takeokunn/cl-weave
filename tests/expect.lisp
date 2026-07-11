@@ -9,14 +9,14 @@
     ("to-be-falsy" (expect nil :to-be-falsy))
     ("to-be-null" (expect nil :to-be-null))
     ("to-be-defined" (expect :value :to-be-defined))
-    ("expect.assertions"
+    ("expect-assertions"
      (progn
-       (expect.assertions 2)
+       (expect-assertions 2)
        (expect :a :to-be :a)
        (expect-not nil :to-be t)))
-    ("expect.hasassertions"
+    ("expect-has-assertions"
      (progn
-       (expect.hasassertions)
+       (expect-has-assertions)
        (expect t)))
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
@@ -33,9 +33,7 @@
            (expect :blocked :to-be-one-of '(:pending :ready :done))
            (error "Expected :to-be-one-of to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-one-of)
            (expect (getf actual :value) :to-be :blocked)
            (expect (getf actual :candidates) :to-equal '(:pending :ready :done))
@@ -51,9 +49,7 @@
            (expect 42 :to-be-nan)
            (error "Expected :to-be-nan to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-nan)
            (expect (getf actual :value) :to-be 42)
            (expect (getf actual :float) :to-be-falsy)
@@ -92,9 +88,7 @@
            (expect "common-lisp" :to-match "scheme")
            (error "Expected :to-match to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match)
            (expect (getf actual :value) :to-equal "common-lisp")
            (expect (getf actual :pattern) :to-equal "scheme")
@@ -165,27 +159,35 @@
              :to-throw
              (lambda (condition)
                (search "predicate" (princ-to-string condition)))))
-    ("expect.resolves" (expect.resolves (lambda () 42) :to-be 42))
-    ("expect.rejects condition type"
-     (expect.rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error))
-    ("expect.poll eventually matches"
+    ("to-throw rejects muffled warnings"
+     (expect (lambda ()
+               (expect (lambda ()
+                         (handler-bind ((warning #'muffle-warning))
+                           (warn "not an error")
+                           :ok))
+                       :to-throw))
+             :to-throw
+             'assertion-failure))
+    ("expect-resolves" (expect-resolves (lambda () 42) :to-be 42))
+    ("expect-rejects condition type"
+     (expect-rejects (lambda () (error "missing user")) :to-be-type-of 'simple-error))
+    ("expect-poll eventually matches"
      (let ((attempt 0))
-       (expect.poll (lambda ()
+       (expect-poll (lambda ()
                       (incf attempt))
          (:timeout-ms 200 :interval-ms 0)
          :to-be 3)))
-    ("expect.poll times out after a slow pass"
+    ("expect-poll times out after a slow pass"
      (handler-case
          (progn
-           (expect.poll (lambda ()
+           (expect-poll (lambda ()
                           (sleep 0.01)
                           :ready)
              (:timeout-ms 0 :interval-ms 0)
              :to-be :ready)
-           (error "Expected expect.poll to fail."))
+           (error "Expected expect-poll to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail)))
+        (with-assertion-detail (detail condition actual)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
            (expect (getf actual :attempts) :to-be 1)
            (expect (getf actual :timeout-ms) :to-be 0)
@@ -196,52 +198,46 @@
              (expect (getf last-assertion :actual) :to-be :ready)
              (expect (getf last-assertion :expected) :to-equal '(:ready))
              (expect (getf last-assertion :pass) :to-be-truthy))))))
-    ("expect.poll without explicit options"
+    ("expect-poll without explicit options"
      (let ((attempt 0))
-       (expect.poll (lambda ()
+       (expect-poll (lambda ()
                       (incf attempt))
          :to-be 1)))
-    ("expect.resolves rejected thunk payload"
+    ("expect-resolves rejected thunk payload"
      (handler-case
          (progn
-           (expect.resolves (lambda () (error "boom")) :to-be :ok)
-           (error "Expected expect.resolves to fail."))
+           (expect-resolves (lambda () (error "boom")) :to-be :ok)
+           (error "Expected expect-resolves to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :resolves)
            (expect (getf actual :state) :to-be :rejected)
            (expect (getf actual :condition-type) :to-be 'simple-error)
            (expect (getf actual :message) :to-match "boom")
            (expect expected :to-equal '(:state :resolved))))))
-    ("expect.rejects resolved thunk payload"
+    ("expect-rejects resolved thunk payload"
      (handler-case
          (progn
-           (expect.rejects (lambda () :ok) :to-be-type-of 'simple-error)
-           (error "Expected expect.rejects to fail."))
+           (expect-rejects (lambda () :ok) :to-be-type-of 'simple-error)
+           (error "Expected expect-rejects to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :rejects)
            (expect (getf actual :state) :to-be :resolved)
            (expect (getf actual :value) :to-be :ok)
            (expect expected :to-equal '(:state :rejected))))))
-    ("expect.poll timeout payload"
+    ("expect-poll timeout payload"
      (handler-case
          (progn
            (let ((attempt 0))
-             (expect.poll (lambda ()
+             (expect-poll (lambda ()
                             (incf attempt)
                             :pending)
                (:timeout-ms 0 :interval-ms 0)
                :to-be :ready))
-           (error "Expected expect.poll to fail."))
+           (error "Expected expect-poll to fail."))
        (cl-weave:assertion-failure (condition)
          (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail))
                 (last-assertion (getf actual :last-assertion)))
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
            (expect (getf actual :attempts) :to-be 1)
@@ -252,27 +248,26 @@
            (expect (getf last-assertion :actual) :to-be :pending)
            (expect (getf last-assertion :expected) :to-equal '(:ready))
            (expect expected :to-equal '(:state :pass))))))
-    ("expect.poll rejects unsupported option keys"
+    ("expect-poll rejects unsupported option keys"
      (handler-case
          (progn
-           (expect.poll (lambda () :ok)
+           (expect-poll (lambda () :ok)
              (:timeout-ms 0 :bogus 1)
              :to-be :ok)
-           (error "Expected expect.poll to fail."))
+           (error "Expected expect-poll to fail."))
        (simple-error (condition)
          (expect (simple-condition-format-control condition)
                  :to-contain
                  "unsupported keys"))))
-    ("expect.poll records thrown conditions in timeout payload"
+    ("expect-poll records thrown conditions in timeout payload"
      (handler-case
          (progn
-           (expect.poll (lambda () (error "boom"))
+           (expect-poll (lambda () (error "boom"))
              (:timeout-ms 0 :interval-ms 0)
              :to-be :ready)
-           (error "Expected expect.poll to fail."))
+           (error "Expected expect-poll to fail."))
        (cl-weave:assertion-failure (condition)
          (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
                 (report (getf actual :last-condition)))
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
            (expect (getf report :state) :to-be :rejected)
@@ -292,9 +287,7 @@
            (expect 'sample-widget :to-have-slot 'missing-slot)
            (error "Expected expect to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-have-slot)
            (expect actual :to-equal '(:class sample-widget :slots (name state)))
             (expect expected :to-equal '(:slot missing-slot))))))
@@ -304,9 +297,7 @@
            (expect #'render-widget-mode :to-have-method-specialized-on '(missing t))
            (error "Expected expect to fail."))
        (cl-weave:assertion-failure (condition)
-         (let* ((detail (cl-weave::failure-detail condition))
-                (actual (cl-weave::assertion-detail-actual detail))
-                (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail)
                    :to-be
                    :to-have-method-specialized-on)
@@ -382,7 +373,7 @@
                :to-throw)))
     ("not" (expect 1 :not :to-be 2))
     ("expect-not" (expect-not 1 :to-be 2))
-    ("expect.extend matcher" (expect 5 :to-be-odd))
+    ("expect-extend matcher" (expect 5 :to-be-odd))
      ("extend-expect matcher" (expect 5 :to-be-between 1 10))))
 
   (it "signals assertion-failure with structured data"
@@ -391,19 +382,18 @@
           (expect 1 :to-be 2)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let ((detail (cl-weave::failure-detail condition)))
+        (with-assertion-detail (detail condition)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(2))))))
 
-  (it "signals assertion-failure when expect.poll receives a non-callable"
+  (it "signals assertion-failure when expect-poll receives a non-callable"
     (handler-case
         (progn
-          (expect.poll :not-a-function (:timeout-ms 0 :interval-ms 0) :to-be :ok)
-          (error "Expected expect.poll to fail."))
+          (expect-poll :not-a-function (:timeout-ms 0 :interval-ms 0) :to-be :ok)
+          (error "Expected expect-poll to fail."))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail)))
+        (with-assertion-detail (detail condition actual)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
           (expect (getf actual :callable) :to-be-falsy)
           (expect (getf actual :value) :to-be :not-a-function)))))
@@ -416,9 +406,7 @@
                   '(:id 2 :name "Grace"))
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-contain-equal)
           (expect (getf actual :container) :to-equal '((:id 1 :name "Ada")))
           (expect (getf actual :value) :to-equal '(:id 2 :name "Grace"))
@@ -435,8 +423,6 @@
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
         (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail))
                (failure (getf actual :failure)))
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-object)
           (expect (getf actual :subset) :to-equal '(:user (:name "Grace")))
@@ -457,9 +443,7 @@
                   37)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-have-property)
           (expect (getf actual :path) :to-equal '(:user :age))
           (expect (getf actual :present) :to-be nil)
@@ -472,9 +456,7 @@
           (expect 31/100 :to-be-close-to 3/10 2)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-close-to)
           (expect (getf actual :value) :to-be 31/100)
           (expect (getf actual :expected-value) :to-be 3/10)
@@ -491,9 +473,7 @@
           (expect "10" :to-be-greater-than 9)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-greater-than)
           (expect (getf actual :value) :to-equal "10")
           (expect (getf actual :expected-value) :to-be 9)
@@ -511,7 +491,7 @@
           (expect-not 1 :to-be 1)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let ((detail (cl-weave::failure-detail condition)))
+        (with-assertion-detail (detail condition)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be)
           (expect (cl-weave::assertion-detail-actual detail) :to-be 1)
           (expect (cl-weave::assertion-detail-expected detail) :to-equal '(1))
@@ -524,9 +504,7 @@
           (expect (lambda () (error "wrong message")) :to-throw "needle")
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-throw)
           (expect (getf actual :threw) :to-be-truthy)
           (expect (getf actual :condition-type) :to-be 'simple-error)
@@ -540,9 +518,7 @@
           (expect (lambda () :ok) :to-throw 'simple-error)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail))
-               (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-throw)
           (expect (getf actual :threw) :to-be nil)
           (expect (getf actual :condition-type) :to-be nil)
@@ -559,9 +535,7 @@
             (expect '(:missing 42) :to-match-snapshot key)
             (expect nil :to-be-truthy))
         (cl-weave:assertion-failure (condition)
-          (let* ((detail (cl-weave::failure-detail condition))
-                 (actual (cl-weave::assertion-detail-actual detail))
-                 (expected (cl-weave::assertion-detail-expected detail)))
+        (with-assertion-detail (detail condition actual expected)
             (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
             (expect (getf actual :snapshot-key) :to-equal key)
             (expect (getf actual :snapshot-file) :to-contain "missing-structured.snapshots")
@@ -586,8 +560,6 @@
                    (expect nil :to-be-truthy))
                (cl-weave:assertion-failure (condition)
                  (let* ((detail (cl-weave::failure-detail condition))
-                        (actual (cl-weave::assertion-detail-actual detail))
-                        (expected (cl-weave::assertion-detail-expected detail))
                         (difference (getf actual :difference)))
                    (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-match-snapshot)
                    (expect (getf actual :snapshot-key) :to-equal key)
@@ -622,8 +594,6 @@
                    (expect nil :to-be-truthy))
                (cl-weave:assertion-failure (condition)
                  (let* ((detail (cl-weave::failure-detail condition))
-                        (actual (cl-weave::assertion-detail-actual detail))
-                        (expected (cl-weave::assertion-detail-expected detail))
                         (difference (getf actual :difference)))
                    (expect (cl-weave::assertion-detail-matcher detail)
                            :to-be
@@ -661,9 +631,7 @@
                            prefix)
                    (expect nil :to-be-truthy))
                (cl-weave:assertion-failure (condition)
-                 (let* ((detail (cl-weave::failure-detail condition))
-                        (actual (cl-weave::assertion-detail-actual detail))
-                        (expected (cl-weave::assertion-detail-expected detail)))
+(with-assertion-detail (detail condition actual expected)
                    (expect (cl-weave::assertion-detail-matcher detail)
                            :to-be
                            :to-match-snapshot-sequence)
@@ -686,21 +654,21 @@
           (expect 5 :to-be-even)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let ((detail (cl-weave::failure-detail condition)))
+        (with-assertion-detail (detail condition)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-even)
           (expect (cl-weave::assertion-detail-actual detail)
                   :to-equal '(:value 5 :parity :odd))
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal '(:parity :even))))))
 
-  (it "supports Vitest-style expect.extend custom matchers"
+  (it "supports Vitest-style expect-extend custom matchers"
     (expect 7 :to-be-odd)
     (handler-case
         (progn
           (expect 8 :to-be-odd)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let ((detail (cl-weave::failure-detail condition)))
+        (with-assertion-detail (detail condition)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-odd)
           (expect (cl-weave::assertion-detail-actual detail)
                   :to-equal '(:value 8 :parity :even))
@@ -714,7 +682,7 @@
           (expect 11 :to-be-between 1 10)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let ((detail (cl-weave::failure-detail condition)))
+        (with-assertion-detail (detail condition)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-between)
           (expect (cl-weave::assertion-detail-actual detail)
                   :to-equal '(:value 11 :range (1 10)))
@@ -754,8 +722,7 @@
           (expect (= (+ 1 1) 3))
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail)))
+        (with-assertion-detail (detail condition actual)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be '=)
           (expect actual :to-contain '(:form (+ 1 1) :value 2))
           (expect actual :to-contain '(:form 3 :value 3))
@@ -768,8 +735,7 @@
           (expect (lambda () (sleep 0.001)) :to-run-under-ms 0)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail)))
+        (with-assertion-detail (detail condition actual)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-run-under-ms)
           (expect actual :to-contain :elapsed-ms)
           (expect actual :to-contain :elapsed-seconds)
@@ -784,8 +750,7 @@
           (expect (lambda () (list :allocated)) :to-allocate-under 0)
           (expect nil :to-be-truthy))
       (cl-weave:assertion-failure (condition)
-        (let* ((detail (cl-weave::failure-detail condition))
-               (actual (cl-weave::assertion-detail-actual detail)))
+(with-assertion-detail (detail condition actual)
           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-allocate-under)
           (expect actual :to-contain :elapsed-ms)
           (expect actual :to-contain :elapsed-seconds)
@@ -793,3 +758,18 @@
           (expect actual :to-contain :values)
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal '(:max-bytes 0)))))))
+
+(describe "matcher public records"
+  (it "exposes matcher names and descriptions"
+    (let ((matcher (cl-weave::matcher-named :to-equal)))
+      (expect (cl-weave:matcher-name matcher) :to-be :to-equal)
+      (expect (cl-weave:matcher-description matcher) :to-be nil)))
+
+  (it "exposes assertion failures through the test-failure base condition"
+    (handler-case
+        (progn
+          (expect :actual :to-be :expected)
+          (expect nil :to-be-truthy))
+      (cl-weave:test-failure (condition)
+        (expect (typep condition 'cl-weave:assertion-failure) :to-be-truthy)
+        (expect (princ-to-string condition) :to-contain "Test assertion failed")))))

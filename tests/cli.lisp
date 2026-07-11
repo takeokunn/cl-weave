@@ -95,12 +95,21 @@
               :to-equal '("cl-weave-tests"))
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
       (expect (cl-weave/cli::parse-reporter "jsonl") :to-be :jsonl)
-      (expect (cl-weave/cli::parse-reporter "ndjson") :to-be :jsonl)
+      (expect (lambda ()
+                (cl-weave/cli::parse-reporter "ndjson"))
+              :to-throw
+              "cl-weave: unknown reporter")
       (expect (cl-weave/cli::parse-reporter "github") :to-be :github)
       (expect (lambda ()
                 (cl-weave/cli::parse-reporter "unknown"))
               :to-throw
               "cl-weave: unknown reporter")
+      (expect (cl-weave/cli::parse-sequence-order "random") :to-be :random)
+      (dolist (removed-order '("defined" "shuffle"))
+        (expect (lambda ()
+                  (cl-weave/cli::parse-sequence-order removed-order))
+                :to-throw
+                "Unknown sequence order"))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "parser")
       (expect (cl-weave/cli::cli-options-output-file options)
               :to-equal "results.json")
@@ -354,7 +363,7 @@
                                          ("CL_WEAVE_TEST_TIMEOUT_MS" . "125")))
                  ("--max-workers" . (("CL_WEAVE_MAX_WORKERS" . "3")))
                  ("--shard" . (("CL_WEAVE_SHARD" . "1/2")))
-                 ("--sequence" . (("CL_WEAVE_SEQUENCE" . "shuffle")))
+                 ("--sequence" . (("CL_WEAVE_SEQUENCE" . "random")))
                  ("--seed" . (("CL_WEAVE_SEQUENCE_SEED" . "11")))
                  ("--coverage" . (("CL_WEAVE_COVERAGE" . "1")))
                  ("--coverage-output" . (("CL_WEAVE_COVERAGE_FILE" . "coverage.out")))
@@ -457,7 +466,7 @@
                 '(:reporter :json
                   :name-filter "watch"
                   :shard nil
-                  :order :defined
+                  :order :random
                   :seed nil
                   :bail nil
                   :coverage t
@@ -544,15 +553,8 @@
         (expect output :to-contain "\"cl-weave\"")
         (expect output :to-contain "\"DESCRIBE\"")
         (expect output :to-contain "\"EXPECT\"")
-        (expect output :to-contain "\"vitestAliases\"")
-        (expect output :to-contain "\"describe.only.each\"")
-        (expect output :to-contain "\"it.property\"")
-        (expect output :to-contain "\"test.isolated\"")
-        (expect output :to-contain "\"expect.hasassertions\"")
-        (expect output :to-contain "\"vi.mocked\"")
-        (expect output :to-contain "\"vi.mockreturnvalues\"")
-        (expect output :to-contain "\"vi.clearallmocks\"")
-        (expect output :to-contain "\"vi.spyon\""))))
+        (expect output :to-contain "\"expect-has-assertions\"")
+        (expect output :not :to-contain "\"vitestAliases\""))))
 
   (it "allows Lisp-native metadata output"
     (let ((options (cl-weave/cli::parse-cli-arguments
@@ -1071,9 +1073,6 @@
                                   '(("custom-command" ("custom-choice")))
                                   :environment '("CUSTOM_ENV")
                                   :description "custom option"))
-                      :vitest-aliases
-                      (list (list :alias "custom.alias"
-                                  :canonical "custom-canonical"))
                       :package-exports
                       (list (list :name "custom-package"
                                   :exports '("custom-export")))
@@ -1206,16 +1205,15 @@
               :to-contain "cl-weave-events.jsonl")
       (expect coverage-gate :not :to-be nil)
       (expect (getf coverage-gate :command)
-              :to-contain "CL_WEAVE_COVERAGE=1")
-      (expect (getf coverage-gate :command)
-              :to-contain "CL_WEAVE_COVERAGE_FILE=cl-weave.coverage")
-      (expect (getf coverage-gate :command)
-              :to-contain
-              "CL_WEAVE_COVERAGE_REPORT_DIR=cl-weave-coverage-report/")
+              :to-contain "scripts/run-coverage-gate.sh")
+      (expect (getf coverage-gate :command) :to-contain "alarm 360; exec @ARGV")
       (expect (getf coverage-gate :artifacts)
               :to-contain "cl-weave.coverage")
       (expect (getf coverage-gate :artifacts)
               :to-contain "cl-weave-coverage-report/")
+      (expect (getf coverage-gate :artifacts)
+              :to-contain "cl-weave-coverage-summary.json")
+      (expect (getf coverage-gate :description) :to-contain "100%")
       (expect watch-once-gate :not :to-be nil)
       (expect (getf watch-once-gate :command)
               :to-equal '("nix" "run" "." "--" "watch" "cl-weave-tests"
@@ -1427,7 +1425,7 @@
               :not :to-contain "tap")
       (expect sequence-option :not :to-be nil)
       (expect (getf sequence-option :choices)
-              :to-equal '("defined" "random" "shuffle"))
+              :to-equal '("random"))
       (expect max-workers-option :not :to-be nil)
       (expect (getf max-workers-option :aliases) :to-equal '())
       (expect (getf max-workers-option :commands) :to-contain "run")
@@ -1619,19 +1617,6 @@
         (expect (getf metadata :list-reporters)
                 :to-equal (mapcar #'reporter-name cl-weave::*list-reporters*)))))
 
-  (it "keeps Vitest aliases aligned with public package exports"
-    (let* ((metadata (cl-weave/cli::framework-metadata))
-           (exports (getf (find "cl-weave"
-                                (getf metadata :package-exports)
-                                :key (lambda (entry) (getf entry :name))
-                                :test #'string=)
-                          :exports)))
-      (flet ((exportedp (name)
-               (or (member name exports :test #'string=)
-                   (member (string-upcase name) exports :test #'string=))))
-        (dolist (entry (getf metadata :vitest-aliases))
-          (expect (getf entry :canonical) :to-satisfy #'exportedp)))))
-
   (it "keeps package export metadata synchronized with actual packages"
     (flet ((actual-exports (package-name)
              (let ((exports '()))
@@ -1816,8 +1801,6 @@
           (dolist (variable (getf entry :environment))
             (expect (member variable (getf metadata :environment) :test #'string=)
                     :not :to-be nil)))
-        (expect-unique-strings (mapcar (lambda (entry) (getf entry :alias))
-                                       (getf metadata :vitest-aliases)))
         (expect-unique-strings (mapcar (lambda (entry) (getf entry :name))
                                        (getf metadata :package-exports)))
         (dolist (entry (getf metadata :package-exports))
@@ -1898,14 +1881,6 @@
                (public-apis (getf entry :public-apis)))
           (expect entry :not :to-be nil)
           (expect public-apis :to-contain "framework-metadata")))))
-
-  (it "keeps metadata canonical names in Common Lisp reader spelling"
-    (dolist (entry (getf (cl-weave/cli::framework-metadata) :vitest-aliases))
-      (let ((canonical (getf entry :canonical)))
-        (expect (every (lambda (char)
-                         (not (upper-case-p char)))
-                       canonical)
-                :to-be t))))
 
   (it "keeps environment specs aligned with environment-backed metadata"
     (dolist (entry cl-weave/cli::*metadata-cli-options*)
@@ -2053,7 +2028,7 @@
         (expect (getf observed-arguments :reporter) :to-be :jsonl)
         (expect (getf observed-arguments :name-filter) :to-equal "watch")
         (expect (getf observed-arguments :shard) :to-be nil)
-        (expect (getf observed-arguments :order) :to-be :defined)
+        (expect (getf observed-arguments :order) :to-be nil)
         (expect (getf observed-arguments :seed) :to-be nil)
         (expect (getf observed-arguments :bail) :to-be nil)
         (expect (getf observed-arguments :coverage) :to-be t)

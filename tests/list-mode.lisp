@@ -159,7 +159,7 @@
         (expect (mapcar #'cl-weave:test-plan-entry-focused plan)
                 :to-equal '(t)))))
 
-  (it "lists only describe.only.each descendants as focused plan entries"
+  (it "lists only describe-only-each descendants as focused plan entries"
     (let ((root (cl-weave::make-suite :name "root"))
           (ran nil))
       (let ((cl-weave::*root-suite* root)
@@ -167,7 +167,7 @@
         (describe "plain suite"
           (it "outside"
             (setf ran :outside)))
-        (describe.only.each ((1 2 3) (2 3 5))
+        (describe-only-each ((1 2 3) (2 3 5))
             "focused suite ~A and ~A"
             (left right total)
           (it "case"
@@ -297,6 +297,69 @@
         (cl-weave::unify-logic-values '(:node ?x) '?x nil)
       (declare (ignore bindings))
       (expect matched-p :to-be nil)))
+
+  (it "bounds recursive logic searches with explicit recovery restarts"
+    (let ((program (logic-program
+                    (:- (:loop ?value)
+                        (:loop ?value)))))
+      (expect (handler-bind
+                  ((logic-search-exhausted
+                     (lambda (condition)
+                       (expect (logic-search-exhausted-limit condition) :to-be 3)
+                       (expect (logic-search-exhausted-steps condition) :to-be 3)
+                       (expect (logic-search-exhausted-pending condition)
+                               :to-satisfy #'plusp)
+                       (expect (logic-search-exhausted-partial-results condition)
+                               :to-equal nil)
+                       (expect (find-restart 'cl-weave:increase-limit condition)
+                               :to-be-truthy)
+                       (invoke-restart (find-restart 'cl-weave:return-partial-results
+                                                     condition)))))
+                (logic-query program '((:loop "forever")) :max-steps 3))
+              :to-equal nil)))
+
+  (it "forwards logic step limits through test plan queries"
+    (let ((program (logic-program (:item "found")))
+          (exhaustions 0))
+      (expect (handler-bind
+                  ((logic-search-exhausted
+                     (lambda (condition)
+                       (incf exhaustions)
+                       (invoke-restart (find-restart 'cl-weave:increase-limit condition)
+                                       2))))
+                (query-test-plan program '((:item ?value)) :max-steps 1))
+              :to-equal '(((?value . "found"))))
+      (expect exhaustions :to-be 1)))
+
+  (it "propagates max steps through logic query macros"
+    (let ((program (logic-program
+                    (:- (:loop ?value)
+                        (:loop ?value))))
+          (exhaustions 0))
+      (dolist (query (list (lambda ()
+                             (logic-run program
+                               (:max-steps 2)
+                               (:loop "forever")))
+                           (lambda ()
+                             (logic-where program
+                               (:max-steps 2)
+                               (:loop "forever")))
+                           (lambda ()
+                             (test-plan-where program
+                               (:max-steps 2)
+                               (:loop "forever")))))
+        (handler-bind
+            ((logic-search-exhausted
+               (lambda (condition)
+                 (incf exhaustions)
+                 (invoke-restart
+                  (find-restart 'cl-weave:return-partial-results condition)))))
+          (funcall query)))
+      (expect exhaustions :to-be 3)))
+
+  (it "walks defensive cyclic binding inputs without recursing forever"
+    (expect (cl-weave::logic-walk '?x '((?x . ?y) (?y . ?x)))
+            :to-satisfy #'logic-variable-p))
 
   (it "queries test plans with macro clauses"
     (let* ((root (cl-weave::make-suite :name "root"))

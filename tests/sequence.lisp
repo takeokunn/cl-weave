@@ -54,3 +54,13 @@
               :to-throw
               "Sequence seed must"))))
 
+(describe "sequence public controls"
+  (it "provides deterministic defaults"
+    (expect cl-weave:*test-sequence-order* :to-be :defined)
+    (expect cl-weave:*test-sequence-seed* :to-be 0))
+
+  (it "supports dynamic sequence control bindings"
+    (let ((cl-weave:*test-sequence-order* :random)
+          (cl-weave:*test-sequence-seed* 29))
+      (expect cl-weave:*test-sequence-order* :to-be :random)
+      (expect cl-weave:*test-sequence-seed* :to-be 29))))

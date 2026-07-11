@@ -4,9 +4,6 @@
   (it-fails "passes when the body fails"
     (expect 1 :to-be 2))
 
-  (test-fails "alias passes when the body errors"
-    (error "known bug"))
-
   (it "turns unexpected success into a structured failure"
     (let* ((test (cl-weave::make-test-case
                   :name "known bug"
@@ -33,4 +30,3 @@
            (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
       (expect attempts :to-be 3)
       (expect (cl-weave::test-event-status event) :to-be :pass))))
-

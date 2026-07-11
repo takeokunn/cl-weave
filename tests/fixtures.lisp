@@ -32,6 +32,42 @@
         (declare (ignore symbol))
         (expect-not status :to-be :external))))
 
+  (it "represents suite and test metadata as readable structures"
+    (let* ((test (cl-weave::make-test-case
+                  :name "works"
+                  :function (lambda () t)
+                  :focus t
+                  :tags '(:unit)
+                  :depends-on '("setup")
+                  :location '(:file "example.lisp" :line 12)))
+           (suite (cl-weave::make-suite
+                   :name "model"
+                   :children (list test))))
+      (expect suite :to-satisfy #'cl-weave::suite-p)
+      (expect test :to-satisfy #'cl-weave::test-case-p)
+      (expect (cl-weave::suite-children suite) :to-equal (list test))
+      (expect (cl-weave::test-case-tags test) :to-equal '(:unit))
+      (expect (princ-to-string suite) :to-contain "model")
+      (expect (princ-to-string suite) :to-contain ":children 1")
+      (expect (princ-to-string test) :to-contain "works")
+      (expect (princ-to-string test) :to-contain ":focus T")))
+
+  (it "reports model conditions with actionable context"
+    (loop for (condition fragment)
+            in (list
+                (list (make-condition
+                       'cl-weave::assertion-failure
+                       :detail (cl-weave::make-assertion-detail
+                                :form '(expect value :to-be 42)))
+                      "EXPECT VALUE :TO-BE 42")
+                (list (make-condition 'cl-weave:test-timeout :timeout-ms 250)
+                      "250 ms timeout")
+                (list (make-condition
+                       'cl-weave:expected-failure-missed
+                       :reason "known defect")
+                      "known defect"))
+          do (expect (princ-to-string condition) :to-contain fragment)))
+
   (it "wraps each test body with around-each continuations"
     (let ((root (cl-weave::make-suite :name "root"))
           (events nil))
@@ -75,4 +111,3 @@
       (let ((result (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
       (expect (reverse events) :to-equal '(:around-cleanup :after)))))
-

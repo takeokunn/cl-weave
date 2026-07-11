@@ -249,6 +249,76 @@
                  (actual (cl-weave::assertion-detail-actual detail)))
             (expect (getf actual :minimal) :to-equal '(0)))))))
 
+  (it "stops shrinking when candidates form a cycle"
+    (let ((generator
+            (cl-weave::make-property-generator
+             :name :cyclic
+             :produce (lambda (rng)
+                        (declare (ignore rng))
+                        :a)
+             :shrink (lambda (value)
+                       (ecase value
+                         (:a '(:b))
+                         (:b '(:a)))))))
+      (expect (cl-weave::shrink-property-values
+               (list generator) '(:a)
+               (lambda (value) (error "failure at ~S" value)))
+              :to-equal '(:b))))
+
+  (it "offers the current value when the shrink step limit is reached"
+    (let ((cl-weave:*property-shrink-max-steps* 1)
+          (generator
+            (cl-weave::make-property-generator
+             :name :unbounded
+             :produce (lambda (rng) (declare (ignore rng)) 3)
+             :shrink (lambda (value) (list (1- value)))))
+          (limit nil))
+      (handler-bind
+          ((property-shrink-limit
+             (lambda (condition)
+               (setf limit condition)
+               (invoke-restart 'accept-current))))
+        (expect (cl-weave::shrink-property-values
+                 (list generator) '(3)
+                 (lambda (value) (error "failure at ~S" value)))
+                :to-equal '(2)))
+      (expect (property-shrink-limit-values limit) :to-equal '(2))
+      (expect (property-shrink-limit-steps limit) :to-be 1)
+      (expect (property-shrink-limit-max-steps limit) :to-be 1)))
+
+  (it "spends the shrink budget on rejected candidates"
+    (let ((cl-weave:*property-shrink-max-steps* 2)
+          (evaluated nil)
+          (limit nil)
+          (generator
+            (cl-weave::make-property-generator
+             :name :rejected
+             :produce (lambda (rng) (declare (ignore rng)) 3)
+             :shrink (lambda (value)
+                       (declare (ignore value))
+                       '(2 1 0)))))
+      (handler-bind
+          ((property-shrink-limit
+             (lambda (condition)
+               (setf limit condition)
+               (invoke-restart 'accept-current))))
+        (expect (cl-weave::shrink-property-values
+                 (list generator) '(3)
+                 (lambda (value)
+                   (push value evaluated)
+                   (when (= value 3)
+                     (error "original failure"))))
+                :to-equal '(3)))
+      (expect evaluated :to-equal '(1 2 3))
+      (expect (property-shrink-limit-steps limit) :to-be 2)))
+
+  (it "rejects invalid shrink step limits"
+    (let ((cl-weave:*property-shrink-max-steps* -1))
+      (expect (lambda ()
+                (cl-weave::shrink-property-values nil '(1) #'identity))
+              :to-throw
+              'type-error)))
+
   (it "uses property count from the CI environment"
     (let ((runs 0))
       (with-mocked-functions

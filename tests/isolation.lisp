@@ -22,6 +22,7 @@
                    :package "CL-WEAVE/TESTS"
                    :timeout 180)))
       (expect (isolated-result-status result) :to-be :fail)
+      (expect (cl-weave:isolated-result-elapsed-ms result) :to-be-greater-than-or-equal 0)
       (expect (isolated-result-exit-code result) :to-be 1)
       (expect (isolated-result-stderr result) :to-contain "child boom")
       (expect (isolated-result-script-path result) :to-be nil)

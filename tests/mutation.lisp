@@ -1,5 +1,22 @@
 (in-package #:cl-weave/tests)
 
+(defun collected-mutation-forms (form &key operators)
+  (mapcar #'mutation-form
+          (if operators
+              (collect-mutations form :operators operators)
+              (collect-mutations form))))
+
+(defun expect-arithmetic-mutation (source expected)
+  (expect (collected-mutation-forms source
+                                    :operators '(:arithmetic-operator))
+          :to-contain
+          expected))
+
+(defun expect-arithmetic-mutations (cases)
+  (dolist (case cases)
+    (destructuring-bind (source expected) case
+      (expect-arithmetic-mutation source expected))))
+
 (describe "mutation testing"
   (it "collects one-at-a-time form mutations"
     (let ((mutations (collect-mutations '(if (= value 1) (+ value 2) nil))))
@@ -37,6 +54,118 @@
       (expect (mutation-original (first mutations)) :to-be :enabled)
       (expect (mutation-replacement (first mutations)) :to-be :disabled)
       (expect (mutation-form (first mutations)) :to-equal '(:disabled))))
+
+  (it "does not mutate quoted forms or named function syntax"
+    (expect (collect-mutations '(quote (+ t nil))) :to-equal nil)
+    (expect (collect-mutations '(function calculate-value)) :to-equal nil))
+
+  (it "mutates executable lambda bodies in function forms"
+    (expect (collected-mutation-forms
+             '(function (lambda (value) (+ value 1))))
+            :to-contain
+            '(function (lambda (value) (- value 1)))))
+
+  (it "mutates lambda bodies but not lambda lists or declarations"
+    (let ((mutations
+            (collect-mutations
+             '(lambda (value &optional (= 1 2))
+                (declare (type (integer 0 10) value))
+                (+ value 1)))))
+      (expect (length mutations) :to-be 1)
+      (expect (mutation-path (first mutations)) :to-equal '(3))
+      (expect (mutation-original (first mutations)) :to-equal '(+ value 1))
+      (expect (mutation-form (first mutations)) :to-equal
+              '(lambda (value &optional (= 1 2))
+                 (declare (type (integer 0 10) value))
+                 (- value 1)))))
+
+  (it "mutates evaluated condition and function-position lambda forms"
+    (let ((cond-mutations
+            (collect-mutations '(cond ((= value 1) :matched) (t :fallback))))
+          (lambda-mutations
+            (collect-mutations '((lambda (value) (+ value 1)) 2))))
+      (expect (mapcar #'mutation-form cond-mutations) :to-contain
+              '(cond ((/= value 1) :matched) (t :fallback)))
+      (expect (mapcar #'mutation-form lambda-mutations) :to-contain
+              '((lambda (value) (- value 1)) 2))))
+
+  (it "mutates handler and restart clause bodies but not clause syntax"
+    (let ((handler-mutations
+            (collect-mutations
+             '(handler-case (parse value)
+                (error (condition)
+                  (declare (ignore condition))
+                  (+ value 1)))))
+          (restart-mutations
+            (collect-mutations
+             '(restart-case (parse value)
+                (use-value (replacement)
+                  (+ replacement 1))))))
+      (expect (mapcar #'mutation-form handler-mutations) :to-contain
+              '(handler-case (parse value)
+                 (error (condition)
+                   (declare (ignore condition))
+                   (- value 1))))
+      (expect (mapcar #'mutation-form restart-mutations) :to-contain
+              '(restart-case (parse value)
+                 (use-value (replacement)
+                   (- replacement 1))))))
+
+  (it "walks evaluated positions across binding and control contexts"
+    (expect-arithmetic-mutations
+     '(((let* ((value (+ 1 2))) value)
+        (let* ((value (- 1 2))) value))
+       ((multiple-value-bind (value) (+ 1 2) value)
+        (multiple-value-bind (value) (- 1 2) value))
+       ((destructuring-bind (value) (list (+ 1 2)) value)
+        (destructuring-bind (value) (list (- 1 2)) value))
+       ((flet ((compute (value) (+ value 1))) (compute 2))
+        (flet ((compute (value) (- value 1))) (compute 2)))
+       ((labels ((compute (value) (+ value 1))) (compute 2))
+        (labels ((compute (value) (- value 1))) (compute 2)))
+       ((macrolet ((compute (value) (+ value 1))) (compute 2))
+        (macrolet ((compute (value) (- value 1))) (compute 2)))
+       ((symbol-macrolet ((value (+ 1 2))) value)
+        (symbol-macrolet ((value (- 1 2))) value))
+       ((do ((value (+ 1 2) (+ value 1)))
+            ((> value 3) (+ value 2))
+          (+ value 3))
+        (do ((value (- 1 2) (+ value 1)))
+            ((> value 3) (+ value 2))
+          (+ value 3)))
+       ((do* ((value 0 (+ value 1)))
+             ((> value 3) (+ value 2)))
+        (do* ((value 0 (- value 1)))
+             ((> value 3) (+ value 2))))
+       ((handler-bind ((error (make-handler (+ 1 2)))) (work))
+        (handler-bind ((error (make-handler (- 1 2)))) (work)))
+       ((unwind-protect (+ 1 2) (cleanup (+ 3 4)))
+        (unwind-protect (- 1 2) (cleanup (+ 3 4))))
+       ((the integer (+ 1 2))
+        (the integer (- 1 2)))
+       ((locally (declare (optimize speed)) (+ 1 2))
+        (locally (declare (optimize speed)) (- 1 2)))
+       ((eval-when (:execute) (+ 1 2))
+        (eval-when (:execute) (- 1 2)))
+       ((multiple-value-call #'list (+ 1 2) (values 3 4))
+        (multiple-value-call #'list (- 1 2) (values 3 4)))
+       ((progv (list 'value) (list (+ 1 2)) (+ 3 4))
+        (progv (list 'value) (list (- 1 2)) (+ 3 4))))))
+
+  (it "keeps syntax, declarations, and documentation immutable"
+    (let ((forms
+            '((let* (((+ 1 2) 3)) value)
+              (multiple-value-bind ((+ 1 2)) (values 3) value)
+              (flet (((+ 1 2) () "(+ 3 4)" (declare (special (+ 5 6))) value))
+                value)
+              (handler-bind (((+ 1 2) #'handle)) value)
+              (the (+ 1 2) value)
+              (eval-when ((+ 1 2)) value))))
+      (dolist (form forms)
+        (expect (collected-mutation-forms
+                 form :operators '(:arithmetic-operator))
+                :to-equal
+                nil))))
 
   (it "marks surviving and killed mutants"
     (let* ((results (run-mutations '(+ 1 1)
@@ -77,6 +206,24 @@
           (expect (getf (mutation-score-failure-summary condition) :survived)
                   :to-be 1)))))
 
+  (it "uses the score threshold when some mutants survive"
+    (let ((results
+            (run-mutations '(+ 1 (= 1 1))
+                           (lambda (form mutation)
+                             (declare (ignore form))
+                             (eq (mutation-operator mutation)
+                                 :comparison-operator)))))
+      (multiple-value-bind (pass-p summary)
+          (mutation-score-passes-p results 0.5)
+        (expect pass-p :to-be t)
+        (expect (getf summary :killed) :to-be 1)
+        (expect (getf summary :survived) :to-be 1)
+        (expect (getf summary :score) :to-be 0.5))
+      (multiple-value-bind (pass-p summary)
+          (mutation-score-passes-p results 0.5001)
+        (declare (ignore summary))
+        (expect pass-p :to-be nil))))
+
   (it "keeps unexpected harness errors visible"
     (let* ((results (run-mutations '(+ 1 1)
                                    (lambda (form mutation)
@@ -85,6 +232,30 @@
            (summary (mutation-summary results)))
       (expect (mapcar #'mutation-result-status results) :to-contain :errored)
       (expect (getf summary :errored) :to-be 1)))
+
+  (it "records mutation test timeouts as errors"
+    (let* ((results (run-mutations '(+ 1 1)
+                                   (lambda (form mutation)
+                                     (declare (ignore form mutation))
+                                     (loop))
+                                   :timeout-ms 10))
+           (result (first results)))
+      (expect (mutation-result-status result) :to-be :errored)
+      (expect (mutation-result-condition result)
+              :to-be-instance-of 'cl-weave:test-timeout)
+      (expect (cl-weave:test-timeout-ms (mutation-result-condition result))
+              :to-be 10)))
+
+  (it "validates mutation timeout values before execution"
+    (handler-case
+        (progn
+          (run-mutations '(+ 1 1) (lambda (form mutation)
+                                    (declare (ignore form mutation))
+                                    t)
+                         :timeout-ms 0)
+          (expect nil :to-be t))
+      (error (condition)
+        (expect (princ-to-string condition) :to-contain "positive integer"))))
 
   (it "prints AI-readable mutation reports"
     (let* ((results (run-mutations '(+ 1 1)
@@ -101,3 +272,25 @@
       (expect json-output :to-contain "\"kind\":\"mutations\"")
       (expect json-output :to-contain "\"killed\":1")
       (expect json-output :to-contain "\"operator\":\"ARITHMETIC-OPERATOR\""))))
+
+(describe "mutation public records"
+  (it "exposes operator names and descriptions"
+    (let ((operator (cl-weave::mutation-operator-named :arithmetic-operator)))
+      (expect (cl-weave:mutation-operator-name operator)
+              :to-be
+              :arithmetic-operator)
+      (expect (cl-weave:mutation-operator-description operator)
+              :to-contain
+              "arithmetic")))
+
+  (it "exposes mutation result fields"
+    (let* ((mutation (first (collect-mutations '(+ 1 1)
+                                                :operators '(:arithmetic-operator))))
+           (condition (make-condition 'simple-error :format-control "failed"))
+           (result (cl-weave::make-mutation-result
+                    :mutation mutation
+                    :status :errored
+                    :condition condition)))
+      (expect (cl-weave:mutation-result-mutation result) :to-be mutation)
+      (expect (cl-weave:mutation-result-status result) :to-be :errored)
+      (expect (cl-weave:mutation-result-condition result) :to-be condition))))

@@ -176,6 +176,16 @@
      ,@(loop for (name form) in cases
              collect `(it ,name ,form))))
 
+(defmacro with-assertion-detail ((detail condition &optional actual expected)
+                                 &body assertions)
+  "Bind the structured payload of an expected assertion failure."
+  `(let* ((,detail (cl-weave::failure-detail ,condition))
+          ,@(when actual
+              `((,actual (cl-weave::assertion-detail-actual ,detail))))
+          ,@(when expected
+              `((,expected (cl-weave::assertion-detail-expected ,detail)))))
+     ,@assertions))
+
 (defun tree-contains-p (tree value)
   (cond
     ((equal tree value) t)
@@ -183,12 +193,6 @@
      (or (tree-contains-p (car tree) value)
          (tree-contains-p (cdr tree) value)))
     (t nil)))
-
-(defmacro expect-macroexpands-through (form canonical-symbol)
-  `(expect (macroexpand-1 ',form)
-           :to-satisfy
-           (lambda (expanded)
-             (tree-contains-p expanded ',canonical-symbol))))
 
 #+sbcl
 (defun quiet-nan ()
@@ -208,7 +212,7 @@
                                         :odd))
           '(:parity :even)))
 
-(expect.extend
+(expect-extend
   (:to-be-odd (actual expected)
     "Passes when ACTUAL is an odd integer."
     (declare (ignore expected))
