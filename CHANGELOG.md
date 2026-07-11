@@ -20,6 +20,19 @@ framework, CLI, reporter, metadata, and Nix workflow changes.
 
 - Replace legacy assertion aliases with the canonical expectation macros.
 
+### User-visible Changes
+
+- Added a `formatter` flake output (`nixfmt`) so `nix fmt` formats `flake.nix`.
+- Added an `overlays.default` flake output so downstream flakes can consume
+  `cl-weave` as `pkgs.cl-weave` without re-deriving the package.
+- Added package `meta` (description, homepage, license, platforms) to the
+  flake's `cl-weave` derivation.
+- Added a `.envrc` so `direnv allow` loads the flake's devShell automatically.
+- Added `docs/README.md` as a documentation index linking the README, AI
+  contract, Nix workflow, and every governance and policy document.
+- Corrected `docs/runtime-support.md`, which described an ASDF-loading
+  timeout as an open blocker after it had already been fixed.
+
 ## 0.1.0 - 2026-07-11
 
 First tagged release. `cl-weave` is a Vitest-inspired Common Lisp testing

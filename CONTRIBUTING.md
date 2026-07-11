@@ -16,6 +16,10 @@ opening the issue or pull request.
 
 ## Development Loop
 
+If you use [direnv](https://direnv.net/), running `direnv allow` once loads the
+flake's `devShell` (SBCL and Perl) automatically whenever you `cd` into the
+repository.
+
 Use the same commands locally that CI uses:
 
 ```sh
@@ -33,6 +37,9 @@ perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --report
 If ASDF loading fails or times out, treat that as a release blocker. Targeted
 source-level checks can explain a defect, but they do not prove packaging,
 downstream adoption, or CI readiness.
+
+Run `nix fmt` before committing changes to `flake.nix` so Nix expressions stay
+consistently formatted.
 
 ## Change Standards
 

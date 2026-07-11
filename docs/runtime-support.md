@@ -14,10 +14,10 @@ validation.
 ## Current Verification Gate
 
 The supported SBCL target is release-ready only when ASDF loading succeeds.
-Current blocker: ASDF/UIOP-loaded SBCL can time out while loading the logic
-runtime through the current source-load arrangement. Targeted source checks are
-useful for narrowing the defect, but they are not a substitute for the release
-gate.
+`scripts/run-tests.lisp` and the packaged CLI both bootstrap the project
+through `asdf:load-asd` plus `asdf:load-system`, matching this gate exactly.
+Targeted source checks are useful for narrowing a defect, but they are not a
+substitute for the release gate.
 
 Required release gate:
 

@@ -9,6 +9,10 @@ reproducible Nix workflows.
 The project is intentionally dependency-free at the core. It should be easy to
 run in CI, embed in ASDF projects, and extend from the REPL.
 
+See [docs/README.md](docs/README.md) for the full documentation index:
+adoption, the AI contract, Nix workflow, and every governance and policy
+document in one place.
+
 ## Support
 
 Use [docs/support-policy.md](docs/support-policy.md) for the canonical support
