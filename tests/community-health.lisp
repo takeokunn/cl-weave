@@ -8,76 +8,93 @@
                 (normalize-markdown-text fragment)
                 fragment))))
 
-(describe "community health"
-  (it "keeps OSS operations documents discoverable"
-    (let ((root (uiop:getcwd))
-          (readme (read-text-file (merge-pathnames #P"README.md" (uiop:getcwd))))
-          (contributing (read-text-file (merge-pathnames #P"CONTRIBUTING.md"
-                                                         (uiop:getcwd))))
-          (security (read-text-file (merge-pathnames #P"SECURITY.md"
-                                                     (uiop:getcwd))))
-          (changelog (read-text-file (merge-pathnames #P"CHANGELOG.md"
-                                                      (uiop:getcwd)))))
-      (dolist (path '("LICENSE" "CITATION.cff" "CONTRIBUTING.md" "SECURITY.md" "CHANGELOG.md"))
-        (expect (probe-file (merge-pathnames path root)) :not :to-be nil)
-        (expect readme :to-contain path))
-      (expect readme :to-contain ".github/pull_request_template.md")
-      (dolist (path '(".github/ISSUE_TEMPLATE/bug_report.md"
-                      ".github/ISSUE_TEMPLATE/feature_request.md"
-                      ".github/ISSUE_TEMPLATE/config.yml"
-                      ".github/pull_request_template.md"
-                      ".github/CODEOWNERS"))
-        (expect (probe-file (merge-pathnames path root)) :not :to-be nil)
-        (expect readme :to-contain path))
-      (expect (probe-file (merge-pathnames "docs/community-health.md" root))
-              :not :to-be nil)
-      (expect readme :to-contain "docs/community-health.md")
-      (expect readme :to-contain "docs/governance.md")
-      (expect contributing :to-contain "nix flake check")
-      (expect contributing :to-contain "cl-weave metadata")
-      (expect contributing :to-contain ".github/pull_request_template.md")
-      (expect contributing :to-contain "docs/community-health.md")
-      (expect contributing :to-contain "docs/governance.md")
-      (expect security :to-contain "subprocess isolation")
-      (expect security :to-contain "snapshot writes")
-      (expect changelog :to-contain "Unreleased")
-      (expect changelog :to-contain "machine-readable policy document metadata")))
+(defun expect-document-without-fragments (document fragments &key normalize)
+  (dolist (fragment fragments)
+    (expect document
+            :not :to-contain
+            (if normalize
+                (normalize-markdown-text fragment)
+                fragment))))
 
-  (it "keeps the changelog aligned with release policy expectations"
-    (let* ((changelog (normalize-markdown-text
-                       (read-text-file
-                        (merge-pathnames #P"CHANGELOG.md" (uiop:getcwd)))))
-           (maintenance-document (normalize-markdown-text
-                                  (read-text-file
-                                   (merge-pathnames #P"docs/maintenance-policy.md"
-                                                    (uiop:getcwd)))))
-           (versioning-document (normalize-markdown-text
-                                 (read-text-file
-                                  (merge-pathnames #P"docs/versioning-policy.md"
-                                                   (uiop:getcwd))))))
-      (dolist (phrase '("## Unreleased"
-                        "### Release Classification"
-                        "### Public Surface Notes"
-                        "### Migration Notes"
-                        "### User-visible Changes"
-                        "additive only"))
-        (expect changelog :to-contain (normalize-markdown-text phrase)))
-      (dolist (phrase '("public-surface discipline"
-                        "migration steps"
-                        "user-visible changes"))
-        (expect maintenance-document :to-contain phrase))
-      (dolist (phrase '("additive only"
-                        "behavior-preserving"
-                        "intentionally breaking"))
-        (expect versioning-document :to-contain phrase))
-      (expect changelog
-              :to-contain
-              (normalize-markdown-text
-               "No downstream migration steps are currently required."))
-      (expect changelog
-              :to-contain
-              (normalize-markdown-text
-               "Existing CLI output, reporter shapes, and machine-readable metadata remain the expected public surface"))))
+(defmacro define-document-contract-tests (&body contracts)
+  `(progn
+     ,@(loop for contract in contracts
+             for name = (first contract)
+             for documents = (getf (rest contract) :documents)
+             for existing = (getf (rest contract) :existing)
+             for required = (getf (rest contract) :required)
+             for forbidden = (getf (rest contract) :forbidden)
+             collect
+             `(it ,name
+                (let ,(loop for (variable path . options) in documents
+                            collect
+                            `(,variable
+                              ,(if (getf options :normalize)
+                                   `(normalize-markdown-text
+                                     (read-text-file
+                                      (merge-pathnames ,path (uiop:getcwd))))
+                                   `(read-text-file
+                                     (merge-pathnames ,path (uiop:getcwd))))))
+                  ,@(when existing
+                      `((dolist (path ',existing)
+                          (expect (probe-file
+                                   (merge-pathnames path (uiop:getcwd)))
+                                  :not :to-be nil))))
+                  ,@(loop for (variable fragments) in required
+                          for document = (assoc variable documents)
+                          collect
+                          `(expect-document-fragments
+                            ,variable ',fragments
+                            :normalize ,(not (null (getf (cddr document)
+                                                        :normalize)))))
+                  ,@(loop for (variable fragments) in forbidden
+                          for document = (assoc variable documents)
+                          collect
+                          `(expect-document-without-fragments
+                            ,variable ',fragments
+                            :normalize ,(not (null (getf (cddr document)
+                                                        :normalize))))))))))
+
+(describe "community health"
+  (define-document-contract-tests
+    ("keeps OSS operations documents discoverable"
+     :documents ((readme #P"README.md")
+                 (contributing #P"CONTRIBUTING.md")
+                 (security #P"SECURITY.md")
+                 (changelog #P"CHANGELOG.md"))
+     :existing ("LICENSE" "CITATION.cff" "CONTRIBUTING.md" "SECURITY.md"
+                "CHANGELOG.md" ".github/ISSUE_TEMPLATE/bug_report.md"
+                ".github/ISSUE_TEMPLATE/feature_request.md"
+                ".github/ISSUE_TEMPLATE/config.yml"
+                ".github/pull_request_template.md" ".github/CODEOWNERS"
+                "docs/community-health.md")
+     :required ((readme ("LICENSE" "CITATION.cff" "CONTRIBUTING.md"
+                         "SECURITY.md" "CHANGELOG.md"
+                         ".github/ISSUE_TEMPLATE/bug_report.md"
+                         ".github/ISSUE_TEMPLATE/feature_request.md"
+                         ".github/ISSUE_TEMPLATE/config.yml"
+                         ".github/pull_request_template.md" ".github/CODEOWNERS"
+                         "docs/community-health.md" "docs/governance.md"))
+                (contributing ("nix flake check" "cl-weave metadata"
+                               ".github/pull_request_template.md"
+                               "docs/community-health.md" "docs/governance.md"))
+                (security ("subprocess isolation" "snapshot writes"))
+                (changelog ("Unreleased"
+                            "machine-readable policy document metadata"))))
+    ("keeps the changelog aligned with release policy expectations"
+     :documents ((changelog #P"CHANGELOG.md" :normalize t)
+                 (maintenance-document #P"docs/maintenance-policy.md" :normalize t)
+                 (versioning-document #P"docs/versioning-policy.md" :normalize t))
+     :required ((changelog ("## Unreleased" "### Release Classification"
+                            "### Public Surface Notes" "### Migration Notes"
+                            "### User-visible Changes" "additive only"
+                            "No downstream migration steps are currently required."
+                            "Existing CLI output, reporter shapes, and machine-readable metadata remain the expected public surface"))
+                (maintenance-document ("public-surface discipline"
+                                       "migration steps" "user-visible changes"))
+                (versioning-document ("additive only" "behavior-preserving"
+                                      "intentionally breaking")))
+     :forbidden ((changelog ("TBD" "TODO")))))
 
   (it "keeps citation and license contracts synchronized with repository metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
