@@ -1,14 +1,58 @@
+#+sbcl
+(load (merge-pathnames "contrib/asdf.fasl" (sb-int:sbcl-homedir-pathname))
+      :verbose nil
+      :print nil)
+#-sbcl
 (require :asdf)
 
-(defun project-root ()
-  (truename "."))
+(defparameter *runner-pathname* *load-truename*)
 
-(defun register-project-systems ()
-  (let ((root (project-root)))
-    (pushnew root asdf:*central-registry* :test #'equal)
-    (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
-    (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
-    root))
+(defun project-root ()
+  (truename
+   (merge-pathnames
+    "../"
+    (make-pathname :name nil :type nil :defaults *runner-pathname*))))
+
+(defun read-system-definition (pathname)
+  (with-open-file (stream pathname)
+    (loop for form = (read stream nil nil)
+          while form
+          when (and (consp form)
+                    (symbolp (first form))
+                    (string= (symbol-name (first form)) "DEFSYSTEM"))
+            return form
+          finally
+             (error "cl-weave: no DEFSYSTEM form in ~A" pathname))))
+
+(defun component-source-pathnames (components directory)
+  (loop for component in components
+        append
+        (case (first component)
+          (:file
+           (list (merge-pathnames
+                  (make-pathname :name (second component) :type "lisp")
+                  directory)))
+          (:module
+           (component-source-pathnames
+            (getf (cddr component) :components)
+            (merge-pathnames
+             (make-pathname :directory (list :relative (second component)))
+             directory)))
+          (otherwise
+           (error "cl-weave: unsupported ASD component: ~S" component)))))
+
+(defun system-source-pathnames (asd-pathname)
+  (let ((definition (read-system-definition asd-pathname)))
+    (component-source-pathnames
+     (getf (cddr definition) :components)
+     (make-pathname :name nil :type nil :defaults asd-pathname))))
+
+(defun load-system-sources (asd-name &key compile)
+  (let* ((asd-pathname (merge-pathnames asd-name (project-root)))
+         #+sbcl
+         (sb-ext:*evaluator-mode* (if compile :compile :interpret)))
+    (dolist (source (system-source-pathnames asd-pathname))
+      (load source :verbose nil :print nil))))
 
 (defun requested-reporter ()
   (let ((reporter #+sbcl (sb-ext:posix-getenv "CL_WEAVE_REPORTER")
@@ -170,11 +214,11 @@
   #+sbcl
   (let ((value (sb-ext:posix-getenv "CL_WEAVE_SEQUENCE")))
     (cond
-      ((or (null value) (string= value "")) :defined)
+      ((or (null value) (string= value "")) nil)
       ((string-equal value "random") :random)
       (t (error "cl-weave: CL_WEAVE_SEQUENCE must be random: ~A" value))))
   #-sbcl
-  :defined)
+  nil)
 
 (defun requested-sequence-seed ()
   #+sbcl
@@ -301,17 +345,16 @@
   nil)
 
 (defun load-project-systems (&key coverage)
-  (register-project-systems)
   (cond
     (coverage
      (enable-coverage-compilation)
-     (asdf:load-system "cl-weave" :force t)
+     (load-system-sources "cl-weave.asd" :compile t)
      ;; Test code exercises the product but must not contribute to its score.
      (disable-coverage-compilation)
-     (asdf:load-system "cl-weave-tests" :force t))
+     (load-system-sources "cl-weave-tests.asd"))
     (t
-     (asdf:load-system "cl-weave")
-     (asdf:load-system "cl-weave-tests"))))
+     (load-system-sources "cl-weave.asd")
+     (load-system-sources "cl-weave-tests.asd"))))
 
 (load-project-systems :coverage (requested-coverage-p))
 
