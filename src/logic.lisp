@@ -77,11 +77,11 @@
         value)))
 
 (defun normalize-logic-bindings (bindings)
-  (let ((normalized '()))
-    (dolist (binding bindings normalized)
-      (push (cons (car binding)
-                  (resolve-logic-value (cdr binding) bindings))
-            normalized))))
+  (nreverse
+   (mapcar (lambda (binding)
+             (cons (car binding)
+                   (resolve-logic-value (cdr binding) bindings)))
+           bindings)))
 
 (defun collect-logic-variables (value)
   (cond
