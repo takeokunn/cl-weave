@@ -26,21 +26,29 @@
 (defun suite-registration-form (name forms options)
   `(register-suite ,name (lambda () ,@forms) ,@options))
 
+(defun registration-syntax-error (format-control &rest arguments)
+  ;; Format eagerly: the arguments may be circular, and a condition holding
+  ;; them raw would explode when printed outside this *PRINT-CIRCLE* binding.
+  (error "~A"
+         (let ((*print-circle* t))
+           (apply #'format nil format-control arguments))))
+
 (defun validate-suite-each-syntax (cases name bindings target)
   (unless (registration-proper-list-p cases)
-    (let ((*print-circle* t))
-      (error "~S requires CASES to be a literal proper list, got ~S." target cases)))
+    (registration-syntax-error
+     "~S requires CASES to be a literal proper list, got ~S." target cases))
   (unless (stringp name)
-    (error "~S requires NAME to be a literal format string, got ~S." target name))
+    (registration-syntax-error
+     "~S requires NAME to be a literal format string, got ~S." target name))
   (unless (registration-proper-list-p bindings)
-    (let ((*print-circle* t))
-      (error "~S requires BINDINGS to be a literal proper list, got ~S." target bindings)))
+    (registration-syntax-error
+     "~S requires BINDINGS to be a literal proper list, got ~S." target bindings))
   (loop for case in cases
         for index from 0
         unless (registration-proper-list-p case)
-          do (let ((*print-circle* t))
-               (error "~S case ~D must be a literal proper list, got ~S."
-                      target index case)))
+          do (registration-syntax-error
+              "~S case ~D must be a literal proper list, got ~S."
+              target index case))
   (values))
 
 (defun suite-each-cases (cases name bindings forms target)
@@ -306,8 +314,8 @@
 
 (defmacro it-property (name bindings &body body)
   (unless (registration-proper-list-p bindings)
-    (let ((*print-circle* t))
-      (error "IT-PROPERTY requires BINDINGS to be a literal proper list, got ~S." bindings)))
+    (registration-syntax-error
+     "IT-PROPERTY requires BINDINGS to be a literal proper list, got ~S." bindings))
   (loop for binding in bindings
         for index from 0
         unless (and (registration-proper-list-p binding)
