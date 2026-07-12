@@ -33,6 +33,20 @@
 (defun metadata-output-reporters ()
   '("json" "sexp"))
 
+(defmacro define-metadata-plist-accessors (&rest specifications)
+  `(progn
+     ,@(loop for (name key) in specifications
+             collect `(defun ,name (entry)
+                        (getf entry ,key)))))
+
+(define-metadata-plist-accessors
+  (metadata-entry-name :name)
+  (metadata-entry-argument :argument)
+  (metadata-entry-description :description)
+  (metadata-entry-choices :choices)
+  (metadata-entry-command-choices :command-choices)
+  (metadata-entry-environment :environment))
+
 (defun metadata-reporter-command-choices ()
   (let ((run-reporters (metadata-run-reporters))
         (list-reporters (metadata-list-reporters)))
@@ -49,11 +63,12 @@
       name))
 
 (defun cli-option-usage-label (entry)
-  (cli-option-usage-name (getf entry :name) (getf entry :argument)))
+  (cli-option-usage-name (metadata-entry-name entry)
+                         (metadata-entry-argument entry)))
 
 (defun cli-option-usage-lines (entry)
   (let* ((label (format nil "  ~A" (cli-option-usage-label entry)))
-         (description (getf entry :description))
+         (description (metadata-entry-description entry))
          (description-column 30))
     (if (< (length label) description-column)
         (list (format nil "~A~VT~A" label description-column description))
@@ -62,9 +77,10 @@
 
 (defun materialized-metadata-cli-option (entry)
   (let ((copy (copy-list entry)))
-    (when (eq (getf copy :choices) :run-reporters)
+    (when (eq (metadata-entry-choices copy) :run-reporters)
       (setf (getf copy :choices) (metadata-run-reporters)))
-    (when (eq (getf copy :command-choices) :reporter-command-choices)
+    (when (eq (metadata-entry-command-choices copy)
+              :reporter-command-choices)
       (setf (getf copy :command-choices) (metadata-reporter-command-choices)))
     copy))
 
@@ -74,8 +90,8 @@
 (defun metadata-environment-variables ()
   (sort (remove-duplicates
          (append *metadata-extra-environment-variables*
-                 (loop for entry in (metadata-cli-options)
-                       append (getf entry :environment)))
+                  (loop for entry in (metadata-cli-options)
+                        append (metadata-entry-environment entry)))
          :test #'string=)
         #'string<))
 
@@ -88,17 +104,14 @@
 (defun metadata-system ()
   (ignore-errors (asdf:find-system "cl-weave" nil)))
 
-(defun framework-homepage ()
-  (let ((system (metadata-system)))
-    (and system (asdf:system-homepage system))))
+(defmacro define-framework-system-reader (name accessor)
+  `(defun ,name ()
+     (let ((system (metadata-system)))
+       (and system (,accessor system)))))
 
-(defun framework-bug-tracker ()
-  (let ((system (metadata-system)))
-    (and system (asdf:system-bug-tracker system))))
-
-(defun framework-license ()
-  (let ((system (metadata-system)))
-    (and system (asdf:system-license system))))
+(define-framework-system-reader framework-homepage asdf:system-homepage)
+(define-framework-system-reader framework-bug-tracker asdf:system-bug-tracker)
+(define-framework-system-reader framework-license asdf:system-license)
 
 (defun package-export-metadata (package-designator)
   (let ((package (or (find-package package-designator)
@@ -127,7 +140,7 @@
   (metadata-release-process *metadata-release-process*)
   (metadata-continuous-integration *metadata-continuous-integration*))
 
-(defun framework-metadata ()
+(defun framework-metadata-core ()
   (list
    :kind "cl-weave-metadata"
    :schema-version 23
@@ -143,20 +156,39 @@
    :capabilities *metadata-capabilities*
    :capability-matrix *metadata-capability-matrix*
    :environment (metadata-environment-variables)
-   :options (metadata-cli-options)
+   :options (metadata-cli-options)))
+
+(defun framework-metadata-documentation ()
+  (list
    :policy-documents (metadata-policy-documents)
-   :reference-documents (metadata-reference-documents)
+   :reference-documents (metadata-reference-documents)))
+
+(defun framework-metadata-community ()
+  (list
    :distribution-channels (metadata-distribution-channels)
    :support-channels (metadata-support-channels)
    :community-health (metadata-community-health)
-   :security-contacts (metadata-security-contacts)
+   :security-contacts (metadata-security-contacts)))
+
+(defun framework-metadata-maintenance ()
+  (list
    :lifecycle (metadata-lifecycle)
    :governance (metadata-governance)
    :runtime-support (metadata-runtime-support)
    :release-process (metadata-release-process)
-   :continuous-integration (metadata-continuous-integration)
+   :continuous-integration (metadata-continuous-integration)))
+
+(defun framework-metadata-ecosystem ()
+  (list
    :package-exports (list (package-export-metadata :cl-weave)
                           (package-export-metadata :cl-weave/metadata)
                           (package-export-metadata :cl-weave/cli))
    :matchers (cl-weave:list-matchers)
    :mutation-operators (cl-weave:list-mutation-operators)))
+
+(defun framework-metadata ()
+  (append (framework-metadata-core)
+          (framework-metadata-documentation)
+          (framework-metadata-community)
+          (framework-metadata-maintenance)
+          (framework-metadata-ecosystem)))

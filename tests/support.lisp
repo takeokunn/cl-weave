@@ -60,12 +60,12 @@
       (read-sequence contents stream)
       contents)))
 
-(defun normalize-shell-text (text)
+(defun collapse-normalized-text (text ignored-characters)
   (with-output-to-string (stream)
     (loop with spacing = t
           for character across text
           do (cond
-               ((char= character #\')
+               ((member character ignored-characters)
                 nil)
                ((member character '(#\Newline #\Tab #\Return #\Space))
                 (unless spacing
@@ -75,23 +75,14 @@
                 (write-char character stream)
                 (setf spacing nil))))))
 
+(defun normalize-shell-text (text)
+  (collapse-normalized-text text '(#\')))
+
 (defun normalize-markdown-text (text)
-  (labels ((collapse-markdown-spacing ()
-             (with-output-to-string (stream)
-               (loop with spacing = t
-                     for character across text
-                     do (cond
-                          ((member character '(#\` #\Newline #\Tab #\Return #\Space))
-                           (unless spacing
-                             (write-char #\Space stream)
-                             (setf spacing t)))
-                          (t
-                           (write-char character stream)
-                           (setf spacing nil))))))
-           (tight-punctuation-p (character)
+  (labels ((tight-punctuation-p (character)
              (member character '(#\, #\. #\: #\; #\) #\]))))
     (let* ((collapsed (string-trim '(#\Space)
-                                   (collapse-markdown-spacing))))
+                                   (collapse-normalized-text text '(#\`)))))
       (with-output-to-string (stream)
         (loop for index from 0 below (length collapsed)
               for character = (char collapsed index)
@@ -120,17 +111,7 @@
          (append initargs (list :elapsed-internal-time 0))))
 
 (defun normalize-command-document-text (text)
-  (with-output-to-string (stream)
-    (loop with spacing = t
-          for character across text
-          do (cond
-               ((member character '(#\` #\Newline #\Tab #\Return #\Space))
-                (unless spacing
-                  (write-char #\Space stream)
-                  (setf spacing t)))
-               (t
-                (write-char character stream)
-                (setf spacing nil))))))
+  (collapse-normalized-text text '(#\`)))
 
 (defun split-normalized-words (text)
   (remove ""
@@ -164,11 +145,14 @@
   ((name :initarg :name :reader sample-widget-name)
    (state :initarg :state :initform :new :reader sample-widget-state)))
 
+(defun sample-widget-render-value (widget)
+  (sample-widget-name widget))
+
 (defgeneric render-widget (widget stream))
 
 (defmethod render-widget ((widget sample-widget) stream)
   (declare (ignore stream))
-  (sample-widget-name widget))
+  (sample-widget-render-value widget))
 
 (defgeneric render-widget-mode (mode stream))
 
@@ -178,7 +162,7 @@
 
 (defmethod render-widget-mode ((mode sample-widget) stream)
   (declare (ignore stream))
-  (sample-widget-name mode))
+  (sample-widget-render-value mode))
 
 (defmacro sample-unless (condition &body body)
   `(if ,condition
@@ -217,24 +201,22 @@
       (1+ (reduce #'max tree :key #'tree-depth :initial-value 0))
       0))
 
+(defun parity-match-values (actual predicate matching-parity opposite-parity)
+  (let ((matches (and (integerp actual) (funcall predicate actual))))
+    (values matches
+            `(:value ,actual :parity ,(if matches matching-parity opposite-parity))
+            `(:parity ,matching-parity))))
+
 (defmatcher :to-be-even (actual expected)
   "Passes when ACTUAL is an even integer."
   (declare (ignore expected))
-  (values (and (integerp actual) (evenp actual))
-          `(:value ,actual :parity ,(if (and (integerp actual) (evenp actual))
-                                        :even
-                                        :odd))
-          '(:parity :even)))
+  (parity-match-values actual #'evenp :even :odd))
 
 (expect-extend
   (:to-be-odd (actual expected)
     "Passes when ACTUAL is an odd integer."
     (declare (ignore expected))
-    (values (and (integerp actual) (oddp actual))
-            `(:value ,actual :parity ,(if (and (integerp actual) (oddp actual))
-                                          :odd
-                                          :even))
-            '(:parity :odd))))
+    (parity-match-values actual #'oddp :odd :even)))
 
 (extend-expect
   (list
