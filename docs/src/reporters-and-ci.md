@@ -26,10 +26,9 @@ and saves readable coverage state with `sb-cover:save-coverage-in-file` when
 meaningless coverage artifacts. Pass `:coverage-reset nil` to merge the run
 into existing counters.
 
-Use `--coverage` to enable `sb-cover:store-coverage-data` while loading the
-product system. Instrumentation is disabled before the test system loads, so
-test helpers are excluded from the measured product code. `--coverage-output`
-saves the coverage state for a subsequent reporting step.
+Use `--coverage` to enable `sb-cover:store-coverage-data` before loading the
+requested system. `--coverage-output` saves the coverage state for a subsequent
+reporting step, and `--coverage-report-directory` emits the HTML report.
 
 ```sh
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
@@ -65,6 +64,7 @@ GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json

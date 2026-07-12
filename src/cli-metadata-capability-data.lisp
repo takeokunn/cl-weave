@@ -140,7 +140,7 @@
      :summary "Coverage helpers expose runtime capability checks, state reset, populated HTML report generation, optional sidecar persistence, and suite execution entrypoints."
      :public-apis ("run-all" "reset-coverage" "save-coverage"
                    "coverage-support-available-p")
-     :quality-gates ("flake-check")
+     :quality-gates ("flake-check" "coverage-artifact")
      :documentation ("README.md" "docs/src/ai-contract.md"))
     (:name "watch-and-parallelism"
      :status "implemented"

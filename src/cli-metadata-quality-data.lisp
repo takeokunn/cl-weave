@@ -77,4 +77,12 @@
                "--reporter" "junit" "--output" "cl-weave-junit.xml")
      :timeout-seconds 360
      :artifacts ("cl-weave-junit.xml")
-     :description "Verify CI-oriented JUnit report generation.")))
+     :description "Verify CI-oriented JUnit report generation.")
+    (:name "coverage-artifact"
+     :kind "cli"
+     :command ("nix" "run" "." "--" "run" "cl-weave/tests"
+               "--coverage" "--coverage-output" "cl-weave.coverage"
+               "--coverage-report-directory" "cl-weave-coverage-report/")
+     :timeout-seconds 360
+     :artifacts ("cl-weave.coverage" "cl-weave-coverage-report/")
+     :description "Verify SBCL coverage state and populated HTML report generation.")))

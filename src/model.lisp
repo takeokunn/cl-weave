@@ -210,6 +210,21 @@
           do (push canonical normalized)
         finally (return (nreverse normalized))))
 
+(defun collapse-parent-directory-components (pathname)
+  (let ((directory (pathname-directory pathname)))
+    (make-pathname
+     :directory
+     (loop with normalized = '()
+           for component in directory
+           if (eq component :up)
+             do (when (and normalized
+                           (not (member (first normalized) '(:absolute :relative :up))))
+                  (pop normalized))
+           else
+             do (push component normalized)
+           finally (return (nreverse normalized)))
+     :defaults pathname)))
+
 (defun normalize-watch-dependencies (dependencies location)
   (unless (tag-proper-list-p dependencies)
     (error "cl-weave: watch dependencies must be a proper list of pathnames or strings."))
@@ -228,7 +243,8 @@
                                  (merge-pathnames pathname base)
                                  (error "cl-weave: relative watch dependency ~S requires a test source location."
                                         dependency)))
-          for canonical = (uiop:ensure-absolute-pathname absolute)
+          for canonical = (collapse-parent-directory-components
+                           (uiop:ensure-absolute-pathname absolute))
           unless (member canonical normalized :test #'equal)
             do (push canonical normalized)
           finally (return (nreverse normalized)))))

@@ -25,6 +25,8 @@
                       "--coverage"
                       "--coverage-output"
                       "coverage.out"
+                      "--coverage-report-directory"
+                      "coverage-report/"
                       "--fail-with-no-tests"
                       "--once"
                       "--snapshot-dir"
@@ -65,6 +67,8 @@
       (expect (cl-weave/cli::cli-options-coverage options) :to-be t)
       (expect (cl-weave/cli::cli-options-coverage-output options)
               :to-equal "coverage.out")
+      (expect (cl-weave/cli::cli-options-coverage-report-directory options)
+              :to-equal "coverage-report/")
       (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be nil)
       (expect (cl-weave/cli::cli-options-watch-once options) :to-be t)
       (expect (cl-weave/cli::cli-options-snapshot-directory options)
@@ -309,9 +313,11 @@
           (((symbol-function 'cl-weave:run-all)
             (lambda (&key reporter name-filter shard order seed bail coverage
                      retry timeout-ms max-workers coverage-output
+                     coverage-report-directory
                      pass-with-no-tests stream)
               (declare (ignore reporter name-filter shard order seed bail coverage
                                retry timeout-ms max-workers coverage-output
+                               coverage-report-directory
                                pass-with-no-tests stream))
               (setf observed
                     (list cl-weave:*snapshot-directory*

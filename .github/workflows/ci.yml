@@ -101,6 +101,11 @@ jobs:
         run: |
           perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
 
+      - name: Generate coverage artifacts
+        timeout-minutes: 8
+        run: |
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -115,4 +120,6 @@ jobs:
             cl-weave-watch-once.json
             cl-weave-tap.txt
             cl-weave-junit.xml
+            cl-weave.coverage
+            cl-weave-coverage-report/
           if-no-files-found: error

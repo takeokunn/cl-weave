@@ -12,7 +12,7 @@
    (retry 0)
    test-timeout-ms max-workers shard
    (order nil :type (or null keyword))
-   seed coverage coverage-output
+   seed coverage coverage-output coverage-report-directory
    (pass-with-no-tests t)
    snapshot-directory snapshot-file update-snapshots version help)
   (:options
@@ -38,6 +38,7 @@
    (:flag "--sequence" :kind :value :field :order :parser parse-sequence-order-option)
    (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
    (:flag "--coverage-output" :kind :value :field :coverage-output)
+   (:flag "--coverage-report-directory" :kind :value :field :coverage-report-directory)
    (:flag "--snapshot-dir" :kind :value :field :snapshot-directory :parser parse-pathname-option)
    (:flag "--snapshot-file" :kind :value :field :snapshot-file)
    (:flag "--bail" :kind :optional-value :field :bail :parser parse-bail-option :default "true"))
@@ -55,6 +56,7 @@
    (:flag "--sequence" :kind :value :field :order :parser parse-sequence-order-option)
    (:flag "--seed" :kind :value :field :seed :parser parse-positive-integer)
    (:flag "--coverage-output" :kind :value :field :coverage-output)
+   (:flag "--coverage-report-directory" :kind :value :field :coverage-report-directory)
    (:flag "--pass-with-no-tests" :kind :value :field :pass-with-no-tests :parser parse-boolean)
    (:flag "--snapshot-dir" :kind :value :field :snapshot-directory :parser parse-pathname-option)
    (:flag "--snapshot-file" :kind :value :field :snapshot-file)

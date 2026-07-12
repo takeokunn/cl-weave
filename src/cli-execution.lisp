@@ -98,6 +98,14 @@
   (dolist (file (cli-options-load-files options))
     (load file)))
 
+(defun prepare-coverage-compilation (options)
+  (when (cli-options-coverage options)
+    (cl-weave::require-coverage-support)
+    (let ((policy (find-symbol "STORE-COVERAGE-DATA" "SB-COVER")))
+      (unless policy
+        (error 'cli-error :message "SB-COVER compiler policy is not available."))
+      (proclaim `(optimize (,policy 3))))))
+
 (defun call-with-output-stream (options callback)
   (let ((output-file (cli-options-output-file options)))
     (if output-file
@@ -120,6 +128,8 @@
           (list :bail (cli-options-bail options)
                 :coverage (cli-options-coverage options)
                 :coverage-output (cli-options-coverage-output options)
+                :coverage-report-directory
+                (cli-options-coverage-report-directory options)
                 :pass-with-no-tests (cli-options-pass-with-no-tests options)
                 :retry (cli-options-retry options)
                 :timeout-ms (cli-options-test-timeout-ms options)
@@ -202,6 +212,7 @@
   (ensure-valid-reporter-for-command options)
   (ensure-watch-command-system options)
   (unless (eq (command-dispatch-kind options) :doctor)
+    (prepare-coverage-compilation options)
     (load-requested-inputs options))
   (with-cli-snapshot-settings (options)
     (execute-command-plan (command-execution-plan options) options)))

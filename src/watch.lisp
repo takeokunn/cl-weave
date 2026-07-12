@@ -171,7 +171,8 @@
 (defun run-system-argument-pairs (&key reporter stream name-filter location-filter
                                     test-path-filter
                                     shard order seed bail coverage
-                                    coverage-output pass-with-no-tests retry
+                                    coverage-output coverage-report-directory
+                                    pass-with-no-tests retry
                                     timeout-ms max-workers)
   (append (list :reporter reporter
         :stream stream
@@ -183,6 +184,7 @@
         :bail bail
         :coverage coverage
         :coverage-output coverage-output
+        :coverage-report-directory coverage-report-directory
         :pass-with-no-tests pass-with-no-tests
         :retry retry
         :timeout-ms timeout-ms
@@ -201,6 +203,7 @@
                          bail
                          coverage
                          coverage-output
+                         coverage-report-directory
                          pass-with-no-tests
                          retry
                          timeout-ms
@@ -221,6 +224,7 @@
           :bail bail
           :coverage coverage
           :coverage-output coverage-output
+          :coverage-report-directory coverage-report-directory
           :pass-with-no-tests pass-with-no-tests
           :retry retry
           :timeout-ms timeout-ms
@@ -233,6 +237,7 @@
 (defun run-watch-cycle (system plan &key reporter stream status-stream
                                   name-filter shard order seed bail
                                   coverage coverage-output
+                                  coverage-report-directory
                                   pass-with-no-tests retry timeout-ms
                                   max-workers once)
   (let ((changed (getf plan :changed))
@@ -261,6 +266,7 @@
                           :bail bail
                           :coverage coverage
                           :coverage-output coverage-output
+                          :coverage-report-directory coverage-report-directory
                           :pass-with-no-tests pass-with-no-tests
                           :retry retry
                           :timeout-ms timeout-ms
@@ -279,6 +285,7 @@
                             bail
                             coverage
                             coverage-output
+                            coverage-report-directory
                             pass-with-no-tests
                             retry
                             timeout-ms
@@ -306,6 +313,7 @@
               :bail bail
               :coverage coverage
               :coverage-output coverage-output
+              :coverage-report-directory coverage-report-directory
               :pass-with-no-tests pass-with-no-tests
               :retry retry
               :timeout-ms timeout-ms

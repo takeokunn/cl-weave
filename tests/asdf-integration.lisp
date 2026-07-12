@@ -255,9 +255,11 @@
             (lambda (system &key reporter stream name-filter shard order seed
                                   location-filter
                                   bail coverage coverage-output
+                                  coverage-report-directory
                                   pass-with-no-tests retry timeout-ms
                                   max-workers)
               (declare (ignore stream))
+              (declare (ignore coverage-report-directory))
               (push (list system reporter name-filter shard order seed bail
                           location-filter coverage coverage-output
                           pass-with-no-tests retry timeout-ms max-workers)
@@ -319,9 +321,11 @@
              ((symbol-function 'cl-weave:run-system)
               (lambda (system &key reporter stream name-filter location-filter shard
                                     order seed bail coverage coverage-output
+                                    coverage-report-directory
                                     pass-with-no-tests retry timeout-ms
                                     max-workers)
                 (declare (ignore stream))
+                (declare (ignore coverage-report-directory))
                 (push (list system reporter name-filter location-filter shard order
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)
@@ -390,9 +394,11 @@
              ((symbol-function 'cl-weave:run-system)
               (lambda (system &key reporter stream name-filter location-filter shard
                                     order seed bail coverage coverage-output
+                                    coverage-report-directory
                                     pass-with-no-tests retry timeout-ms
                                     max-workers)
                 (declare (ignore stream))
+                (declare (ignore coverage-report-directory))
                 (push (list system reporter name-filter location-filter shard order
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)

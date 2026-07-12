@@ -250,6 +250,25 @@
             artifacts = [ "cl-weave-junit.xml" ];
           };
 
+          coverage-artifact = mkCheck {
+            name = "cl-weave-coverage-artifact";
+            timeoutSeconds = 360;
+            command = [
+              packaged-cli
+              "run"
+              "cl-weave/tests"
+              "--coverage"
+              "--coverage-output"
+              "cl-weave.coverage"
+              "--coverage-report-directory"
+              "cl-weave-coverage-report/"
+            ];
+            artifacts = [
+              "cl-weave.coverage"
+              "cl-weave-coverage-report/"
+            ];
+          };
+
           paredit-lint = paredit-cli.lib.${pkgs.stdenv.hostPlatform.system}.mkLintCheck {
             src = self;
             name = "cl-weave-paredit-lint";

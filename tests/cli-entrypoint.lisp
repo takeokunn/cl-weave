@@ -117,6 +117,7 @@
                      "--filter" "watch"
                      "--coverage"
                      "--coverage-output" "watch.coverage"
+                     "--coverage-report-directory" "watch-coverage-report/"
                      "--pass-with-no-tests"
                      "--once"
                      "--watch-interval" "1.5"
@@ -133,6 +134,8 @@
         (expect (getf observed-arguments :coverage) :to-be t)
         (expect (getf observed-arguments :coverage-output)
                 :to-equal "watch.coverage")
+        (expect (getf observed-arguments :coverage-report-directory)
+                :to-equal "watch-coverage-report/")
         (expect (getf observed-arguments :pass-with-no-tests) :to-be t)
         (expect (getf observed-arguments :retry) :to-be 0)
         (expect (getf observed-arguments :timeout-ms) :to-be nil)
@@ -163,11 +166,13 @@
                   ((symbol-function 'cl-weave:watch-system)
                    (lambda (system &key reporter stream status-stream name-filter
                                          shard order seed bail coverage
-                                         coverage-output pass-with-no-tests retry
+                                         coverage-output coverage-report-directory
+                                         pass-with-no-tests retry
                                          timeout-ms max-workers include-dependencies
                                          once interval)
                      (declare (ignore system shard order seed bail coverage
-                                      coverage-output pass-with-no-tests retry
+                                      coverage-output coverage-report-directory
+                                      pass-with-no-tests retry
                                       timeout-ms max-workers include-dependencies
                                       interval))
                      (expect reporter :to-be :json)

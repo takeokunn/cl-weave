@@ -128,6 +128,13 @@
      :choices nil
      :environment ("CL_WEAVE_COVERAGE_FILE")
      :description "Save SBCL coverage state to FILE")
+   (:name "--coverage-report-directory"
+     :commands ("run" "watch")
+     :argument "DIRECTORY"
+     :value-kind :directory
+     :choices nil
+     :environment ("CL_WEAVE_COVERAGE_REPORT_DIRECTORY")
+     :description "Generate an SBCL HTML coverage report in DIRECTORY")
    (:name "--pass-with-no-tests"
      :commands ("run" "watch")
      :argument nil

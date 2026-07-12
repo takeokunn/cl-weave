@@ -14,9 +14,11 @@
                  (((symbol-function 'cl-weave:run-all)
                    (lambda (&key reporter name-filter shard order seed bail coverage
                             retry timeout-ms max-workers coverage-output
+                            coverage-report-directory
                             pass-with-no-tests stream)
                      (declare (ignore name-filter shard order seed bail coverage
                                       retry timeout-ms max-workers coverage-output
+                                      coverage-report-directory
                                       pass-with-no-tests))
                      (expect reporter :to-be :json)
                      (cl-weave::report-json nil stream)
@@ -52,6 +54,7 @@
                     :name-filter "watch"
                     :coverage t
                     :coverage-output "watch.coverage.sexp"
+                    :coverage-report-directory "watch-coverage-report/"
                     :pass-with-no-tests t
                     :watch-once t
                     :watch-interval 1.25
@@ -72,6 +75,7 @@
                   :bail nil
                   :coverage t
                   :coverage-output "watch.coverage.sexp"
+                  :coverage-report-directory "watch-coverage-report/"
                   :pass-with-no-tests t
                   :retry 0
                   :timeout-ms nil
