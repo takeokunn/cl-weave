@@ -88,11 +88,11 @@ requests and public builds still work. If the token is present, the workflow
 pushes fresh build outputs back to the cache. The workflow also pulls from
 `nix-community` via `extraPullNames` to reduce cold-start latency.
 
-The workflow runs on Linux and macOS, then uploads `cl-weave-results.json`,
+The workflow runs on Linux (x86_64-linux), then uploads `cl-weave-results.json`,
 `cl-weave-events.jsonl`, `cl-weave.coverage`, `cl-weave-coverage-report/`,
 `cl-weave-cli-results.json`, `cl-weave-metadata.json`, `cl-weave-plan.json`,
 `cl-weave-watch-once.json`, `cl-weave-tap.txt`, and `cl-weave-junit.xml` as
-`cl-weave-test-reports-${system}` artifacts. JSON result
+`cl-weave-test-reports-x86_64-linux` artifacts. JSON result
 schema v6 is intended for AI agents and external automation: the root object
 identifies itself with `kind: "test-results"`, and every event includes both a
 machine `path` and a stable Vitest-style `pathString`, while assertion payloads
