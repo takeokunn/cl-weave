@@ -345,7 +345,7 @@
     (let* ((options (parse-cli '("metadata" "cl-weave-tests" "--reporter" "spec")))
            (output (framework-metadata-output options)))
       (expect (cl-weave/cli::metadata-reporter options) :to-be :json)
-      (expect output :to-contain "\"schemaVersion\":22")
+      (expect output :to-contain "\"schemaVersion\":23")
       (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")))
 
   (it "normalizes spec metadata reporter before writing output"
@@ -361,7 +361,7 @@
                      :to-equal "")
               (let ((output (read-text-file output-file)))
               (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")
-              (expect output :to-contain "\"schemaVersion\":22")
+              (expect output :to-contain "\"schemaVersion\":23")
               (expect output :to-contain "\"qualityGates\"")
               (expect output :not :to-contain ":KIND")))
         (when (probe-file output-file)

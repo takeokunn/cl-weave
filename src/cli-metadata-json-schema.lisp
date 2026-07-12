@@ -80,27 +80,6 @@
 (defun write-json-reference-documents (entries stream)
   (write-json-plist-array entries *json-reference-document-fields* stream))
 
-(defparameter *json-citation-author-fields*
-  '((:name "name" write-json-string-value)))
-
-(defun write-json-citation-authors (entries stream)
-  (write-json-plist-array entries *json-citation-author-fields* stream))
-
-(defparameter *json-citation-fields*
-  '((:cff-version "cffVersion" write-json-string-value)
-    (:message "message" write-json-string-value)
-    (:title "title" write-json-string-value)
-    (:authors "authors" write-json-citation-authors)
-    (:license "license" write-json-string-value)
-    (:repository-code "repositoryCode" write-json-string-value)
-    (:url "url" write-json-string-value)
-    (:version "version" write-json-string-value)
-    (:preferred-citation-path "preferredCitationPath"
-     write-json-string-value)))
-
-(defun write-json-citation (entry stream)
-  (write-json-plist-object entry *json-citation-fields* stream))
-
 (defparameter *json-distribution-channel-fields*
   '((:name "name" write-json-string-value)
     (:kind "kind" write-json-string-value)
@@ -157,8 +136,7 @@
     (:status "status" write-json-string-value)
     (:supported-line "supportedLine" write-json-string-value)
     (:support-document "supportDocument" write-json-string-value)
-    (:versioning-document "versioningDocument" write-json-string-value)
-    (:security-document "securityDocument" write-json-string-value)))
+    (:versioning-document "versioningDocument" write-json-string-value)))
 
 (defun write-json-lifecycle (entry stream)
   (write-json-plist-object entry *json-lifecycle-fields* stream))
@@ -280,7 +258,6 @@
     (:options "options" write-json-cli-options)
     (:policy-documents "policyDocuments" write-json-string-list)
     (:reference-documents "referenceDocuments" write-json-reference-documents)
-    (:citation "citation" write-json-citation)
     (:distribution-channels "distributionChannels"
      write-json-distribution-channels)
     (:support-channels "supportChannels" write-json-support-channels)

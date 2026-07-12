@@ -38,7 +38,7 @@ mode, say so explicitly.
 
 ## Practical Guidance
 
-- Check [CONTRIBUTING.md](../CONTRIBUTING.md) before opening a pull request so
+- Check [docs/pull-request-template.md](pull-request-template.md) before opening a pull request so
   the local validation workflow matches maintainer expectations.
 - Check [docs/project-scope.md](project-scope.md) before filing a feature
   request.

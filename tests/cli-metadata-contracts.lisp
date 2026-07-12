@@ -50,7 +50,7 @@
     (let ((public-metadata (cl-weave/metadata:framework-metadata)))
       (expect (getf public-metadata :artifact-schemas)
               :to-equal (cl-weave:reporter-artifact-schemas))
-      (expect (getf public-metadata :citation) :not :to-be nil)))
+      (expect (getf public-metadata :policy-documents) :not :to-be nil)))
 
   (it "keeps artifact schemas aligned with command reporter contracts"
     (labels ((reporter-choices-for (command metadata)
@@ -224,7 +224,7 @@
             (expect (probe-file (merge-pathnames (getf entry :target) (uiop:getcwd)))
                     :not :to-be nil)))
         (let ((lifecycle (getf metadata :lifecycle)))
-          (dolist (key '(:support-document :versioning-document :security-document))
+          (dolist (key '(:support-document :versioning-document))
             (expect (probe-file (merge-pathnames (getf lifecycle key) (uiop:getcwd)))
                     :not :to-be nil)))
         (let ((runtime-support (getf metadata :runtime-support)))

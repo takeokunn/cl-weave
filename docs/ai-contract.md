@@ -41,16 +41,13 @@ verification and scope policy for those channels lives in
 
 ```json
 {
-  "schemaVersion": 22,
+  "schemaVersion": 23,
   "kind": "cl-weave-metadata",
   "version": "0.2.0",
   "homepage": "https://github.com/takeokunn/cl-weave",
   "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
   "license": "MIT",
   "policyDocuments": [
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
-    "SECURITY.md",
     "docs/community-health.md",
     "docs/distribution-policy.md",
     "docs/governance.md",
@@ -71,11 +68,6 @@ verification and scope policy for those channels lives in
       "description": "Primary user-facing guide and CLI reference."
     },
     {
-      "name": "citation",
-      "path": "CITATION.cff",
-      "description": "Canonical citation metadata for research, cataloging, and downstream attribution."
-    },
-    {
       "name": "ai-contract",
       "path": "docs/ai-contract.md",
       "description": "Machine-readable contract and metadata normalization guide."
@@ -86,31 +78,11 @@ verification and scope policy for those channels lives in
       "description": "Migration guidance and downstream adoption plan."
     },
     {
-      "name": "release-notes",
-      "path": "CHANGELOG.md",
-      "description": "User-visible changes and release history."
-    },
-    {
       "name": "license",
       "path": "LICENSE",
       "description": "Canonical project license text."
     }
   ],
-  "citation": {
-    "cffVersion": "1.2.0",
-    "message": "If you use cl-weave in research, tooling, or documentation, please cite the project using this metadata.",
-    "title": "cl-weave",
-    "authors": [
-      {
-        "name": "takeokunn"
-      }
-    ],
-    "license": "MIT",
-    "repositoryCode": "https://github.com/takeokunn/cl-weave",
-    "url": "https://github.com/takeokunn/cl-weave",
-    "version": "0.2.0",
-    "preferredCitationPath": "CITATION.cff"
-  },
   "distributionChannels": [
     {
       "name": "source-self-test",
@@ -204,7 +176,6 @@ verification and scope policy for those channels lives in
       "references": [
         "docs/community-health.md",
         "docs/support-policy.md",
-        "SECURITY.md",
         "docs/issue-reporting.md"
       ],
       "requiredSections": [],
@@ -215,8 +186,8 @@ verification and scope policy for those channels lives in
           "purpose": "Check whether the request belongs in issue tracking and what detail is required."
         },
         {
-          "name": "Security policy",
-          "target": "https://github.com/takeokunn/cl-weave/blob/main/SECURITY.md",
+          "name": "Security reporting",
+          "target": "https://github.com/takeokunn/cl-weave/security/advisories/new",
           "purpose": "Report vulnerabilities through the private security contact path."
         },
         {
@@ -258,10 +229,10 @@ verification and scope policy for those channels lives in
   ],
   "securityContacts": [
     {
-      "name": "security-policy",
-      "kind": "document",
-      "target": "SECURITY.md",
-      "scope": "Private vulnerability reporting guidance and security handling policy."
+      "name": "security-reporting",
+      "kind": "github",
+      "target": "https://github.com/takeokunn/cl-weave/security/advisories/new",
+      "scope": "Private vulnerability reporting through GitHub security advisories."
     }
   ],
   "lifecycle": {
@@ -269,8 +240,7 @@ verification and scope policy for those channels lives in
     "status": "active",
     "supportedLine": "main",
     "supportDocument": "docs/support-policy.md",
-    "versioningDocument": "docs/versioning-policy.md",
-    "securityDocument": "SECURITY.md"
+    "versioningDocument": "docs/versioning-policy.md"
   },
   "governance": {
     "policyDocument": "docs/governance.md",
@@ -280,7 +250,7 @@ verification and scope policy for those channels lives in
       "Protecting compatibility expectations recorded in the versioning policy.",
       "Keeping machine-readable metadata, release notes, and policy documents synchronized.",
       "Requiring regression coverage for public-surface changes when practical.",
-      "Handling security-sensitive reports through the private SECURITY.md path."
+      "Handling security-sensitive reports through private GitHub security advisories."
     ],
     "decisionDocuments": [
       "docs/project-scope.md",
@@ -322,8 +292,8 @@ verification and scope policy for those channels lives in
     "checklist": [
       "Run the full test suite.",
       "Run nix flake check --print-build-logs when Nix is available.",
-      "Review CHANGELOG.md and summarize user-visible changes.",
-      "Check that README.md, CONTRIBUTING.md, SECURITY.md, and docs/maintenance-policy.md still match the current workflow.",
+      "Summarize user-visible changes in the release notes.",
+      "Check that README.md and docs/maintenance-policy.md still match the current workflow.",
       "Review docs/pull-request-template.md and .github/pull_request_template.md so release-bound changes still capture public-surface notes, validation commands, and follow-up risk in a consistent format.",
       "Verify that cl-weave metadata still advertises the expected package links, reporter list, and schema versions.",
       "Verify that docs/distribution-policy.md still matches the documented source and Nix install paths.",

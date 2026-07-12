@@ -3,8 +3,8 @@ contact_links:
   - name: Support policy
     url: https://github.com/takeokunn/cl-weave/blob/main/docs/support-policy.md
     about: Check whether the request belongs in issue tracking and what detail is required.
-  - name: Security policy
-    url: https://github.com/takeokunn/cl-weave/blob/main/SECURITY.md
+  - name: Security reporting
+    url: https://github.com/takeokunn/cl-weave/security/advisories/new
     about: Report vulnerabilities through the private security contact path.
   - name: Issue reporting guide
     url: https://github.com/takeokunn/cl-weave/blob/main/docs/issue-reporting.md

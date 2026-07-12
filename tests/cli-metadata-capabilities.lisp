@@ -101,7 +101,7 @@
                                     :key (lambda (entry) (getf entry :kind))
                                     :test #'string=))
            (field-name (lambda (entry) (getf entry :name))))
-      (expect (getf metadata :schema-version) :to-be 22)
+      (expect (getf metadata :schema-version) :to-be 23)
       (expect results-schema :not :to-be nil)
       (expect (getf results-schema :commands) :to-equal '("run" "watch"))
       (expect (getf results-schema :reporters) :to-equal '("json"))

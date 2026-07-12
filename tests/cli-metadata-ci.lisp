@@ -160,7 +160,7 @@
   (it "advertises CI workflow operations as structured metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (ci (getf metadata :continuous-integration)))
-      (expect (getf metadata :schema-version) :to-be 22)
+      (expect (getf metadata :schema-version) :to-be 23)
       (expect ci :not :to-be nil)
       (expect (getf ci :policy-document) :to-equal "docs/release-process.md")
       (expect (getf ci :provider) :to-equal "github-actions")
@@ -198,7 +198,7 @@
            (junit-gate (find "junit-artifact" gates
                              :key (lambda (entry) (getf entry :name))
                              :test #'string=)))
-      (expect (getf metadata :schema-version) :to-be 22)
+      (expect (getf metadata :schema-version) :to-be 23)
       (expect flake-gate :not :to-be nil)
       (expect (getf flake-gate :kind) :to-equal "nix")
       (expect (getf flake-gate :command)

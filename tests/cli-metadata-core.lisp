@@ -9,12 +9,12 @@
       (let ((output (framework-metadata-output options)))
         (expect-text-contract
          output
-         '("\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":22"
+         '("\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":23"
            "\"homepage\"" "\"bugTracker\"" "\"commands\"" "\"metadata\""
            "\"artifactSchemas\"" "\"kind\":\"test-results\"" "\"schemaVersion\":6"
            "\"fields\"" "\"name\":\"events\"" "\"kind\":\"array\"" "\"required\":true"
            "\"kind\":\"test-plan\"" "\"schemaVersion\":2" "\"streaming\":true"
-           "\"qualityGates\"" "\"capabilityMatrix\"" "\"citation\"" "\"cffVersion\":\"1.2.0\""
+           "\"qualityGates\"" "\"capabilityMatrix\""
            "\"distributionChannels\"" "\"name\":\"source-self-test\"" "\"installCommand\":[]"
            "\"runCommand\":[\"sbcl\",\"--noinform\",\"--non-interactive\",\"--load\",\"scripts\\/run-tests.lisp\"]"
            "\"governance\"" "\"policyDocument\":\"docs\\/governance.md\""

@@ -18,17 +18,14 @@ reference; use this page to find everything else.
 
 ## Contributing
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — the development loop, change
-  standards, and pull request expectations.
 - [Issue Reporting Guide](issue-reporting.md) — what to include when filing a
   bug or behavior report.
 - [Pull Request Template](pull-request-template.md) — the canonical PR
   summary, compatibility impact, and validation notes format.
 - [Community Health](community-health.md) — the GitHub intake surfaces under
   `.github/` and how they map to these policy documents.
-- [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — participation expectations for
-  issues, pull requests, and reviews.
-- [SECURITY.md](../SECURITY.md) — private vulnerability reporting.
+- [Private security advisories](https://github.com/takeokunn/cl-weave/security/advisories/new)
+  — private vulnerability reporting.
 
 ## Project Governance
 
@@ -47,7 +44,6 @@ reference; use this page to find everything else.
   channels and how maintainers verify them.
 - [Release Process](release-process.md) — the release flow while the project
   remains pre-1.0.
-- [CITATION.cff](../CITATION.cff) — how to cite this project.
 
 ## Nix Workflow
 
@@ -64,5 +60,4 @@ Nix flake:
   as reproducible derivations.
 - `nix fmt` — formats `flake.nix` with `nixfmt`.
 
-Running `direnv allow` loads the devShell automatically; see
-[CONTRIBUTING.md](../CONTRIBUTING.md) for the full development loop.
+Running `direnv allow` loads the devShell automatically.
