@@ -81,6 +81,9 @@
 (define-record-class test-plan-entry
   (path status reason focused retry timeout-ms concurrent location))
 
+(define-record-class benchmark-result
+  (samples iterations warmup))
+
 (defun report-test-failure (condition stream)
   (let ((detail (failure-detail condition)))
     (format stream "Test assertion failed: ~S"

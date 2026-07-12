@@ -3,7 +3,7 @@
 (describe "cli options"
   (it "parses Vitest-shaped run options into explicit data"
     (let ((options (parse-cli '("run"
-                      "cl-weave-tests"
+                      "cl-weave/tests"
                       "--reporter=json"
                       "--filter"
                       "parser"
@@ -34,7 +34,7 @@
                       "--update-snapshots"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :run)
       (expect (cl-weave/cli::cli-options-systems options)
-              :to-equal '("cl-weave-tests"))
+              :to-equal '("cl-weave/tests"))
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
       (expect (cl-weave/cli::parse-reporter "jsonl") :to-be :jsonl)
       (expect (lambda ()
@@ -86,7 +86,7 @@
                     ("run" "--snapshotFile=vitest.snapshots")
                     ("run" "--update")
                     ("run" "--updateSnapshots")
-                    ("watch" "cl-weave-tests" "--watchInterval" "2.5")))
+                    ("watch" "cl-weave/tests" "--watchInterval" "2.5")))
       (expect (lambda ()
                 (parse-cli argv))
               :to-throw
@@ -132,10 +132,10 @@
       (expect (cl-weave/cli::cli-options-command options) :to-be :doctor)
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
       (expect (cl-weave/cli::cli-options-systems options) :to-equal '()))
-    (let ((options (parse-cli '("doctor" "cl-weave-tests"))))
+    (let ((options (parse-cli '("doctor" "cl-weave/tests"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :doctor)
       (expect (cl-weave/cli::cli-options-systems options)
-              :to-equal '("cl-weave-tests"))))
+              :to-equal '("cl-weave/tests"))))
 
   (it "parses CI snapshot settings from environment variables"
     (with-mocked-functions

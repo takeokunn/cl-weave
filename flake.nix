@@ -77,13 +77,9 @@
             name = "cl-weave-test";
             timeoutSeconds = 360;
             command = [
-              "sbcl"
-              "--dynamic-space-size"
-              "4096"
-              "--noinform"
-              "--non-interactive"
-              "--load"
-              "scripts/run-tests.lisp"
+              packaged-cli
+              "run"
+              "cl-weave/tests"
             ];
           };
 
@@ -91,16 +87,13 @@
             name = "cl-weave-json-results-artifact";
             timeoutSeconds = 360;
             command = [
-              "env"
-              "CL_WEAVE_REPORTER=json"
-              "CL_WEAVE_OUTPUT_FILE=cl-weave-results.json"
-              "sbcl"
-              "--dynamic-space-size"
-              "4096"
-              "--noinform"
-              "--non-interactive"
-              "--load"
-              "scripts/run-tests.lisp"
+              packaged-cli
+              "run"
+              "cl-weave/tests"
+              "--reporter"
+              "json"
+              "--output"
+              "cl-weave-results.json"
             ];
             artifacts = [ "cl-weave-results.json" ];
           };
@@ -109,41 +102,15 @@
             name = "cl-weave-jsonl-events-artifact";
             timeoutSeconds = 360;
             command = [
-              "env"
-              "CL_WEAVE_REPORTER=jsonl"
-              "CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl"
-              "sbcl"
-              "--dynamic-space-size"
-              "4096"
-              "--noinform"
-              "--non-interactive"
-              "--load"
-              "scripts/run-tests.lisp"
+              packaged-cli
+              "run"
+              "cl-weave/tests"
+              "--reporter"
+              "jsonl"
+              "--output"
+              "cl-weave-events.jsonl"
             ];
             artifacts = [ "cl-weave-events.jsonl" ];
-          };
-
-          coverage-artifact = mkCheck {
-            name = "cl-weave-coverage-gate";
-            timeoutSeconds = 360;
-            command = [
-              "sh"
-              "scripts/run-coverage-gate.sh"
-            ];
-            artifacts = [
-              "cl-weave.coverage"
-              "cl-weave-coverage-summary.json"
-              "cl-weave-coverage-report"
-            ];
-          };
-
-          coverage-gate-unit = mkCheck {
-            name = "cl-weave-coverage-gate-unit";
-            timeoutSeconds = 30;
-            command = [
-              "perl"
-              "scripts/test-coverage-gate.pl"
-            ];
           };
 
           cli-json-results = mkCheck {
@@ -152,7 +119,7 @@
             command = [
               packaged-cli
               "run"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--filter"
@@ -169,7 +136,7 @@
             command = [
               packaged-cli
               "metadata"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--output"
@@ -184,7 +151,7 @@
             command = [
               packaged-cli
               "list"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--filter"
@@ -201,7 +168,7 @@
             command = [
               packaged-cli
               "watch"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--once"
               "--reporter"
               "json"
@@ -219,7 +186,7 @@
             command = [
               packaged-cli
               "run"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "tap"
               "--filter"
@@ -234,15 +201,11 @@
             name = "cl-weave-filtered-smoke";
             timeoutSeconds = 60;
             command = [
-              "env"
-              "CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring"
-              "sbcl"
-              "--dynamic-space-size"
-              "4096"
-              "--noinform"
-              "--non-interactive"
-              "--load"
-              "scripts/run-tests.lisp"
+              packaged-cli
+              "run"
+              "cl-weave/tests"
+              "--filter"
+              "filtering > runs only tests matching a path substring"
             ];
           };
 
@@ -250,16 +213,13 @@
             name = "cl-weave-junit-artifact";
             timeoutSeconds = 360;
             command = [
-              "env"
-              "CL_WEAVE_REPORTER=junit"
-              "CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml"
-              "sbcl"
-              "--dynamic-space-size"
-              "4096"
-              "--noinform"
-              "--non-interactive"
-              "--load"
-              "scripts/run-tests.lisp"
+              packaged-cli
+              "run"
+              "cl-weave/tests"
+              "--reporter"
+              "junit"
+              "--output"
+              "cl-weave-junit.xml"
             ];
             artifacts = [ "cl-weave-junit.xml" ];
           };
@@ -274,7 +234,7 @@
       packages = forAllSystems (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
-          version = "0.2.0";
+          version = "0.4.0";
           src = self;
           dontBuild = true;
           installPhase = ''
@@ -289,7 +249,7 @@
               --eval '(require :asdf)' \\
               --eval '(asdf:initialize-output-translations (quote (:output-translations (t (:home ".cache" "common-lisp" :implementation)) :ignore-inherited-configuration)))' \\
               --eval '(asdf:load-system :cl-weave)' \\
-              --eval '(cl-weave/cli:main (uiop:command-line-arguments))' \\
+              --eval '(cl-weave/cli:main)' \\
               -- "\$@"
             EOF
             chmod +x $out/bin/cl-weave

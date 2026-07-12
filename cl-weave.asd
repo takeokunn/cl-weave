@@ -6,7 +6,7 @@
   :license "MIT"
   :homepage "https://github.com/takeokunn/cl-weave"
   :bug-tracker "https://github.com/takeokunn/cl-weave/issues"
-  :version "0.2.0"
+  :version "0.4.0"
   :serial t
   :components
   ((:module "src"
@@ -17,6 +17,7 @@
      (:file "platform-portable")
      (:file "platform-sbcl")
      (:file "model")
+     (:file "benchmark")
      (:file "logic")
      (:file "isolation")
      (:file "snapshots")
@@ -69,4 +70,70 @@
      (:file "cli-metadata-reporting")
      (:file "cli")
      (:file "cli-execution"))))
-  :in-order-to ((test-op (test-op "cl-weave-tests"))))
+  :in-order-to ((test-op (test-op "cl-weave/tests"))))
+
+(defsystem "cl-weave/tests"
+  :description "Self tests for cl-weave."
+  :author "takeokunn"
+  :license "MIT"
+  :depends-on ("cl-weave")
+  :serial t
+  :components
+  ((:module "tests"
+    :serial t
+    :components
+    ((:file "package")
+     (:file "support")
+     (:file "expect-core")
+     (:file "expect-failures")
+     (:file "expect-extensions")
+     (:file "expect-records")
+     (:file "macros")
+     (:file "isolation")
+     (:file "property-support")
+     (:file "property-generators")
+     (:file "property-shrinking")
+     (:file "property-environment")
+     (:file "mutation")
+     (:file "fixtures")
+     (:file "cps")
+     (:file "platform-timeout")
+     (:file "retry-timeout")
+     (:file "concurrent")
+     (:file "coverage")
+     (:file "expected-failures")
+     (:file "skips")
+     (:file "todos")
+     (:file "focus")
+     (:file "filtering")
+     (:file "sharding")
+     (:file "sequence")
+     (:file "list-mode")
+     (:file "bail")
+     (:file "cli-support")
+     (:file "cli-options")
+     (:file "cli-execution")
+     (:file "cli-metadata-schema")
+     (:file "cli-metadata-core")
+     (:file "cli-metadata-doctor")
+     (:file "cli-metadata-public-links")
+     (:file "cli-metadata-artifact")
+     (:file "cli-metadata-ci")
+     (:file "cli-metadata-capabilities")
+     (:file "cli-metadata-contracts")
+     (:file "cli-entrypoint")
+     (:file "community-health")
+     (:file "asdf-integration")
+     (:file "benchmark")
+     (:file "mocking")
+     (:file "reporter-formats")
+     (:file "reporter-plans")
+     (:file "reporter-schemas")
+     (:file "reporter-ci")
+     (:file "reporter-status")
+     (:file "reporter-runtime")
+     (:file "runner-public-api"))))
+  :perform (test-op (op c)
+             (declare (ignore op c))
+             (unless (uiop:symbol-call :cl-weave :run-all :reporter :spec)
+               (error "cl-weave self test suite failed."))))

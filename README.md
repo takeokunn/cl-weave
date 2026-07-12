@@ -89,7 +89,7 @@ documented in [docs/versioning-policy.md](docs/versioning-policy.md):
 Run the self-test suite:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests
 ```
 
 With Nix:
@@ -99,7 +99,7 @@ nix develop
 nix run . -- --help
 nix profile install .
 perl -e 'alarm 600; exec @ARGV' -- nix flake check
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter spec
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter spec
 ```
 
 Without cloning the repository first:
@@ -113,15 +113,15 @@ The packaged CLI is intended for local use, CI, and AI
 agents:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'math > adds'
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- doctor --reporter json --output cl-weave-doctor.json
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave-tests --filter parser
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --bail=1 --sequence random --seed 12345
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --filter parser
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
 ```
 
 Lisp-side agents can read the full structured framework metadata with
@@ -143,7 +143,7 @@ Agents and generators should start from runtime metadata instead of scraping
 source files or examples:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
 ```
 
 The metadata payload advertises CLI commands, typed options, finite choices,
@@ -203,17 +203,15 @@ GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command sh scripts/run-coverage-gate.sh
-nix develop --command perl scripts/test-coverage-gate.pl
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
-nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
+perl -e 'alarm 60; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring'
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
 ```
 
 To enable binary cache reuse across developer machines and GitHub Actions,
@@ -1015,10 +1013,10 @@ path, for example `suite > nested suite > case`. Filtering composes with
 `describe-only` and `it-only`: focus narrows the candidate set first, then the
 name filter selects matching paths.
 
-For command-line and CI usage, `CL_WEAVE_TEST_FILTER` provides the same filter:
+For command-line and CI usage, use `--filter`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='math > adds' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'math > adds'
 ```
 
 Suites with no selected descendants do not run `before-all` or `after-all`, so
@@ -1039,10 +1037,10 @@ Shard indexes are one-based and use `(INDEX COUNT)`. cl-weave first applies
 focus and `name-filter`, then assigns a stable discovery ordinal to the selected
 tests. A test belongs to shard `INDEX` when its ordinal maps to that slot.
 
-For command-line and CI usage, `CL_WEAVE_SHARD` uses `INDEX/COUNT`:
+For command-line and CI usage, `--shard` uses `INDEX/COUNT`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_SHARD=1/3 CL_WEAVE_REPORTER=json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --shard 1/3 --reporter json
 ```
 
 Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
@@ -1069,7 +1067,7 @@ reproduce order-dependent failures.
 For command-line and CI usage:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --sequence random --seed 12345
 ```
 
 ### Test Listing
@@ -1088,15 +1086,15 @@ available; JSON emits `null` for manually constructed tests without source
 metadata. `tags` and `dependsOn` are descriptive metadata only; cl-weave does
 not infer filtering or dependency ordering from them.
 
-For command-line and CI usage, `CL_WEAVE_LIST=1` prints the selected test plan
+For command-line and CI usage, `list` prints the selected test plan
 and exits with status `0`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='math' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'math'
 ```
 
-List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `CL_WEAVE_OUTPUT_FILE`
-can write the plan payload to an artifact file.
+List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `--output FILE`
+writes the plan payload to an artifact file.
 
 AI agents can also query plans as plain Lisp facts:
 
@@ -1160,11 +1158,11 @@ an already-expanded logic program, so derived views can be layered on top of
 stops after that many failing or errored events. Skips and todos do not count
 toward the bail limit.
 
-For command-line and CI usage, `CL_WEAVE_BAIL` accepts `true`, `yes`, `on`,
+For command-line and CI usage, `--bail` accepts `true`, `yes`, `on`,
 `t`, `false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_BAIL=1 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --bail 1
 ```
 
 Bail composes with focus and filtering. Reporters emit only the events that were
@@ -1285,17 +1283,14 @@ and saves readable coverage state with `sb-cover:save-coverage-in-file` when
 meaningless coverage artifacts. Pass `:coverage-reset nil` to merge the run
 into existing counters.
 
-When `CL_WEAVE_COVERAGE=1` is set, `scripts/run-tests.lisp` enables
-`sb-cover:store-coverage-data` while loading the product system, then disables
-instrumentation before loading the test system. This keeps test helpers out of
-the measured code while forcing a coverage-aware product reload.
+Use `--coverage` to enable `sb-cover:store-coverage-data` while loading the
+product system. Instrumentation is disabled before the test system loads, so
+test helpers are excluded from the measured product code. `--coverage-output`
+saves the coverage state for a subsequent reporting step.
 
-Run `scripts/run-coverage-gate.sh` for the CI coverage contract. It requires
-every Lisp file under `src/` to be present in the SB-COVER report and requires
-aggregate product expression and branch coverage to stay at or above the 87%
-ratchet baseline (raise the threshold as coverage grows). Missing source
-measurements or a lower rate fail the command. The gate writes its
-machine-readable result to `cl-weave-coverage-summary.json`.
+```sh
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
+```
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
 reporter is the stable external-tool interface. The `:jsonl` reporter emits one
@@ -1306,29 +1301,14 @@ non-policy paths through `referenceDocuments` and `citation`, plus support
 and lifecycle contracts through `supportChannels`, `securityContacts`,
 `lifecycle`, `runtimeSupport`, and `releaseProcess`.
 
-`scripts/run-tests.lisp` accepts `CL_WEAVE_REPORTER=spec`, `sexp`, `json`, `jsonl`,
-`tap`, `github`, or `junit`, accepts `CL_WEAVE_TEST_FILTER` for path substring filtering, accepts
-`CL_WEAVE_SHARD=INDEX/COUNT` for CI partitioning, accepts `CL_WEAVE_LIST=1` for
-discovery without execution, accepts `CL_WEAVE_SEQUENCE=random` plus positive
-`CL_WEAVE_SEQUENCE_SEED=N` for deterministic order reproduction, and accepts
-`CL_WEAVE_BAIL` for fast-fail runs. It also accepts `CL_WEAVE_RETRY=N` for a
-global retry default and `CL_WEAVE_TEST_TIMEOUT_MS=N` or
-`CL_WEAVE_TEST_TIMEOUT=N` for a global per-attempt timeout default, plus
-`CL_WEAVE_MAX_WORKERS=N` to bound adjacent concurrent worker batches. Boolean
-environment variables treat
-`0`, `false`, `no`, `off`, and `nil` as false. Set
-`CL_WEAVE_PASS_WITH_NO_TESTS=false` to fail CI when filters select no tests.
-Set `CL_WEAVE_COVERAGE=1` to wrap execution with SBCL `sb-cover`, set
-`CL_WEAVE_COVERAGE_REPORT_DIR=path/` to emit a populated HTML coverage report,
-and set `CL_WEAVE_COVERAGE_FILE=path` to save the coverage state as a CI
-artifact.
-Set `CL_WEAVE_SNAPSHOT_DIR`, `CL_WEAVE_SNAPSHOT_FILE`, and
-`CL_WEAVE_UPDATE_SNAPSHOTS=1` to control snapshot location and updates from CI.
-Set `CL_WEAVE_OUTPUT_FILE=path` to write reporter output directly to an
-artifact file while preserving the process exit code contract. Use `tap` for
-line-oriented CI logs, `github` for GitHub Actions annotations, and `junit`
-when a CI service should ingest test results as XML. List mode supports `spec`,
-`sexp`, `json`, and `jsonl`.
+The packaged CLI accepts `--reporter` (`spec`, `sexp`, `json`, `jsonl`, `tap`,
+`github`, or `junit`), `--filter`, `--shard`, `--sequence`, `--seed`, `--bail`,
+`--retry`, `--test-timeout-ms`, `--max-workers`, `--coverage`, snapshot flags,
+and `--output`. Use the `list` command for discovery without execution. Use
+`--fail-with-no-tests` when a zero-test filtered CI run must fail. `tap` is for
+line-oriented logs, `github` emits GitHub Actions annotations, and `junit`
+produces XML for CI ingestion. List mode supports `spec`, `sexp`, `json`, and
+`jsonl`.
 
 The CLI uses kebab-case flags consistently, including `--test-name-pattern`,
 `--watch-interval`, `--coverage-output`, `--output-file`,
@@ -1370,14 +1350,13 @@ defaults to `*error-output*`.
 The script runner enables watch mode with environment variables:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 sbcl --noinform --load scripts/run-tests.lisp
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_ONCE=1 sbcl --noinform --load scripts/run-tests.lisp
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_WATCH=1 CL_WEAVE_WATCH_INTERVAL=0.25 sbcl --noinform --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --once
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --watch-interval 0.25
 ```
 
-CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
-`CL_WEAVE_REPORTER=tap`, `CL_WEAVE_REPORTER=json`, or
-`CL_WEAVE_REPORTER=jsonl`.
+CI should use `run` rather than `watch`, with `--reporter junit`, `tap`,
+`json`, or `jsonl` as appropriate.
 
 ## Project Operations
 

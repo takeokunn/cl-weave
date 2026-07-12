@@ -14,7 +14,7 @@ Link the issue, policy, or contract that motivated the change:
 
 List the commands you ran:
 
-- `perl -e 'alarm 360; exec @ARGV' -- sbcl --noinform --non-interactive --load scripts/run-tests.lisp`
+- `perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests`
 - `perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs`
 - any narrower command that directly exercises the change
 

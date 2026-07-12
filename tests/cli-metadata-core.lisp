@@ -2,10 +2,10 @@
 
 (describe "cli metadata rendering"
   (it "prints AI-friendly framework metadata"
-    (let ((options (parse-cli '("metadata" "cl-weave-tests"))))
+    (let ((options (parse-cli '("metadata" "cl-weave/tests"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :metadata)
       (expect (cl-weave/cli::cli-options-systems options)
-              :to-equal '("cl-weave-tests"))
+              :to-equal '("cl-weave/tests"))
       (let ((output (framework-metadata-output options)))
         (expect-text-contract
          output
@@ -16,7 +16,7 @@
            "\"kind\":\"test-plan\"" "\"schemaVersion\":2" "\"streaming\":true"
            "\"qualityGates\"" "\"capabilityMatrix\""
            "\"distributionChannels\"" "\"name\":\"source-self-test\"" "\"installCommand\":[]"
-           "\"runCommand\":[\"sbcl\",\"--noinform\",\"--non-interactive\",\"--load\",\"scripts\\/run-tests.lisp\"]"
+           "\"runCommand\":[\"nix\",\"run\",\".\",\"--\",\"run\",\"cl-weave\\/tests\"]"
            "\"governance\"" "\"policyDocument\":\"docs\\/governance.md\""
            "\"reviewOwnership\":\".github\\/CODEOWNERS\"" "\"maintainerResponsibilities\""
            "\"decisionDocuments\"" "\"name\":\"vitest-dsl\"" "\"publicApis\""
@@ -25,7 +25,7 @@
            "\"command\":[\"nix\",\"flake\",\"check\",\"--print-build-logs\"]" "\"timeoutSeconds\":600"
            "\"name\":\"ai-metadata-artifact\"" "\"cl-weave-metadata.json\"" "\"name\":\"tap-artifact\""
            "\"Verify TAP output for line-oriented CI logs.\"" "\"name\":\"filtered-smoke\""
-           "\"CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring\""
+           "\"nix\",\"run\",\".\",\"--\",\"run\",\"cl-weave\\/tests\",\"--filter\",\"filtering > runs only tests matching a path substring\""
            "\"options\"" "\"listReporters\"" "\"valueKind\"" "\"commandChoices\""
            "\"name\":\"--reporter\"" "\"command\":\"metadata\"" "\"choices\":[\"json\",\"sexp\"]"
            "\"--filter\"" "\"CL_WEAVE_TEST_FILTER\"" "\"--update-snapshots\"" "\"matchers\""

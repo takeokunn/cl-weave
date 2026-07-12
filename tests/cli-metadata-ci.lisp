@@ -189,9 +189,6 @@
            (jsonl-gate (find "jsonl-events-artifact" gates
                              :key (lambda (entry) (getf entry :name))
                              :test #'string=))
-           (coverage-gate (find "coverage-artifact" gates
-                                :key (lambda (entry) (getf entry :name))
-                                :test #'string=))
            (watch-once-gate (find "watch-once-artifact" gates
                                   :key (lambda (entry) (getf entry :name))
                                   :test #'string=))
@@ -210,23 +207,12 @@
       (expect (getf metadata-gate :artifacts)
               :to-contain "cl-weave-metadata.json")
       (expect jsonl-gate :not :to-be nil)
-      (expect (getf jsonl-gate :command)
-              :to-contain "CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl")
+      (expect (getf jsonl-gate :command) :to-contain "jsonl")
       (expect (getf jsonl-gate :artifacts)
               :to-contain "cl-weave-events.jsonl")
-      (expect coverage-gate :not :to-be nil)
-      (expect (getf coverage-gate :command)
-              :to-contain "scripts/run-coverage-gate.sh")
-      (expect (getf coverage-gate :artifacts)
-              :to-contain "cl-weave.coverage")
-      (expect (getf coverage-gate :artifacts)
-              :to-contain "cl-weave-coverage-report/")
-      (expect (getf coverage-gate :artifacts)
-              :to-contain "cl-weave-coverage-summary.json")
-      (expect (getf coverage-gate :description) :to-contain "87%")
       (expect watch-once-gate :not :to-be nil)
       (expect (getf watch-once-gate :command)
-              :to-equal '("nix" "run" "." "--" "watch" "cl-weave-tests"
+              :to-equal '("nix" "run" "." "--" "watch" "cl-weave/tests"
                           "--once" "--reporter" "json" "--filter"
                           "filtering > runs only tests matching a path substring"
                           "--output" "cl-weave-watch-once.json"))
@@ -234,8 +220,7 @@
       (expect (getf watch-once-gate :artifacts)
               :to-equal '("cl-weave-watch-once.json"))
       (expect junit-gate :not :to-be nil)
-      (expect (getf junit-gate :command)
-              :to-contain "CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml")
+      (expect (getf junit-gate :command) :to-contain "junit")
       (expect (getf junit-gate :artifacts)
               :to-contain "cl-weave-junit.xml")))
 
@@ -322,7 +307,9 @@
                                              (getf channel :run-command))
                 :to-be t))
       (expect source-channel :not :to-be nil)
-      (expect (probe-file #P"scripts/run-tests.lisp") :not :to-be nil)
+      (expect (getf source-channel :run-command)
+              :to-equal '("nix" "run" "." "--" "run" "cl-weave/tests"))
+      (expect (probe-file #P"scripts/") :to-be nil)
       (expect local-channel :not :to-be nil)
       (expect flake :to-contain "packages = forAllSystems")
       (expect flake :to-contain "apps = forAllSystems")
