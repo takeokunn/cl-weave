@@ -27,19 +27,26 @@
         (expect (nreverse suite-counts) :to-equal '(1 1)))))
 
   (it "clears registered tests before each watched system reload"
-    (let ((suite-counts nil))
-      (labels ((mock-run-system (system &rest arguments)
-                 (declare (ignore system arguments))
-                 (cl-weave::register-suite "watched" (lambda () nil))
-                 (push (length (cl-weave::suite-children
-                                (cl-weave::root-suite)))
-                       suite-counts)
-                 t))
-        (with-mocked-functions
-            (((symbol-function 'cl-weave:run-system) #'mock-run-system))
-          (cl-weave::run-watched-system "watched")
-          (cl-weave::run-watched-system "watched")))
-      (expect suite-counts :to-equal '(1 1))))
+    (let ((suite-counts nil)
+          (cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test #'equal)))
+      (with-mocked-functions
+          (((symbol-function 'asdf:load-system)
+            (lambda (system &key force)
+              (declare (ignore system force))
+              (cl-weave::register-suite "watched" (lambda () nil))
+              t))
+           ((symbol-function 'cl-weave:run-all)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (push (length (cl-weave::suite-children
+                             (cl-weave::root-suite)))
+                    suite-counts)
+              t)))
+        (cl-weave::run-watched-system "watched")
+        (cl-weave::run-watched-system "watched"))
+      (expect (nreverse suite-counts) :to-equal '(1 1))))
 
   (it "collects source files from ASDF systems"
     (let ((files (cl-weave:asdf-system-files "cl-weave" :include-dependencies nil)))
