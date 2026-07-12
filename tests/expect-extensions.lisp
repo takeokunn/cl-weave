@@ -145,3 +145,20 @@
 
   (it "reports allocation measurements in assertion failures"
     (expect-allocation-measurement-failure)))
+
+(describe "matcher argument validation"
+  (it "rejects malformed matcher arguments with stable errors"
+    (dolist (bad-expectation
+             (list (lambda () (expect 1 :to-be-close-to))
+                   (lambda () (expect 1 :to-be-close-to 2 :digits))
+                   (lambda () (expect 1 :to-be-close-to 2 -3))
+                   (lambda () (expect 1 :to-be-one-of))
+                   (lambda () (expect 1 :to-be-instance-of :no-such-class))
+                   (lambda () (expect (lambda () t) :to-throw 42))
+                   (lambda () (expect 42 :to-run-under-ms 5))
+                   (lambda () (expect (lambda () t) :to-run-under-ms "fast"))
+                   (lambda () (expect (lambda () t) :to-run-under-ms -1))
+                   (lambda () (expect (lambda () t) :to-allocate-under "few"))
+                   (lambda () (expect 42 :to-have-method-specialized-on 'name))
+                   (lambda () (expect 42 :to-have-slot))))
+      (expect bad-expectation :to-throw))))
