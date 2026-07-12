@@ -167,11 +167,19 @@
                    (lambda (system &key reporter stream status-stream name-filter
                                          shard order seed bail coverage
                                          coverage-output coverage-report-directory
+                                         coverage-include-pathnames
+                                         coverage-exclude-pathnames
+                                         coverage-minimum-expression
+                                         coverage-minimum-branch
                                          pass-with-no-tests retry
                                          timeout-ms max-workers include-dependencies
                                          once interval)
                      (declare (ignore system shard order seed bail coverage
                                       coverage-output coverage-report-directory
+                                      coverage-include-pathnames
+                                      coverage-exclude-pathnames
+                                      coverage-minimum-expression
+                                      coverage-minimum-branch
                                       pass-with-no-tests retry
                                       timeout-ms max-workers include-dependencies
                                       interval))
@@ -313,6 +321,7 @@
   (it "recompiles requested systems when coverage is enabled"
     (let* ((options (cl-weave/cli::make-cli-options
                      :systems '("cl-weave/tests")
+                     :coverage-systems '("cl-weave")
                      :coverage t))
            (loaded-asdf-systems '()))
       (with-mocked-functions
@@ -325,7 +334,8 @@
               (push (list system force) loaded-asdf-systems)
               :loaded-asdf)))
         (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-asdf-systems :to-equal '(("cl-weave/tests" t))))))
+        (expect loaded-asdf-systems
+                :to-equal '(("cl-weave/tests" t) ("cl-weave" t))))))
 
   (it "reports actionable CLI errors when requested systems remain unavailable"
     (let* ((cwd #P"/tmp/cl-weave-missing/")

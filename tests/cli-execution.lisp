@@ -15,10 +15,14 @@
                    (lambda (&key reporter name-filter shard order seed bail coverage
                             retry timeout-ms max-workers coverage-output
                             coverage-report-directory
+                            coverage-include-pathnames coverage-exclude-pathnames
+                            coverage-minimum-expression coverage-minimum-branch
                             pass-with-no-tests stream)
                      (declare (ignore name-filter shard order seed bail coverage
                                       retry timeout-ms max-workers coverage-output
                                       coverage-report-directory
+                                      coverage-include-pathnames coverage-exclude-pathnames
+                                      coverage-minimum-expression coverage-minimum-branch
                                       pass-with-no-tests))
                      (expect reporter :to-be :json)
                      (cl-weave::report-json nil stream)
@@ -55,6 +59,10 @@
                     :coverage t
                     :coverage-output "watch.coverage.sexp"
                     :coverage-report-directory "watch-coverage-report/"
+                    :coverage-include-pathnames '("src/")
+                    :coverage-exclude-pathnames '("src/generated/")
+                    :coverage-minimum-expression 80
+                    :coverage-minimum-branch 70
                     :pass-with-no-tests t
                     :watch-once t
                     :watch-interval 1.25
@@ -76,6 +84,10 @@
                   :coverage t
                   :coverage-output "watch.coverage.sexp"
                   :coverage-report-directory "watch-coverage-report/"
+                  :coverage-include-pathnames ("src/")
+                  :coverage-exclude-pathnames ("src/generated/")
+                  :coverage-minimum-expression 80
+                  :coverage-minimum-branch 70
                   :pass-with-no-tests t
                   :retry 0
                   :timeout-ms nil

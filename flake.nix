@@ -262,6 +262,12 @@
               "cl-weave.coverage"
               "--coverage-report-directory"
               "cl-weave-coverage-report/"
+              "--coverage-system"
+              "cl-weave"
+              "--coverage-min-expression"
+              "1"
+              "--coverage-min-branch"
+              "1"
             ];
             artifacts = [
               "cl-weave.coverage"

@@ -79,24 +79,117 @@
 
 (defparameter *coverage-report-finder* #'coverage-fbound-symbol)
 
-(defun save-coverage-report (pathname)
+(defun coverage-source-matcher (include-pathnames exclude-pathnames)
+  (labels ((normalized (pathname)
+             (namestring (uiop:ensure-absolute-pathname pathname)))
+           (matches-p (source candidate)
+             (let ((candidate (normalized candidate)))
+               (or (string= source candidate)
+                   (and (uiop:directory-pathname-p (pathname candidate))
+                        (uiop:string-prefix-p candidate source))))))
+    (let ((includes (mapcar #'normalized include-pathnames))
+          (excludes (mapcar #'normalized exclude-pathnames)))
+      (lambda (source)
+        (let ((source (normalized source)))
+          (and (or (null includes)
+                   (some (lambda (candidate) (matches-p source candidate)) includes))
+               (not (some (lambda (candidate) (matches-p source candidate)) excludes))))))))
+
+(defun coverage-internal-symbol (name &optional required-p)
+  (let ((package (find-package "SB-COVER")))
+    (multiple-value-bind (symbol status)
+        (and package (find-symbol name package))
+      (if status
+          symbol
+          (when required-p
+            (error 'coverage-unavailable
+                   :reason (format nil "SB-COVER internal ~A is not available." name)))))))
+
+(defun coverage-statistics (&key include-pathnames exclude-pathnames)
+  (let ((refresh (coverage-internal-symbol "REFRESH-COVERAGE-BITS" t))
+        (coverage-info (coverage-internal-symbol "*CODE-COVERAGE-INFO*" t))
+        (compute (coverage-internal-symbol "COMPUTE-FILE-INFO" t))
+        (ok-of (coverage-internal-symbol "OK-OF" t))
+        (all-of (coverage-internal-symbol "ALL-OF" t))
+        (matcher (coverage-source-matcher include-pathnames exclude-pathnames))
+        (expression-covered 0)
+        (expression-total 0)
+        (branch-covered 0)
+        (branch-total 0))
+    (funcall refresh)
+    (maphash
+     (lambda (source ignored)
+       (declare (ignore ignored))
+       (when (and (funcall matcher source) (probe-file source))
+         (multiple-value-bind (counts)
+             (funcall compute source :default)
+           (incf expression-covered (funcall ok-of (getf counts :expression)))
+           (incf expression-total (funcall all-of (getf counts :expression)))
+           (incf branch-covered (funcall ok-of (getf counts :branch)))
+           (incf branch-total (funcall all-of (getf counts :branch))))))
+     (let ((value (and (boundp coverage-info) (symbol-value coverage-info))))
+       (unless (and (consp value) (hash-table-p (car value)))
+         (error 'coverage-unavailable
+                :reason "SB-COVER coverage data has an unsupported representation."))
+       (car value)))
+    (list :expression-covered expression-covered
+          :expression-total expression-total
+          :branch-covered branch-covered
+          :branch-total branch-total)))
+
+(defun coverage-percentage (covered total)
+  (if (zerop total) 100.0 (* 100.0 (/ covered total))))
+
+(defun check-coverage-thresholds (statistics minimum-expression minimum-branch)
+  (loop for (kind minimum covered-key total-key)
+          in `((:expression ,minimum-expression :expression-covered :expression-total)
+               (:branch ,minimum-branch :branch-covered :branch-total))
+        when minimum
+          do (let ((actual (coverage-percentage (getf statistics covered-key)
+                                                (getf statistics total-key))))
+               (when (< actual minimum)
+                 (error "Coverage threshold failed for ~A: ~,2F% is below ~,2F%."
+                        kind actual minimum))))
+  statistics)
+
+(defun save-coverage-report (pathname &key include-pathnames exclude-pathnames)
   (let* ((directory (pathname pathname))
-         (index-path (merge-pathnames #P"cover-index.html" directory)))
+         (index-path (merge-pathnames #P"cover-index.html" directory))
+         (matcher (coverage-source-matcher include-pathnames exclude-pathnames)))
     (ensure-directories-exist index-path)
     (let ((report (funcall *coverage-report-finder* "REPORT")))
       (unless report
         (error 'coverage-unavailable :reason "SB-COVER:REPORT is not available."))
-      (funcall report directory))
+      (if (or include-pathnames exclude-pathnames)
+          (funcall report directory :if-matches matcher)
+          (funcall report directory)))
     (unless (probe-file index-path)
       (error "Coverage report at ~A did not produce ~A." directory index-path))
     (when (coverage-report-empty-p index-path)
       (error "Coverage report at ~A did not capture any coverage data." index-path))
     directory))
 
-(defun collect-coverage-cleanup-failures (coverage-report-directory coverage-output)
+(defun collect-coverage-cleanup-failures (coverage-report-directory coverage-output
+                                          include-pathnames exclude-pathnames
+                                          minimum-expression minimum-branch)
   (loop for (kind pathname saver)
-          in `((:report ,coverage-report-directory ,#'save-coverage-report)
-               (:data ,coverage-output ,#'save-coverage))
+            in `((:report ,coverage-report-directory
+                          ,(lambda (path)
+                             (if (or include-pathnames exclude-pathnames)
+                                 (save-coverage-report
+                                  path
+                                  :include-pathnames include-pathnames
+                                  :exclude-pathnames exclude-pathnames)
+                                 (save-coverage-report path))))
+                 (:threshold ,(or minimum-expression minimum-branch)
+                             ,(lambda (ignored)
+                                (declare (ignore ignored))
+                                (check-coverage-thresholds
+                                 (coverage-statistics
+                                  :include-pathnames include-pathnames
+                                  :exclude-pathnames exclude-pathnames)
+                                 minimum-expression minimum-branch)))
+                 (:data ,coverage-output ,#'save-coverage))
         when pathname
           append (handler-case
                      (progn
@@ -107,18 +200,19 @@
 
 (defun handle-coverage-cleanup-failures (failures preserve-control-transfer-p)
   (when failures
-    (let ((condition (make-condition (if preserve-control-transfer-p
-                                         'coverage-cleanup-failure
-                                         'coverage-cleanup-error)
-                                     :failures failures)))
-      (restart-case
-          (if preserve-control-transfer-p
-              (signal condition)
-              (error condition))
-        (ignore-coverage-cleanup-failure ()
-          :report "Ignore failures while saving coverage artifacts.")))))
+    (if preserve-control-transfer-p
+        (signal 'coverage-cleanup-failure :failures failures)
+        (let ((threshold-failure (assoc :threshold failures)))
+          (when threshold-failure
+            (error (cdr threshold-failure)))
+          (restart-case
+              (error 'coverage-cleanup-error :failures failures)
+            (ignore-coverage-cleanup-failure ()
+              :report "Ignore failures while saving coverage artifacts."))))))
 
-(defun call-with-coverage (coverage coverage-output coverage-report-directory coverage-reset thunk)
+(defun call-with-coverage (coverage coverage-output coverage-report-directory coverage-reset thunk
+                          &key include-pathnames exclude-pathnames
+                            minimum-expression minimum-branch)
   (if coverage
       (progn
         (require-coverage-support)
@@ -135,7 +229,9 @@
                    (error condition)))
             (handle-coverage-cleanup-failures
              (collect-coverage-cleanup-failures coverage-report-directory
-                                                coverage-output)
+                                                coverage-output
+                                                include-pathnames exclude-pathnames
+                                                minimum-expression minimum-branch)
              (or primary-error (not completed-p))))))
       (funcall thunk)))
 
@@ -262,6 +358,10 @@
                   coverage
                   coverage-output
                   coverage-report-directory
+                  coverage-include-pathnames
+                  coverage-exclude-pathnames
+                  coverage-minimum-expression
+                  coverage-minimum-branch
                   (pass-with-no-tests t)
                   (coverage-reset t))
   (ensure-run-reporter reporter)
@@ -287,7 +387,11 @@
                     :max-workers max-workers)))
        (emit-run-report reporter events stream)
        (and (or pass-with-no-tests events)
-            (every #'passed-event-p events))))))
+            (every #'passed-event-p events))))
+   :include-pathnames coverage-include-pathnames
+   :exclude-pathnames coverage-exclude-pathnames
+   :minimum-expression coverage-minimum-expression
+   :minimum-branch coverage-minimum-branch))
 
 (defun list-tests (&key (reporter :spec)
                      (stream *standard-output*)

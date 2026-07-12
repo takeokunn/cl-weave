@@ -256,10 +256,14 @@
                                   location-filter
                                   bail coverage coverage-output
                                   coverage-report-directory
+                                  coverage-include-pathnames coverage-exclude-pathnames
+                                  coverage-minimum-expression coverage-minimum-branch
                                   pass-with-no-tests retry timeout-ms
                                   max-workers)
               (declare (ignore stream))
               (declare (ignore coverage-report-directory))
+              (declare (ignore coverage-include-pathnames coverage-exclude-pathnames
+                               coverage-minimum-expression coverage-minimum-branch))
               (push (list system reporter name-filter shard order seed bail
                           location-filter coverage coverage-output
                           pass-with-no-tests retry timeout-ms max-workers)
@@ -322,10 +326,14 @@
               (lambda (system &key reporter stream name-filter location-filter shard
                                     order seed bail coverage coverage-output
                                     coverage-report-directory
+                                    coverage-include-pathnames coverage-exclude-pathnames
+                                    coverage-minimum-expression coverage-minimum-branch
                                     pass-with-no-tests retry timeout-ms
                                     max-workers)
                 (declare (ignore stream))
                 (declare (ignore coverage-report-directory))
+                (declare (ignore coverage-include-pathnames coverage-exclude-pathnames
+                                 coverage-minimum-expression coverage-minimum-branch))
                 (push (list system reporter name-filter location-filter shard order
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)
@@ -395,10 +403,14 @@
               (lambda (system &key reporter stream name-filter location-filter shard
                                     order seed bail coverage coverage-output
                                     coverage-report-directory
+                                    coverage-include-pathnames coverage-exclude-pathnames
+                                    coverage-minimum-expression coverage-minimum-branch
                                     pass-with-no-tests retry timeout-ms
                                     max-workers)
                 (declare (ignore stream))
                 (declare (ignore coverage-report-directory))
+                (declare (ignore coverage-include-pathnames coverage-exclude-pathnames
+                                 coverage-minimum-expression coverage-minimum-branch))
                 (push (list system reporter name-filter location-filter shard order
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)

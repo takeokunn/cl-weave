@@ -172,6 +172,8 @@
                                     test-path-filter
                                     shard order seed bail coverage
                                     coverage-output coverage-report-directory
+                                    coverage-include-pathnames coverage-exclude-pathnames
+                                    coverage-minimum-expression coverage-minimum-branch
                                     pass-with-no-tests retry
                                     timeout-ms max-workers)
   (append (list :reporter reporter
@@ -185,6 +187,10 @@
         :coverage coverage
         :coverage-output coverage-output
         :coverage-report-directory coverage-report-directory
+        :coverage-include-pathnames coverage-include-pathnames
+        :coverage-exclude-pathnames coverage-exclude-pathnames
+        :coverage-minimum-expression coverage-minimum-expression
+        :coverage-minimum-branch coverage-minimum-branch
         :pass-with-no-tests pass-with-no-tests
         :retry retry
         :timeout-ms timeout-ms
@@ -204,6 +210,8 @@
                          coverage
                          coverage-output
                          coverage-report-directory
+                         coverage-include-pathnames coverage-exclude-pathnames
+                         coverage-minimum-expression coverage-minimum-branch
                          pass-with-no-tests
                          retry
                          timeout-ms
@@ -225,6 +233,10 @@
           :coverage coverage
           :coverage-output coverage-output
           :coverage-report-directory coverage-report-directory
+          :coverage-include-pathnames coverage-include-pathnames
+          :coverage-exclude-pathnames coverage-exclude-pathnames
+          :coverage-minimum-expression coverage-minimum-expression
+          :coverage-minimum-branch coverage-minimum-branch
           :pass-with-no-tests pass-with-no-tests
           :retry retry
           :timeout-ms timeout-ms
@@ -238,6 +250,8 @@
                                   name-filter shard order seed bail
                                   coverage coverage-output
                                   coverage-report-directory
+                                  coverage-include-pathnames coverage-exclude-pathnames
+                                  coverage-minimum-expression coverage-minimum-branch
                                   pass-with-no-tests retry timeout-ms
                                   max-workers once)
   (let ((changed (getf plan :changed))
@@ -267,6 +281,10 @@
                           :coverage coverage
                           :coverage-output coverage-output
                           :coverage-report-directory coverage-report-directory
+                          :coverage-include-pathnames coverage-include-pathnames
+                          :coverage-exclude-pathnames coverage-exclude-pathnames
+                          :coverage-minimum-expression coverage-minimum-expression
+                          :coverage-minimum-branch coverage-minimum-branch
                           :pass-with-no-tests pass-with-no-tests
                           :retry retry
                           :timeout-ms timeout-ms
@@ -286,6 +304,8 @@
                             coverage
                             coverage-output
                             coverage-report-directory
+                            coverage-include-pathnames coverage-exclude-pathnames
+                            coverage-minimum-expression coverage-minimum-branch
                             pass-with-no-tests
                             retry
                             timeout-ms
@@ -314,6 +334,10 @@
               :coverage coverage
               :coverage-output coverage-output
               :coverage-report-directory coverage-report-directory
+              :coverage-include-pathnames coverage-include-pathnames
+              :coverage-exclude-pathnames coverage-exclude-pathnames
+              :coverage-minimum-expression coverage-minimum-expression
+              :coverage-minimum-branch coverage-minimum-branch
               :pass-with-no-tests pass-with-no-tests
               :retry retry
               :timeout-ms timeout-ms

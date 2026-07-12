@@ -34,6 +34,7 @@
    #:collect-mutations
    #:continue-test
    #:coverage-support-available-p
+   #:coverage-statistics
    #:coverage-unavailable
    #:coverage-unavailable-reason
    #:defmutation-operator

@@ -27,6 +27,11 @@
                       "coverage.out"
                       "--coverage-report-directory"
                       "coverage-report/"
+                      "--coverage-include" "src/"
+                      "--coverage-exclude" "src/generated/"
+                      "--coverage-system" "cl-weave"
+                      "--coverage-min-expression" "80.5"
+                      "--coverage-min-branch" "70"
                       "--fail-with-no-tests"
                       "--once"
                       "--snapshot-dir"
@@ -69,6 +74,16 @@
               :to-equal "coverage.out")
       (expect (cl-weave/cli::cli-options-coverage-report-directory options)
               :to-equal "coverage-report/")
+      (expect (cl-weave/cli::cli-options-coverage-include-pathnames options)
+              :to-equal '("src/"))
+      (expect (cl-weave/cli::cli-options-coverage-exclude-pathnames options)
+              :to-equal '("src/generated/"))
+      (expect (cl-weave/cli::cli-options-coverage-systems options)
+              :to-equal '("cl-weave"))
+      (expect (cl-weave/cli::cli-options-coverage-minimum-expression options)
+              :to-be 80.5)
+      (expect (cl-weave/cli::cli-options-coverage-minimum-branch options)
+              :to-be 70)
       (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be nil)
       (expect (cl-weave/cli::cli-options-watch-once options) :to-be t)
       (expect (cl-weave/cli::cli-options-snapshot-directory options)
@@ -95,6 +110,15 @@
                 (parse-cli argv))
               :to-throw
               "Unknown option")))
+
+  (it "validates coverage thresholds as percentages"
+    (expect (cl-weave/cli::cli-options-coverage-minimum-expression
+             (parse-cli '("run" "--coverage-min-expression" "0")))
+            :to-be 0.0)
+    (dolist (value '("100.1" "-1" ".5" "1."))
+      (expect (lambda ()
+                (parse-cli (list "run" "--coverage-min-branch" value)))
+              :to-throw)))
 
   (it "parses watch intervals as explicit CLI text"
     (labels ((watch-interval-from-env (value)
@@ -314,10 +338,14 @@
             (lambda (&key reporter name-filter shard order seed bail coverage
                      retry timeout-ms max-workers coverage-output
                      coverage-report-directory
+                     coverage-include-pathnames coverage-exclude-pathnames
+                     coverage-minimum-expression coverage-minimum-branch
                      pass-with-no-tests stream)
               (declare (ignore reporter name-filter shard order seed bail coverage
                                retry timeout-ms max-workers coverage-output
                                coverage-report-directory
+                               coverage-include-pathnames coverage-exclude-pathnames
+                               coverage-minimum-expression coverage-minimum-branch
                                pass-with-no-tests stream))
               (setf observed
                     (list cl-weave:*snapshot-directory*

@@ -28,10 +28,14 @@ into existing counters.
 
 Use `--coverage` to enable `sb-cover:store-coverage-data` before loading the
 requested system. `--coverage-output` saves the coverage state for a subsequent
-reporting step, and `--coverage-report-directory` emits the HTML report.
+reporting step, and `--coverage-report-directory` emits the HTML report. Limit
+both reports and gates with repeatable `--coverage-system`, `--coverage-include`,
+and `--coverage-exclude` selectors; exclusions take precedence. Enforce CI gates
+with `--coverage-min-expression` and `--coverage-min-branch`, each from 0 to 100.
+An unmet gate exits nonzero even when no HTML report was requested.
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-system cl-weave --coverage-min-expression 80 --coverage-min-branch 70 --coverage-output cl-weave.coverage
 ```
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`

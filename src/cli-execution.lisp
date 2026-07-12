@@ -92,11 +92,18 @@
                    system))))
 
 (defun load-requested-inputs (options)
+  (when (cli-options-coverage options)
+    (dolist (system (cli-options-coverage-systems options))
+      (ensure-requested-system-visible system options)
+      (asdf:load-system system :force t)))
   (dolist (system (cli-options-systems options))
-    (ensure-requested-system-visible system options)
-    (if (cli-options-coverage options)
-        (asdf:load-system system :force t)
-        (asdf:load-system system)))
+    (unless (and (cli-options-coverage options)
+                 (member system (cli-options-coverage-systems options)
+                         :test #'string=))
+      (ensure-requested-system-visible system options)
+      (if (cli-options-coverage options)
+          (asdf:load-system system :force t)
+          (asdf:load-system system))))
   (dolist (file (cli-options-load-files options))
     (load file)))
 
@@ -126,16 +133,29 @@
         :seed (cli-options-seed options)))
 
 (defun run-execution-argument-pairs (options)
+  (let ((system-pathnames
+          (loop for system in (cli-options-coverage-systems options)
+                do (ensure-requested-system-visible system options)
+                append (cl-weave::asdf-system-files system))))
   (append (shared-execution-argument-pairs options)
           (list :bail (cli-options-bail options)
                 :coverage (cli-options-coverage options)
                 :coverage-output (cli-options-coverage-output options)
                 :coverage-report-directory
                 (cli-options-coverage-report-directory options)
+                :coverage-include-pathnames
+                (append system-pathnames
+                        (cli-options-coverage-include-pathnames options))
+                :coverage-exclude-pathnames
+                (cli-options-coverage-exclude-pathnames options)
+                :coverage-minimum-expression
+                (cli-options-coverage-minimum-expression options)
+                :coverage-minimum-branch
+                (cli-options-coverage-minimum-branch options)
                 :pass-with-no-tests (cli-options-pass-with-no-tests options)
                 :retry (cli-options-retry options)
                 :timeout-ms (cli-options-test-timeout-ms options)
-                :max-workers (cli-options-max-workers options))))
+                :max-workers (cli-options-max-workers options)))))
 
 (defun call-list-command (options stream)
   (apply #'cl-weave:list-tests

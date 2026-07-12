@@ -135,6 +135,41 @@
      :choices nil
      :environment ("CL_WEAVE_COVERAGE_REPORT_DIRECTORY")
      :description "Generate an SBCL HTML coverage report in DIRECTORY")
+   (:name "--coverage-include"
+     :commands ("run" "watch")
+     :argument "PATH"
+     :value-kind :file
+     :choices nil
+     :environment nil
+     :description "Include an exact source file or directory in coverage reporting")
+   (:name "--coverage-exclude"
+     :commands ("run" "watch")
+     :argument "PATH"
+     :value-kind :file
+     :choices nil
+     :environment nil
+     :description "Exclude an exact source file or directory from coverage reporting")
+   (:name "--coverage-system"
+     :commands ("run" "watch")
+     :argument "SYSTEM"
+     :value-kind :asdf-system
+     :choices nil
+     :environment nil
+     :description "Include source files owned by an ASDF system in coverage reporting")
+   (:name "--coverage-min-expression"
+     :commands ("run" "watch")
+     :argument "PERCENT"
+     :value-kind :percentage
+     :choices nil
+     :environment nil
+     :description "Fail when expression coverage is below PERCENT")
+   (:name "--coverage-min-branch"
+     :commands ("run" "watch")
+     :argument "PERCENT"
+     :value-kind :percentage
+     :choices nil
+     :environment nil
+     :description "Fail when branch coverage is below PERCENT")
    (:name "--pass-with-no-tests"
      :commands ("run" "watch")
      :argument nil

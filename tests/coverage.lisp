@@ -11,6 +11,45 @@
         condition))))
 
 (describe "coverage"
+  (it "filters coverage sources with exclusions taking precedence"
+    (let* ((root (make-test-temporary-directory "coverage-filter"))
+           (included (merge-pathnames #P"src/included.lisp" root))
+           (excluded-directory (merge-pathnames #P"src/generated/" root))
+           (excluded (merge-pathnames #P"generated.lisp" excluded-directory))
+           (matcher (cl-weave::coverage-source-matcher
+                     (list (merge-pathnames #P"src/" root))
+                     (list excluded-directory))))
+      (expect (funcall matcher included) :to-be-truthy)
+      (expect (funcall matcher excluded) :to-be nil)))
+
+  (it "accepts zero-item coverage and rejects unmet thresholds"
+    (expect (cl-weave::check-coverage-thresholds
+             '(:expression-covered 0 :expression-total 0
+               :branch-covered 0 :branch-total 0)
+             100 100)
+            :to-be-truthy)
+    (expect (lambda ()
+              (cl-weave::check-coverage-thresholds
+               '(:expression-covered 7 :expression-total 10
+                 :branch-covered 8 :branch-total 10)
+               75 80))
+            :to-throw "Coverage threshold failed"))
+
+  (it "enforces thresholds without requiring an HTML report"
+    (with-mocked-functions
+        (((symbol-function 'cl-weave::require-coverage-support) (lambda () t))
+         ((symbol-function 'cl-weave:reset-coverage) (lambda () t))
+         ((symbol-function 'cl-weave:coverage-statistics)
+          (lambda (&key include-pathnames exclude-pathnames)
+            (declare (ignore include-pathnames exclude-pathnames))
+            '(:expression-covered 1 :expression-total 2
+              :branch-covered 1 :branch-total 2))))
+      (expect (lambda ()
+                (cl-weave::call-with-coverage
+                 t nil nil t (lambda () t)
+                 :minimum-expression 75))
+              :to-throw "Coverage threshold failed")))
+
   (it "reports coverage support as a safe boolean"
     (expect (cl-weave:coverage-support-available-p)
             :to-satisfy (lambda (value)
