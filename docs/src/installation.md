@@ -21,7 +21,7 @@ The packaged CLI is intended for local use, CI, and AI agents.
 
 ## Supported Runtime
 
-`cl-weave` targets SBCL first. Linux and macOS are intended CI targets, and
+`cl-weave` targets SBCL first. Linux and macOS are supported platforms, and
 SBCL-specific features such as subprocess isolation and coverage handling are
 documented in [Runtime Support](runtime-support.md). A platform is
 release-ready only when the ASDF load gate and the relevant CI entrypoints

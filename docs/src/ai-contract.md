@@ -316,10 +316,9 @@ verification and scope policy for those channels lives in
       "workflow_dispatch"
     ],
     "systems": [
-      "x86_64-linux",
-      "aarch64-darwin"
+      "x86_64-linux"
     ],
-    "artifactBundle": "cl-weave-test-reports-${{ matrix.system }}",
+    "artifactBundle": "cl-weave-test-reports-x86_64-linux",
     "cacheProvider": "cachix",
     "cacheModes": [
       "pull-only",

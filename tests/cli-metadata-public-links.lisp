@@ -200,8 +200,8 @@
                           :workflow-path ".github/workflows/ci.yml"
                           :job-name "nix"
                           :triggers ("pull_request" "push:main" "workflow_dispatch")
-                          :systems ("x86_64-linux" "aarch64-darwin")
-                          :artifact-bundle "cl-weave-test-reports-${{ matrix.system }}"
+                          :systems ("x86_64-linux")
+                          :artifact-bundle "cl-weave-test-reports-x86_64-linux"
                           :cache-provider "cachix"
                           :cache-modes ("pull-only" "push-enabled")
                           :quality-gate-source "qualityGates"))))
