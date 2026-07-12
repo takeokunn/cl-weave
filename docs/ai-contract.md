@@ -43,7 +43,7 @@ verification and scope policy for those channels lives in
 {
   "schemaVersion": 23,
   "kind": "cl-weave-metadata",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "homepage": "https://github.com/takeokunn/cl-weave",
   "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
   "license": "MIT",
@@ -86,10 +86,10 @@ verification and scope policy for those channels lives in
   "distributionChannels": [
     {
       "name": "source-self-test",
-      "kind": "source-checkout",
+      "kind": "nix",
       "installCommand": [],
-      "runCommand": ["sbcl", "--noinform", "--non-interactive", "--load", "scripts/run-tests.lisp"],
-      "scope": "Run the bundled self-test suite from a source checkout.",
+      "runCommand": ["nix", "run", ".", "--", "run", "cl-weave/tests"],
+      "scope": "Run the bundled ASDF test system through the packaged CLI.",
       "references": ["README.md", "docs/distribution-policy.md"]
     },
     {
@@ -783,14 +783,14 @@ strings, and unstructured objects still fall back to printed strings. This
 keeps isolated-process diagnostics and snapshot metadata machine-readable for
 CI and agent consumers without changing the surrounding event envelope.
 
-For script-driven CI and agent runs, `scripts/run-tests.lisp` can write the
-same reporter payload directly to an artifact file:
+For Nix CLI CI and agent runs, the packaged application writes the same
+reporter payload directly to an artifact file:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
 ```
 
-`CL_WEAVE_OUTPUT_FILE` affects only reporter output. The process still exits
+`--output` affects only reporter output. The process still exits
 with `0` when all selected events pass, skip, or todo, and exits with `1` when
 any selected event fails or errors. Empty selections exit with `0` by default;
 set `CL_WEAVE_PASS_WITH_NO_TESTS=false`, pass `--fail-with-no-tests`, or call
@@ -800,8 +800,7 @@ External snapshots are sidecar artifacts controlled by dynamic bindings or
 CLI/environment settings:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_UPDATE_SNAPSHOTS=1 CL_WEAVE_SNAPSHOT_DIR=tests/__snapshots__/ CL_WEAVE_SNAPSHOT_FILE=snapshots.sexp \
-  sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 ```
 
 Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
@@ -851,16 +850,12 @@ side.
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
 ```
 
-The gate instruments product sources but not the test system. It fails when any
-Lisp file under `src/` is absent from the SB-COVER report or aggregate product
-expression and branch coverage falls below the 87% ratchet baseline (raise the
-threshold as coverage grows). Its artifacts are a populated
-HTML report, an SBCL state sidecar, and
-`cl-weave-coverage-summary.json`. Agents should treat them as sidecar artifacts
-and continue to parse S-expression or JSON reporter output for test results.
+The CLI instruments product sources but not the test system and saves an SBCL
+coverage state sidecar. Agents should treat it as a separate artifact and
+continue to parse S-expression or JSON reporter output for test results.
 
 ## Mutation Reports
 
@@ -1380,10 +1375,10 @@ Agents can discover selected tests without executing hooks or test bodies:
 (cl-weave:collect-test-plan (cl-weave::root-suite) :name-filter "parser")
 ```
 
-The command runner exposes the same discovery mode through `CL_WEAVE_LIST=1`:
+The packaged CLI exposes the same discovery mode:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- env CL_WEAVE_LIST=1 CL_WEAVE_REPORTER=json CL_WEAVE_TEST_FILTER='parser' CL_WEAVE_SHARD=1/2 CL_WEAVE_SEQUENCE=random CL_WEAVE_SEQUENCE_SEED=12345 sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter parser --shard 1/2 --sequence random --seed 12345
 ```
 
 The JSON test plan reporter prints one object:

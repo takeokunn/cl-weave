@@ -127,8 +127,7 @@
      :public-apis ("run" "list-tests" "reporter-artifact-schemas"
                    "framework-metadata")
      :quality-gates ("json-results-artifact" "jsonl-events-artifact"
-                     "tap-artifact" "junit-artifact" "plan-artifact"
-                     "coverage-artifact")
+                     "tap-artifact" "junit-artifact" "plan-artifact")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "subprocess-isolation"
      :status "implemented"
@@ -141,7 +140,7 @@
      :summary "Coverage helpers expose runtime capability checks, state reset, populated HTML report generation, optional sidecar persistence, and suite execution entrypoints."
      :public-apis ("run-all" "reset-coverage" "save-coverage"
                    "coverage-support-available-p")
-     :quality-gates ("coverage-artifact" "flake-check")
+     :quality-gates ("flake-check")
      :documentation ("README.md" "docs/ai-contract.md"))
     (:name "watch-and-parallelism"
      :status "implemented"

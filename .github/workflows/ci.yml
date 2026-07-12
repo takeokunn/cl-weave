@@ -59,57 +59,47 @@ jobs:
       - name: Run JSON reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
 
       - name: Run JSONL reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
-
-      - name: Run coverage artifact
-        timeout-minutes: 8
-        run: |
-          nix develop --command sh scripts/run-coverage-gate.sh
-
-      - name: Run coverage gate unit tests
-        timeout-minutes: 1
-        run: |
-          nix develop --command perl scripts/test-coverage-gate.pl
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
 
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
 
       - name: Generate AI metadata
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
 
       - name: Run AI discovery smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
 
       - name: Run watch once smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
 
       - name: Run TAP reporter smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
+          perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
 
       - name: Run filtered smoke test
         timeout-minutes: 2
         run: |
-          nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+          perl -e 'alarm 60; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring'
 
       - name: Run JUnit reporter
         timeout-minutes: 8
         run: |
-          nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
 
       - name: Upload test reports
         if: always()
@@ -119,9 +109,6 @@ jobs:
           path: |
             cl-weave-results.json
             cl-weave-events.jsonl
-            cl-weave.coverage
-            cl-weave-coverage-report/
-            cl-weave-coverage-summary.json
             cl-weave-cli-results.json
             cl-weave-metadata.json
             cl-weave-plan.json

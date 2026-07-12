@@ -37,10 +37,10 @@
                            :description "Canonical project license text.")))
       (expect (getf metadata :distribution-channels)
               :to-equal '((:name "source-self-test"
-                           :kind "source-checkout"
+                           :kind "nix"
                            :install-command ()
-                           :run-command ("sbcl" "--noinform" "--non-interactive" "--load" "scripts/run-tests.lisp")
-                           :scope "Run the bundled self-test suite from a source checkout."
+                           :run-command ("nix" "run" "." "--" "run" "cl-weave/tests")
+                           :scope "Run the bundled ASDF test system through the packaged CLI."
                            :references ("README.md"
                                         "docs/distribution-policy.md"))
                           (:name "nix-local-cli"

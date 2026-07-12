@@ -14,8 +14,8 @@ validation.
 ## Current Verification Gate
 
 The supported SBCL target is release-ready only when ASDF loading succeeds.
-`scripts/run-tests.lisp` and the packaged CLI both bootstrap the project
-through `asdf:load-asd` plus `asdf:load-system`, matching this gate exactly.
+The packaged CLI bootstraps the project through `asdf:load-asd` plus
+`asdf:load-system`, matching this gate exactly.
 Targeted source checks are useful for narrowing a defect, but they are not a
 substitute for the release gate.
 
