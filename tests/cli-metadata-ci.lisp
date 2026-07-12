@@ -223,7 +223,7 @@
               :to-contain "cl-weave-coverage-report/")
       (expect (getf coverage-gate :artifacts)
               :to-contain "cl-weave-coverage-summary.json")
-      (expect (getf coverage-gate :description) :to-contain "85%")
+      (expect (getf coverage-gate :description) :to-contain "87%")
       (expect watch-once-gate :not :to-be nil)
       (expect (getf watch-once-gate :command)
               :to-equal '("nix" "run" "." "--" "watch" "cl-weave-tests"

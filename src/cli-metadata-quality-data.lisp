@@ -52,7 +52,7 @@
      :timeout-seconds 360
      :artifacts ("cl-weave.coverage" "cl-weave-coverage-report/"
                  "cl-weave-coverage-summary.json")
-     :description "Require measured product-source expression and branch coverage to stay at or above the 85% ratchet baseline, then publish SBCL coverage artifacts.")
+     :description "Require measured product-source expression and branch coverage to stay at or above the 87% ratchet baseline, then publish SBCL coverage artifacts.")
     (:name "coverage-gate-unit"
      :kind "script"
      :command ("nix" "develop" "--command" "perl"

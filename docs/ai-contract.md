@@ -43,7 +43,7 @@ verification and scope policy for those channels lives in
 {
   "schemaVersion": 22,
   "kind": "cl-weave-metadata",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "homepage": "https://github.com/takeokunn/cl-weave",
   "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
   "license": "MIT",
@@ -108,7 +108,7 @@ verification and scope policy for those channels lives in
     "license": "MIT",
     "repositoryCode": "https://github.com/takeokunn/cl-weave",
     "url": "https://github.com/takeokunn/cl-weave",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "preferredCitationPath": "CITATION.cff"
   },
   "distributionChannels": [
@@ -886,7 +886,7 @@ perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
 
 The gate instruments product sources but not the test system. It fails when any
 Lisp file under `src/` is absent from the SB-COVER report or aggregate product
-expression and branch coverage falls below the 85% ratchet baseline (raise the
+expression and branch coverage falls below the 87% ratchet baseline (raise the
 threshold as coverage grows). Its artifacts are a populated
 HTML report, an SBCL state sidecar, and
 `cl-weave-coverage-summary.json`. Agents should treat them as sidecar artifacts

@@ -1295,7 +1295,7 @@ the measured code while forcing a coverage-aware product reload.
 
 Run `scripts/run-coverage-gate.sh` for the CI coverage contract. It requires
 every Lisp file under `src/` to be present in the SB-COVER report and requires
-aggregate product expression and branch coverage to stay at or above the 85%
+aggregate product expression and branch coverage to stay at or above the 87%
 ratchet baseline (raise the threshold as coverage grows). Missing source
 measurements or a lower rate fail the command. The gate writes its
 machine-readable result to `cl-weave-coverage-summary.json`.
