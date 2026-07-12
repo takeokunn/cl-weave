@@ -19,12 +19,10 @@
    #:defmatcher
    #:defmutation-operator
    #:describe-concurrent
-   #:describe-concurrent-each
    #:describe-each
    #:describe-only
    #:describe-only-each
    #:describe-sequential
-   #:describe-sequential-each
    #:describe-run-if
    #:describe-skip
    #:describe-skip-each

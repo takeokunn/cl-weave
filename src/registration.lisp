@@ -99,12 +99,6 @@
 (defmacro describe-only-each (cases suite-name bindings &body body)
   `(progn ,@(suite-each-cases cases suite-name bindings body 'describe-only)))
 
-(defmacro describe-concurrent-each (cases suite-name bindings &body body)
-  `(progn ,@(suite-each-cases cases suite-name bindings body 'describe-concurrent)))
-
-(defmacro describe-sequential-each (cases suite-name bindings &body body)
-  `(progn ,@(suite-each-cases cases suite-name bindings body 'describe-sequential)))
-
 (defmacro describe-skip-each (cases suite-name bindings &body body)
   (validate-suite-each-syntax cases suite-name bindings 'describe-skip-each)
   (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")

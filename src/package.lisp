@@ -34,13 +34,11 @@
    #:defmutation-operator
    #:describe
    #:describe-concurrent
-   #:describe-concurrent-each
    #:describe-each
    #:describe-only
    #:describe-only-each
    #:describe-run-if
    #:describe-sequential
-   #:describe-sequential-each
    #:describe-skip
    #:describe-skip-each
    #:describe-skip-if

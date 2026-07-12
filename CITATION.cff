@@ -1,9 +1,0 @@
-cff-version: 1.2.0
-message: "If you use cl-weave in research, tooling, or documentation, please cite the project using this metadata."
-title: "cl-weave"
-authors:
-  - name: "takeokunn"
-license: "MIT"
-repository-code: "https://github.com/takeokunn/cl-weave"
-url: "https://github.com/takeokunn/cl-weave"
-version: "0.2.0"

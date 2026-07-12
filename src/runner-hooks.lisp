@@ -18,13 +18,6 @@
   (loop for current in (reverse (suite-lineage suite))
         append (reverse (suite-hook current after-each))))
 
-(defun call-hooks/k (hooks continue)
-  (if (null hooks)
-      (funcall continue)
-      (progn
-        (funcall (first hooks))
-        (call-hooks/k (rest hooks) continue))))
-
 (defun call-hooks/collect-errors (hooks)
   (loop for hook in hooks
         when (handler-case
