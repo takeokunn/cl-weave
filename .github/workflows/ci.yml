@@ -54,7 +54,7 @@ jobs:
 
       - name: Run flake checks
         timeout-minutes: 10
-        run: perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
+        run: perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs --max-jobs 1
 
       - name: Run JSON reporter
         timeout-minutes: 8
