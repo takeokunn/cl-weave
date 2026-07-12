@@ -362,7 +362,16 @@
   #-sbcl
   nil)
 
+(defun register-project-systems ()
+  "Teach ASDF where the project systems live for tests that reload them."
+  (let ((root (project-root)))
+    (pushnew root asdf:*central-registry* :test #'equal)
+    (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
+    (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
+    root))
+
 (defun load-project-systems (&key coverage)
+  (register-project-systems)
   (cond
     (coverage
      (enable-coverage-compilation)
