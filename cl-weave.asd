@@ -39,6 +39,7 @@
      (:file "expect-runtime")
      (:file "expect")
      (:file "reporter-schema")
+     (:file "reporter-schema-data")
      (:file "reporter-json")
      (:file "reporter-results")
      (:file "reporter-tap")
