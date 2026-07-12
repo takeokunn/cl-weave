@@ -47,12 +47,30 @@
      (getf (cddr definition) :components)
      (make-pathname :name nil :type nil :defaults asd-pathname))))
 
+(defun compiled-source-output (source)
+  (let ((directory
+          (merge-pathnames
+           (make-pathname :directory '(:relative "cl-weave-coverage-fasl"))
+           (uiop:temporary-directory))))
+    (ensure-directories-exist directory)
+    (merge-pathnames
+     (make-pathname :name (pathname-name source) :type "fasl")
+     directory)))
+
 (defun load-system-sources (asd-name &key compile)
   (let* ((asd-pathname (merge-pathnames asd-name (project-root)))
          #+sbcl
          (sb-ext:*evaluator-mode* (if compile :compile :interpret)))
     (dolist (source (system-source-pathnames asd-pathname))
-      (load source :verbose nil :print nil))))
+      (if compile
+          ;; SB-COVER only instruments code that goes through COMPILE-FILE.
+          (load (compile-file source
+                              :output-file (compiled-source-output source)
+                              :verbose nil
+                              :print nil)
+                :verbose nil
+                :print nil)
+          (load source :verbose nil :print nil)))))
 
 (defun requested-reporter ()
   (let ((reporter #+sbcl (sb-ext:posix-getenv "CL_WEAVE_REPORTER")
