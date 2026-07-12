@@ -6,7 +6,7 @@
   :license "MIT"
   :homepage "https://github.com/takeokunn/cl-weave"
   :bug-tracker "https://github.com/takeokunn/cl-weave/issues"
-  :version "0.1.0"
+  :version "0.2.0"
   :serial t
   :components
   ((:module "src"
@@ -57,6 +57,7 @@
      (:file "runner-api")
      (:file "watch")
      (:file "cli-options")
+     (:file "cli-options-data")
      (:file "cli-metadata-project-data")
      (:file "cli-metadata-quality-data")
      (:file "cli-metadata-option-data")
