@@ -22,6 +22,23 @@ framework, CLI, reporter, metadata, and Nix workflow changes.
 
 ### User-visible Changes
 
+- Fixed the runner's failure path: a failing or erroring test previously
+  crashed the whole run with an unbound-variable error instead of being
+  recorded as a `:fail` or `:error` event.
+- Fixed after-each cleanup so it also runs when a test attempt times out.
+- Fixed interactive `retry-test` so an exhausted retry budget is recorded as
+  an `:error` event instead of aborting any enclosing runner.
+- Fixed coverage instrumentation: coverage runs now compile product sources
+  through `COMPILE-FILE`, so `scripts/run-coverage-gate.sh` measures real
+  expression and branch coverage. The gate threshold is the measured 85%
+  ratchet baseline; raise it as coverage grows.
+- Fixed registration syntax errors for circular literals: the message is now
+  rendered eagerly so printing the condition can no longer exhaust the heap.
+- Suites and test cases now print readably (name plus child count or focus).
+- Added the `coverage-gate-unit` quality gate and CI step covering the
+  coverage gate's own Perl unit tests.
+- Added `paredit-cli` to the devShell and a repo-wide `paredit-lint` flake
+  check for structural S-expression validation.
 - Added a `formatter` flake output (`nixfmt`) so `nix fmt` formats `flake.nix`.
 - Added an `overlays.default` flake output so downstream flakes can consume
   `cl-weave` as `pkgs.cl-weave` without re-deriving the package.
