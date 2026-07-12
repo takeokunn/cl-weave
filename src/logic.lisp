@@ -185,14 +185,15 @@
                      (logic-search-exhausted-limit condition)
                      (logic-search-exhausted-pending condition)))))
 
+(defun validate-logic-query-bound (name value)
+  (unless (or (null value)
+              (and (integerp value) (plusp value)))
+    (error "cl-weave: ~A must be NIL or a positive integer, got ~S."
+           name value)))
+
 (defun logic-query (program clauses &key limit max-steps)
-  (unless (or (null limit) (and (integerp limit) (plusp limit)))
-    (error "cl-weave: logic-query limit must be NIL or a positive integer, got ~S."
-           limit))
-  (unless (or (null max-steps)
-              (and (integerp max-steps) (plusp max-steps)))
-    (error "cl-weave: logic-query max-steps must be NIL or a positive integer, got ~S."
-           max-steps))
+  (validate-logic-query-bound "logic-query limit" limit)
+  (validate-logic-query-bound "logic-query max-steps" max-steps)
   (let ((normalized-program (normalize-logic-program program))
         (query-variables
           (remove-duplicate-logic-variables (collect-logic-variables clauses)))
@@ -274,51 +275,66 @@
     (unless clauses
       (error "cl-weave: logic where macros require at least one relation clause."))
     (dolist (clause clauses)
-      (unless (and (consp clause) (keywordp (first clause)))
-        (error "cl-weave: logic clauses must be non-empty keyword relation lists, got ~S."
-               clause)))
+      (validate-logic-clause clause))
     (values clauses limit limit-present-p max-steps max-steps-present-p)))
 
-(defmacro logic-where (facts &body forms)
+(defun build-logic-query-form (operator program forms)
   (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
       (split-logic-where-forms forms)
-    `(logic-query ,facts ',clauses
-                  ,@(when limit-present-p `(:limit ,limit))
-                  ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
+    `(,operator ,program ',clauses
+                ,@(when limit-present-p `(:limit ,limit))
+                ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
+
+(defmacro define-logic-query-macro (name operator)
+  `(defmacro ,name (program &body forms)
+     (build-logic-query-form ',operator program forms)))
+
+(defmacro define-logic-query-family (&rest specifications)
+  `(progn
+     ,@(loop for (name operator) in specifications
+             collect `(define-logic-query-macro ,name ,operator))))
+
+(defun validate-logic-clause (clause)
+  (unless (and (consp clause) (keywordp (first clause)))
+    (error "cl-weave: logic clauses must be non-empty keyword relation lists, got ~S."
+           clause)))
+
+(defun test-plan-entry-fact (path relation value)
+  (list relation path value))
+
+(defun test-plan-entry-flag-fact (path relation)
+  (list relation path))
 
 (defmacro logic-program (&body entries)
   `(list ,@(mapcar (lambda (entry) `',entry) entries)))
 
-(defmacro logic-run (program &body forms)
-  (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
-      (split-logic-where-forms forms)
-    `(logic-query ,program ',clauses
-                  ,@(when limit-present-p `(:limit ,limit))
-                  ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
-
-(defmacro test-plan-where (plan &body forms)
-  (multiple-value-bind (clauses limit limit-present-p max-steps max-steps-present-p)
-      (split-logic-where-forms forms)
-    `(query-test-plan ,plan ',clauses
-                      ,@(when limit-present-p `(:limit ,limit))
-                      ,@(when max-steps-present-p `(:max-steps ,max-steps)))))
+(define-logic-query-family
+    (logic-where logic-query)
+    (logic-run logic-query)
+    (test-plan-where query-test-plan))
 
 (defun test-plan-entry-facts (entry)
-  (let ((path (test-plan-entry-path entry)))
-    (append
-     (list (list :test path)
-           (list :status path (test-plan-entry-status entry))
-           (list :retry path (test-plan-entry-retry entry)))
-     (when (test-plan-entry-reason entry)
-       (list (list :reason path (test-plan-entry-reason entry))))
-     (when (test-plan-entry-focused entry)
-       (list (list :focused path)))
-     (when (test-plan-entry-timeout-ms entry)
-       (list (list :timeout-ms path (test-plan-entry-timeout-ms entry))))
-     (when (test-plan-entry-concurrent entry)
-       (list (list :concurrent path)))
-     (when (test-plan-entry-location entry)
-       (list (list :location path (test-plan-entry-location entry)))))))
+  (let* ((path (test-plan-entry-path entry))
+         (status (test-plan-entry-status entry))
+         (retry (test-plan-entry-retry entry))
+         (reason (test-plan-entry-reason entry))
+         (focused (test-plan-entry-focused entry))
+         (timeout-ms (test-plan-entry-timeout-ms entry))
+         (concurrent (test-plan-entry-concurrent entry))
+         (location (test-plan-entry-location entry)))
+    (append (list (test-plan-entry-flag-fact path :test)
+                  (test-plan-entry-fact path :status status)
+                  (test-plan-entry-fact path :retry retry))
+            (when reason
+              (list (test-plan-entry-fact path :reason reason)))
+            (when focused
+              (list (test-plan-entry-flag-fact path :focused)))
+            (when timeout-ms
+              (list (test-plan-entry-fact path :timeout-ms timeout-ms)))
+            (when concurrent
+              (list (test-plan-entry-flag-fact path :concurrent)))
+            (when location
+              (list (test-plan-entry-fact path :location location))))))
 
 (defun test-plan-facts (plan)
   (mapcan #'test-plan-entry-facts plan))

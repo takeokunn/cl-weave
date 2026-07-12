@@ -33,6 +33,13 @@
          (let ((*print-circle* t))
            (apply #'format nil format-control arguments))))
 
+(defun format-each-case-name (target format-string case index)
+  (handler-case
+      (apply #'format nil format-string case)
+    (error (condition)
+      (error "~S case ~D does not match format string ~S: ~A"
+             target index format-string condition))))
+
 (defun validate-suite-each-syntax (cases name bindings target)
   (unless (registration-proper-list-p cases)
     (registration-syntax-error
@@ -55,33 +62,68 @@
   (validate-suite-each-syntax cases name bindings target)
   (loop for case in cases
         for index from 0
-        collect `(,target ,(handler-case
-                               (apply #'format nil name case)
-                             (error (condition)
-                               (error "~S case ~D does not match format string ~S: ~A"
-                                      target index name condition)))
+        collect `(,target ,(format-each-case-name target name case index)
                    (destructuring-bind ,bindings ',case
                      ,@forms))))
 
-(defmacro describe (suite-name &body body)
-  (suite-registration-form suite-name body nil))
+(defun reasoned-each-cases (cases name bindings body target wrapper default-reason
+                            include-body-p)
+  (validate-suite-each-syntax cases name bindings target)
+  (multiple-value-bind (reason forms) (split-reasoned-body body default-reason)
+    (unless include-body-p
+      (when forms
+        (error "~S does not accept a test body; only an optional reason string is allowed."
+               target)))
+    (loop for case in cases
+          for index from 0
+          collect `(,wrapper ,(format-each-case-name target name case index)
+                     ,reason
+                     ,@(when include-body-p
+                         `((destructuring-bind ,bindings ',case
+                             ,@forms)))))))
 
-(defmacro describe-only (suite-name &body body)
-  (suite-registration-form suite-name body '(:focus t)))
+(defmacro define-suite-each-macro (name target)
+  `(defmacro ,name (cases suite-name bindings &body body)
+     `(progn ,@(suite-each-cases cases suite-name bindings body ',target))))
 
-(defmacro describe-concurrent (suite-name &body body)
-  (suite-registration-form suite-name body '(:execution-mode :concurrent)))
+(defmacro define-reasoned-each-macro (name wrapper default-reason include-body-p)
+  `(defmacro ,name (cases suite-name bindings &body body)
+     `(progn ,@(reasoned-each-cases cases suite-name bindings body
+                                    ',name ',wrapper
+                                    ,default-reason
+                                    ,include-body-p))))
 
-(defmacro describe-sequential (suite-name &body body)
-  (suite-registration-form suite-name body '(:execution-mode :sequential)))
+(defmacro define-suite-registration-macro (name options-form)
+  `(defmacro ,name (suite-name &body body)
+     (suite-registration-form suite-name body ,options-form)))
 
-(defmacro describe-skip (suite-name &body body)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")
-    (suite-registration-form suite-name forms (list :skip-reason reason))))
+(defmacro define-reasoned-suite-registration-macro (name option-key default-reason)
+  `(defmacro ,name (suite-name &body body)
+     (multiple-value-bind (reason forms) (split-reasoned-body body ,default-reason)
+       (suite-registration-form suite-name forms (list ,option-key reason)))))
 
-(defmacro describe-todo (suite-name &body body)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "todo")
-    (suite-registration-form suite-name forms (list :todo-reason reason))))
+(defmacro define-registration-family (plain-macro reasoned-macro &rest specifications)
+  `(progn
+     ,@(loop for specification in specifications
+             collect (destructuring-bind (kind name &rest arguments) specification
+                       (ecase kind
+                         (:plain `(,plain-macro ,name ,@arguments))
+                         (:reasoned `(,reasoned-macro ,name ,@arguments)))))))
+
+(define-registration-family define-suite-registration-macro
+    define-reasoned-suite-registration-macro
+  (:plain describe nil)
+  (:plain describe-only '(:focus t))
+  (:plain describe-concurrent '(:execution-mode :concurrent))
+  (:plain describe-sequential '(:execution-mode :sequential))
+  (:reasoned describe-skip :skip-reason "skipped")
+  (:reasoned describe-todo :todo-reason "todo"))
+
+(define-registration-family define-suite-each-macro define-reasoned-each-macro
+  (:plain describe-each describe)
+  (:plain describe-only-each describe-only)
+  (:reasoned describe-skip-each describe-skip "skipped" t)
+  (:reasoned describe-todo-each describe-todo "todo" t))
 
 (defmacro describe-skip-if (condition name &body body)
   `(if ,condition
@@ -93,32 +135,6 @@
        (describe ,name ,@body)
        (describe-skip ,name "conditional run-if" ,@body)))
 
-(defmacro describe-each (cases suite-name bindings &body body)
-  `(progn ,@(suite-each-cases cases suite-name bindings body 'describe)))
-
-(defmacro describe-only-each (cases suite-name bindings &body body)
-  `(progn ,@(suite-each-cases cases suite-name bindings body 'describe-only)))
-
-(defmacro describe-skip-each (cases suite-name bindings &body body)
-  (validate-suite-each-syntax cases suite-name bindings 'describe-skip-each)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")
-    `(progn
-       ,@(loop for case in cases
-               collect `(describe-skip ,(apply #'format nil suite-name case)
-                          ,reason
-                          (destructuring-bind ,bindings ',case
-                            ,@forms))))))
-
-(defmacro describe-todo-each (cases suite-name bindings &body body)
-  (validate-suite-each-syntax cases suite-name bindings 'describe-todo-each)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "todo")
-    `(progn
-       ,@(loop for case in cases
-               collect `(describe-todo ,(apply #'format nil suite-name case)
-                          ,reason
-                          (destructuring-bind ,bindings ',case
-                            ,@forms))))))
-
 (defun option-plist-form-p (form)
   (and (consp form)
        (evenp (length form))
@@ -128,6 +144,19 @@
 (defun plist-key-present-p (plist key)
   (loop for (candidate nil) on plist by #'cddr
         thereis (eq candidate key)))
+
+(defmacro define-registration-option-accessors (&rest specifications)
+  `(progn
+     ,@(loop for (name key) on specifications by #'cddr
+             collect `(defun ,(intern (format nil "TEST-REGISTRATION-OPTION-~A" name)
+                                      *package*)
+                          (options)
+                        (getf options ,key)))))
+
+(define-registration-option-accessors
+    retry :retry
+    timeout-ms :timeout-ms
+    execution-mode :execution-mode)
 
 (defun ensure-unique-option-keys (options)
   (loop with seen = '()
@@ -143,12 +172,12 @@
         unless (member key '(:retry :timeout-ms :execution-mode))
           do (error "Unknown test option ~S." key))
   (append
-   (when (plist-key-present-p options :retry)
-     `(:retry ,(getf options :retry)))
-   (when (plist-key-present-p options :timeout-ms)
-     `(:timeout-ms ,(getf options :timeout-ms)))
-   (when (plist-key-present-p options :execution-mode)
-     `(:execution-mode ,(getf options :execution-mode)))))
+     (when (plist-key-present-p options :retry)
+       `(:retry ,(test-registration-option-retry options)))
+     (when (plist-key-present-p options :timeout-ms)
+       `(:timeout-ms ,(test-registration-option-timeout-ms options)))
+     (when (plist-key-present-p options :execution-mode)
+       `(:execution-mode ,(test-registration-option-execution-mode options)))))
 
 (defun source-location-form ()
   `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))
@@ -170,8 +199,8 @@
 
 (defun test-options-with-registration-options (options prefix-options)
   (let* ((registration-options (test-registration-options options))
-         (fixed-mode (getf prefix-options :execution-mode))
-         (requested-mode (getf registration-options :execution-mode)))
+           (fixed-mode (test-registration-option-execution-mode prefix-options))
+           (requested-mode (test-registration-option-execution-mode registration-options)))
     (when (and fixed-mode requested-mode (not (eql fixed-mode requested-mode)))
       (error "Execution mode ~S conflicts with fixed mode ~S."
              requested-mode fixed-mode))
@@ -182,48 +211,36 @@
                         append (list key value))
                 registration-options))))
 
-(defmacro it (test-name &body body)
-  (multiple-value-bind (options forms) (split-test-body body)
-    (test-registration-form
-     test-name
-     forms
-     (test-options-with-registration-options options '()))))
+(defmacro define-test-registration-macro (name prefix-options)
+  `(defmacro ,name (test-name &body body)
+     (multiple-value-bind (options forms) (split-test-body body)
+       (test-registration-form
+        test-name
+        forms
+        (test-options-with-registration-options options ,prefix-options)))))
 
-(defmacro it-only (test-name &body body)
-  (multiple-value-bind (options forms) (split-test-body body)
-    (test-registration-form
-     test-name
-     forms
-     (test-options-with-registration-options options '(:focus t)))))
+(defmacro define-reasoned-test-registration-macro (name option-key default-reason body-form)
+  `(defmacro ,name (test-name &optional (reason ,default-reason))
+     (test-registration-form test-name ,body-form (list ,option-key reason))))
 
-(defmacro it-concurrent (test-name &body body)
-  (multiple-value-bind (options forms) (split-test-body body)
-    (test-registration-form
-     test-name
-     forms
-     (test-options-with-registration-options options '(:execution-mode :concurrent)))))
+(define-registration-family define-test-registration-macro
+    define-reasoned-test-registration-macro
+  (:plain it nil)
+  (:plain it-only '(:focus t))
+  (:plain it-concurrent '(:execution-mode :concurrent))
+  (:plain it-sequential '(:execution-mode :sequential))
+  (:plain it-fails '(:expected-failure-reason "expected failure"))
+  (:reasoned it-skip :skip-reason "skipped" '(nil))
+  (:reasoned it-todo :todo-reason "todo" '(nil)))
 
-(defmacro it-sequential (test-name &body body)
-  (multiple-value-bind (options forms) (split-test-body body)
-    (test-registration-form
-     test-name
-     forms
-     (test-options-with-registration-options options '(:execution-mode :sequential)))))
-
-(defmacro it-fails (test-name &body body)
-  (multiple-value-bind (options forms) (split-test-body body)
-    (test-registration-form
-     test-name
-     forms
-     (test-options-with-registration-options
-      options
-      '(:expected-failure-reason "expected failure")))))
-
-(defmacro it-skip (test-name &optional (reason "skipped"))
-  (test-registration-form test-name '(nil) (list :skip-reason reason)))
-
-(defmacro it-todo (test-name &optional (reason "todo"))
-  (test-registration-form test-name '(nil) (list :todo-reason reason)))
+(define-registration-family define-suite-each-macro define-reasoned-each-macro
+  (:plain it-each it)
+  (:plain it-only-each it-only)
+  (:plain it-concurrent-each it-concurrent)
+  (:plain it-sequential-each it-sequential)
+  (:plain it-fails-each it-fails)
+  (:reasoned it-skip-each it-skip "skipped" nil)
+  (:reasoned it-todo-each it-todo "todo" nil))
 
 (defmacro it-skip-if (condition name &body body)
   `(if ,condition
@@ -236,7 +253,7 @@
        (it-skip ,name "conditional run-if")))
 
 (defun isolated-option-form (options key fallback)
-  (if (getf options key)
+  (if (plist-key-present-p options key)
       (getf options key)
       fallback))
 
@@ -267,44 +284,6 @@
          (if (eq (isolated-result-status result) :pass)
              t
              (signal-isolated-failure result ',form))))))
-
-(defmacro it-each (cases test-name bindings &body body)
-  `(progn
-     ,@(suite-each-cases cases test-name bindings body 'it)))
-
-(defmacro it-only-each (cases test-name bindings &body body)
-  `(progn
-     ,@(suite-each-cases cases test-name bindings body 'it-only)))
-
-(defmacro it-concurrent-each (cases test-name bindings &body body)
-  `(progn
-     ,@(suite-each-cases cases test-name bindings body 'it-concurrent)))
-
-(defmacro it-sequential-each (cases test-name bindings &body body)
-  `(progn
-     ,@(suite-each-cases cases test-name bindings body 'it-sequential)))
-
-(defmacro it-fails-each (cases test-name bindings &body body)
-  `(progn
-     ,@(suite-each-cases cases test-name bindings body 'it-fails)))
-
-(defmacro it-skip-each (cases test-name bindings &body body)
-  (validate-suite-each-syntax cases test-name bindings 'it-skip-each)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "skipped")
-    (when forms
-      (error "IT-SKIP-EACH does not accept a test body; only an optional reason string is allowed."))
-    `(progn
-       ,@(loop for case in cases
-               collect `(it-skip ,(apply #'format nil test-name case) ,reason)))))
-
-(defmacro it-todo-each (cases test-name bindings &body body)
-  (validate-suite-each-syntax cases test-name bindings 'it-todo-each)
-  (multiple-value-bind (reason forms) (split-reasoned-body body "todo")
-    (when forms
-      (error "IT-TODO-EACH does not accept a test body; only an optional reason string is allowed."))
-    `(progn
-       ,@(loop for case in cases
-               collect `(it-todo ,(apply #'format nil test-name case) ,reason)))))
 
 (defmacro it-property (name bindings &body body)
   (unless (registration-proper-list-p bindings)

@@ -5,6 +5,25 @@
   (:report (lambda (condition stream)
              (write-string (cli-error-message condition) stream))))
 
+(defmacro define-cli-spec-accessors (&rest specifications)
+  `(progn
+     ,@(loop for (name key) in specifications
+             collect `(defun ,name (spec)
+                        (getf spec ,key)))))
+
+(define-cli-spec-accessors
+  (cli-spec-flag :flag)
+  (cli-spec-field :field)
+  (cli-spec-kind :kind)
+  (cli-spec-command :command)
+  (cli-spec-parser :parser)
+  (cli-spec-argument-name :argument-name)
+  (cli-spec-default :default)
+  (cli-spec-value :value)
+  (cli-spec-environment :environment)
+  (cli-entry-name :name)
+  (cli-entry-environment :environment))
+
 (defmacro define-cli-options (&body clauses)
   (labels ((clause (name)
              (or (assoc name clauses)
@@ -14,9 +33,9 @@
            (validate-specs (specs namespace fields allowed-kinds)
              (let ((flags '()))
                (dolist (spec specs)
-                 (let ((flag (getf spec :flag))
-                       (field (getf spec :field))
-                       (kind (getf spec :kind)))
+                 (let ((flag (cli-spec-flag spec))
+                       (field (cli-spec-field spec))
+                       (kind (cli-spec-kind spec)))
                    (unless (and (stringp flag) (plusp (length flag)))
                      (error "~A CLI spec requires a non-empty string :FLAG: ~S"
                             namespace spec))
@@ -38,8 +57,8 @@
            (collection-fields
              (remove-duplicates
               (loop for spec in option-specs
-                    when (eq (getf spec :kind) :collection)
-                      collect (getf spec :field))))
+                    when (eq (cli-spec-kind spec) :collection)
+                      collect (cli-spec-field spec))))
            (field-accessors
              (loop for field in fields
                    collect
@@ -75,15 +94,15 @@
            options)))))
 
 (defun cli-option-spec (flag)
-  (find flag *cli-option-specs* :key (lambda (entry) (getf entry :flag))
+  (find flag *cli-option-specs* :key #'cli-spec-flag
         :test #'string=))
 
 (defun cli-environment-spec (flag)
-  (find flag *cli-environment-specs* :key (lambda (entry) (getf entry :flag))
+  (find flag *cli-environment-specs* :key #'cli-spec-flag
         :test #'string=))
 
 (defun apply-cli-option-command (options spec)
-  (let ((command (getf spec :command)))
+  (let ((command (cli-spec-command spec)))
     (when command
       (set-cli-option-field options :command command))))
 
@@ -259,38 +278,38 @@
   (let ((spec (cli-option-spec flag)))
     (unless spec
       (error 'cli-error :message (format nil "Unknown option: ~A" flag)))
-    (ecase (getf spec :kind)
+    (ecase (cli-spec-kind spec)
       (:flag
        (when inline-p
          (error 'cli-error
                 :message (format nil "~A does not accept an inline value" flag)))
-       (set-cli-option-field options (getf spec :field)
-                             (if (member :value spec) (getf spec :value) t))
+       (set-cli-option-field options (cli-spec-field spec)
+                             (if (member :value spec) (cli-spec-value spec) t))
        (apply-cli-option-command options spec)
        rest)
       (:collection
-       (push-cli-option-field options (getf spec :field)
+       (push-cli-option-field options (cli-spec-field spec)
                               (require-option-argument flag rest))
        (rest rest))
       (:value
        (let* ((raw (require-option-argument flag rest))
-              (name (getf spec :argument-name flag))
-              (value (call-cli-option-parser (getf spec :parser) raw name)))
-         (set-cli-option-field options (getf spec :field) value)
+              (name (or (cli-spec-argument-name spec) flag))
+              (value (call-cli-option-parser (cli-spec-parser spec) raw name)))
+         (set-cli-option-field options (cli-spec-field spec) value)
          (rest rest)))
       (:optional-value
        (multiple-value-bind (raw remaining)
-           (consume-optional-value (getf spec :default) rest)
-         (let* ((name (getf spec :argument-name flag))
-                (value (call-cli-option-parser (getf spec :parser) raw name)))
-           (set-cli-option-field options (getf spec :field) value)
+           (consume-optional-value (cli-spec-default spec) rest)
+         (let* ((name (or (cli-spec-argument-name spec) flag))
+                (value (call-cli-option-parser (cli-spec-parser spec) raw name)))
+           (set-cli-option-field options (cli-spec-field spec) value)
            remaining))))))
 
 (defun apply-cli-option-environment (options entry)
-  (let* ((binding (first-environment-binding (getf entry :environment)))
+  (let* ((binding (first-environment-binding (cli-entry-environment entry)))
          (name (car binding))
          (value (cdr binding))
-         (option-name (getf entry :name))
+         (option-name (cli-entry-name entry))
          (spec (cli-environment-spec option-name)))
     (when binding
       (unless spec
@@ -298,15 +317,15 @@
                :message (format nil
                                  "Unhandled environment-backed CLI option: ~A"
                                  option-name)))
-      (ecase (getf spec :kind)
+      (ecase (cli-spec-kind spec)
         (:value
          (set-cli-option-field
           options
-          (getf spec :field)
-          (call-cli-option-parser (getf spec :parser) value name)))
+          (cli-spec-field spec)
+          (call-cli-option-parser (cli-spec-parser spec) value name)))
         (:truthy
          (when (truthy-environment-p name)
-           (set-cli-option-field options (getf spec :field) t)
+           (set-cli-option-field options (cli-spec-field spec) t)
            (apply-cli-option-command options spec)))))))
 
 (defun options-from-environment ()

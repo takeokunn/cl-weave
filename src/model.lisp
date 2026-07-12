@@ -127,20 +127,39 @@
       (setf *root-suite*
             (make-suite :name "root"))))
 
+(defun current-or-root-suite ()
+  (or *current-suite*
+      (root-suite)))
+
 (defun clear-tests ()
   (setf *root-suite* nil
         *current-suite* nil
         *named-suites* (make-hash-table :test #'equal))
   t)
 
+(defmacro append-to-tail-list (suite head tail value)
+  (let ((suite-var (gensym "SUITE"))
+        (value-var (gensym "VALUE"))
+        (cell-var (gensym "CELL")))
+    `(let* ((,suite-var ,suite)
+            (,value-var ,value)
+            (,cell-var (list ,value-var)))
+       (if (,tail ,suite-var)
+           (setf (cdr (,tail ,suite-var)) ,cell-var
+                 (,tail ,suite-var) ,cell-var)
+           (setf (,head ,suite-var) ,cell-var
+                 (,tail ,suite-var) ,cell-var))
+       ,value-var)))
+
+(defmacro define-tail-registration (name head tail)
+  `(defun ,name (function)
+     (append-to-tail-list (current-or-root-suite)
+                          ,head
+                          ,tail
+                          function)))
+
 (defun add-child (parent child)
-  (let ((cell (list child)))
-    (if (suite-children-tail parent)
-        (setf (cdr (suite-children-tail parent)) cell
-              (suite-children-tail parent) cell)
-        (setf (suite-children parent) cell
-              (suite-children-tail parent) cell)))
-  child)
+  (append-to-tail-list parent suite-children suite-children-tail child))
 
 (defun normalize-execution-mode (mode)
   (unless (member mode '(nil :concurrent :sequential))
@@ -154,89 +173,56 @@
     (string (string-upcase name))
     (t name)))
 
+(defun suite-registration-initargs
+    (name parent focus execution-mode skip-reason todo-reason)
+  (list :name name
+        :parent parent
+        :focus focus
+        :execution-mode (normalize-execution-mode execution-mode)
+        :skip-reason skip-reason
+        :todo-reason todo-reason))
+
+(defun test-registration-initargs
+    (name function focus skip-reason todo-reason retry timeout-ms
+     execution-mode expected-failure-reason location)
+  (list :name name
+        :function function
+        :focus focus
+        :skip-reason skip-reason
+        :todo-reason todo-reason
+        :retry retry
+        :timeout-ms timeout-ms
+        :execution-mode (normalize-execution-mode execution-mode)
+        :expected-failure-reason expected-failure-reason
+        :location location))
+
 (defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
-  (let* ((parent (or *current-suite* (root-suite)))
+  (let* ((parent (current-or-root-suite))
          (suite (add-child parent
                            (apply #'make-suite
-                                  (list
-                                   :name name
-                                   :parent parent
-                                   :focus focus
-                                   :execution-mode
-                                   (normalize-execution-mode execution-mode)
-                                   :skip-reason skip-reason
-                                   :todo-reason todo-reason)))))
+                                  (suite-registration-initargs
+                                   name parent focus execution-mode
+                                   skip-reason todo-reason)))))
     (let ((*current-suite* suite))
       (funcall thunk))
     suite))
 
 (defun register-test
-    (name function &key focus skip-reason todo-reason retry timeout-ms
+  (name function &key focus skip-reason todo-reason retry timeout-ms
        execution-mode expected-failure-reason location)
-  (let ((suite (or *current-suite* (root-suite))))
+  (let ((suite (current-or-root-suite)))
     (add-child suite
                (apply #'make-test-case
-                      (list
-                       :name name
-                       :function function
-                       :focus focus
-                       :skip-reason skip-reason
-                       :todo-reason todo-reason
-                       :retry retry
-                       :timeout-ms timeout-ms
-                       :execution-mode (normalize-execution-mode execution-mode)
-                       :expected-failure-reason expected-failure-reason
-                       :location location)))))
+                      (test-registration-initargs
+                       name function focus skip-reason todo-reason retry
+                       timeout-ms execution-mode expected-failure-reason
+                       location)))))
 
-(defun register-before-all (function)
-  (let* ((suite (or *current-suite* (root-suite)))
-         (cell (list function)))
-    (if (suite-before-all-tail suite)
-        (setf (cdr (suite-before-all-tail suite)) cell
-              (suite-before-all-tail suite) cell)
-        (setf (suite-before-all suite) cell
-              (suite-before-all-tail suite) cell))
-    function))
-
-(defun register-after-all (function)
-  (let* ((suite (or *current-suite* (root-suite)))
-         (cell (list function)))
-    (if (suite-after-all-tail suite)
-        (setf (cdr (suite-after-all-tail suite)) cell
-              (suite-after-all-tail suite) cell)
-        (setf (suite-after-all suite) cell
-              (suite-after-all-tail suite) cell))
-    function))
-
-(defun register-before-each (function)
-  (let* ((suite (or *current-suite* (root-suite)))
-         (cell (list function)))
-    (if (suite-before-each-tail suite)
-        (setf (cdr (suite-before-each-tail suite)) cell
-              (suite-before-each-tail suite) cell)
-        (setf (suite-before-each suite) cell
-              (suite-before-each-tail suite) cell))
-    function))
-
-(defun register-around-each (function)
-  (let* ((suite (or *current-suite* (root-suite)))
-         (cell (list function)))
-    (if (suite-around-each-tail suite)
-        (setf (cdr (suite-around-each-tail suite)) cell
-              (suite-around-each-tail suite) cell)
-        (setf (suite-around-each suite) cell
-              (suite-around-each-tail suite) cell))
-    function))
-
-(defun register-after-each (function)
-  (let* ((suite (or *current-suite* (root-suite)))
-         (cell (list function)))
-    (if (suite-after-each-tail suite)
-        (setf (cdr (suite-after-each-tail suite)) cell
-              (suite-after-each-tail suite) cell)
-        (setf (suite-after-each suite) cell
-              (suite-after-each-tail suite) cell))
-    function))
+(define-tail-registration register-before-all suite-before-all suite-before-all-tail)
+(define-tail-registration register-after-all suite-after-all suite-after-all-tail)
+(define-tail-registration register-before-each suite-before-each suite-before-each-tail)
+(define-tail-registration register-around-each suite-around-each suite-around-each-tail)
+(define-tail-registration register-after-each suite-after-each suite-after-each-tail)
 
 (defun signal-assertion-failure (detail)
   (error 'assertion-failure :detail detail))
@@ -253,39 +239,44 @@
   (unless (assertion-counting-active-p)
     (error "cl-weave: ~S must be used inside a running test." form)))
 
+(defmacro with-assertion-counting ((form) &body body)
+  `(progn
+     (require-assertion-counting ,form)
+     ,@body))
+
 (defun set-expected-assertion-count (count form)
-  (require-assertion-counting form)
-  (unless (and (integerp count) (not (minusp count)))
-    (error "cl-weave: EXPECT-ASSERTIONS count must be a non-negative integer, got ~S."
-           count))
-  (setf *expected-assertion-count* count
-        *expected-assertion-count-form* form)
-  count)
+  (with-assertion-counting (form)
+    (unless (and (integerp count) (not (minusp count)))
+      (error "cl-weave: EXPECT-ASSERTIONS count must be a non-negative integer, got ~S."
+             count))
+    (setf *expected-assertion-count* count
+          *expected-assertion-count-form* form)
+    count))
 
 (defun set-has-assertions-required (form)
-  (require-assertion-counting form)
-  (setf *has-assertions-required* t
-        *has-assertions-form* form)
-  t)
+  (with-assertion-counting (form)
+    (setf *has-assertions-required* t
+          *has-assertions-form* form)
+    t))
 
 (defun assertion-count-failure-detail (form matcher actual expected)
   (make-assertion-detail-record form matcher actual expected nil nil))
 
+(defun signal-assertion-count-failure (form matcher actual expected)
+  (signal-assertion-failure
+   (assertion-count-failure-detail form matcher actual expected)))
+
 (defun verify-assertion-counts ()
   (when (and *expected-assertion-count*
              (/= *assertion-count* *expected-assertion-count*))
-    (signal-assertion-failure
-     (assertion-count-failure-detail
-      *expected-assertion-count-form*
-      :assertions
-      *assertion-count*
-      *expected-assertion-count*)))
+    (signal-assertion-count-failure *expected-assertion-count-form*
+                                    :assertions
+                                    *assertion-count*
+                                    *expected-assertion-count*))
   (when (and *has-assertions-required*
              (zerop *assertion-count*))
-    (signal-assertion-failure
-     (assertion-count-failure-detail
-      *has-assertions-form*
-      :has-assertions
-       *assertion-count*
-      '(:minimum 1))))
+    (signal-assertion-count-failure *has-assertions-form*
+                                    :has-assertions
+                                    *assertion-count*
+                                    '(:minimum 1)))
   t)
