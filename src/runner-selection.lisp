@@ -16,6 +16,7 @@
   focus-enabled
   name-filter
   location-filter
+  test-path-filter
   include-tags
   exclude-tags
   shard-paths)
@@ -65,6 +66,10 @@
         (and pathname
              (member pathname location-filter :test #'equal)))))
 
+(defun test-path-matches-exact-filter-p (path test-path-filter)
+  (or (null test-path-filter)
+      (member path test-path-filter :test #'equal)))
+
 (defun test-tags-match-filter-p (test include-tags exclude-tags)
   (let ((tags (test-case-tags test)))
     (and (or (null include-tags)
@@ -80,6 +85,9 @@
                                    (selection-filter-name-filter filter))
        (test-location-matches-filter-p test
                                        (selection-filter-location-filter filter))
+       (test-path-matches-exact-filter-p
+        (test-path suite test)
+        (selection-filter-test-path-filter filter))
        (test-tags-match-filter-p test
                                  (selection-filter-include-tags filter)
                                  (selection-filter-exclude-tags filter))))

@@ -53,7 +53,7 @@
 
 (define-record-class test-case
   (name function focus skip-reason todo-reason retry timeout-ms execution-mode
-   expected-failure-reason location tags))
+   expected-failure-reason location tags watch-dependencies))
 
 (defmethod print-object ((test test-case) stream)
   (print-unreadable-object (test stream :type t)
@@ -210,9 +210,32 @@
           do (push canonical normalized)
         finally (return (nreverse normalized))))
 
+(defun normalize-watch-dependencies (dependencies location)
+  (unless (tag-proper-list-p dependencies)
+    (error "cl-weave: watch dependencies must be a proper list of pathnames or strings."))
+  (let* ((source (getf location :file))
+         (base (and source
+                    (uiop:pathname-directory-pathname
+                     (uiop:ensure-absolute-pathname source)))))
+    (loop with normalized = '()
+          for dependency in dependencies
+          for pathname = (etypecase dependency
+                           (pathname dependency)
+                           (string (pathname dependency)))
+          for absolute = (if (uiop:absolute-pathname-p pathname)
+                             pathname
+                             (if base
+                                 (merge-pathnames pathname base)
+                                 (error "cl-weave: relative watch dependency ~S requires a test source location."
+                                        dependency)))
+          for canonical = (uiop:ensure-absolute-pathname absolute)
+          unless (member canonical normalized :test #'equal)
+            do (push canonical normalized)
+          finally (return (nreverse normalized)))))
+
 (defun test-registration-initargs
     (name function focus skip-reason todo-reason retry timeout-ms
-     execution-mode expected-failure-reason location tags)
+     execution-mode expected-failure-reason location tags watch-dependencies)
   (list :name name
         :function function
         :focus focus
@@ -223,7 +246,8 @@
         :execution-mode (normalize-execution-mode execution-mode)
         :expected-failure-reason expected-failure-reason
         :location location
-        :tags (normalize-tags tags)))
+        :tags (normalize-tags tags)
+        :watch-dependencies (normalize-watch-dependencies watch-dependencies location)))
 
 (defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
   (let* ((parent (current-or-root-suite))
@@ -238,14 +262,14 @@
 
 (defun register-test
   (name function &key focus skip-reason todo-reason retry timeout-ms
-       execution-mode expected-failure-reason location tags)
+       execution-mode expected-failure-reason location tags watch-depends-on)
   (let ((suite (current-or-root-suite)))
     (add-child suite
                (apply #'make-test-case
                       (test-registration-initargs
                        name function focus skip-reason todo-reason retry
                        timeout-ms execution-mode expected-failure-reason
-                       location tags)))))
+                       location tags watch-depends-on)))))
 
 (define-tail-registration register-before-all suite-before-all suite-before-all-tail)
 (define-tail-registration register-after-all suite-after-all suite-after-all-tail)

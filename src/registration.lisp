@@ -157,7 +157,8 @@
     retry :retry
     timeout-ms :timeout-ms
     execution-mode :execution-mode
-    tags :tags)
+    tags :tags
+    watch-depends-on :watch-depends-on)
 
 (defun ensure-unique-option-keys (options)
   (loop with seen = '()
@@ -170,7 +171,8 @@
 (defun test-registration-options (options)
   (ensure-unique-option-keys options)
   (loop for (key nil) on options by #'cddr
-        unless (member key '(:retry :timeout-ms :execution-mode :tags))
+        unless (member key '(:retry :timeout-ms :execution-mode :tags
+                             :watch-depends-on))
           do (error "Unknown test option ~S." key))
   (append
      (when (plist-key-present-p options :retry)
@@ -180,7 +182,10 @@
      (when (plist-key-present-p options :execution-mode)
        `(:execution-mode ,(test-registration-option-execution-mode options)))
      (when (plist-key-present-p options :tags)
-       `(:tags ,(test-registration-option-tags options)))))
+       `(:tags ,(test-registration-option-tags options)))
+     (when (plist-key-present-p options :watch-depends-on)
+       `(:watch-depends-on
+         ,(test-registration-option-watch-depends-on options)))))
 
 (defun source-location-form ()
   `',(let ((pathname (or *compile-file-pathname* *load-pathname*)))

@@ -249,6 +249,7 @@
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
                   location-filter
+                  test-path-filter
                   include-tags
                   exclude-tags
                   shard
@@ -274,6 +275,7 @@
                     (root-suite)
                     :name-filter name-filter
                     :location-filter location-filter
+                    :test-path-filter test-path-filter
                     :include-tags include-tags
                     :exclude-tags exclude-tags
                     :shard shard

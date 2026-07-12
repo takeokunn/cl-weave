@@ -127,12 +127,13 @@
                  (continue-with-event payload)))))))))
 
 (defun call-with-collection-context
-    (suite name-filter location-filter include-tags exclude-tags shard order seed
+    (suite name-filter location-filter test-path-filter include-tags exclude-tags shard order seed
      retry timeout-ms max-workers continue)
   (let* ((filter (make-selection-filter
                   :focus-enabled (focused-suite-p suite)
                   :name-filter (normalized-test-filter name-filter)
                   :location-filter (normalize-location-filter location-filter)
+                  :test-path-filter test-path-filter
                   :include-tags (normalize-tags include-tags "include-tags")
                   :exclude-tags (normalize-tags exclude-tags "exclude-tags")))
          (normalized-shard (normalize-shard shard))
@@ -151,13 +152,14 @@
       (funcall continue filter))))
 
 (defun collect-events
-    (suite &key name-filter location-filter include-tags exclude-tags bail shard
+    (suite &key name-filter location-filter test-path-filter include-tags exclude-tags bail shard
                   order seed retry timeout-ms max-workers)
   (with-runner-condition-propagation (nil)
     (call-with-collection-context
      suite
      name-filter
      location-filter
+     test-path-filter
      include-tags
      exclude-tags
      shard
@@ -241,12 +243,13 @@
                  (continue-with-entry payload)))))))))
 
 (defun collect-test-plan
-    (suite &key name-filter location-filter include-tags exclude-tags shard order
-                  seed retry timeout-ms)
+    (suite &key name-filter location-filter test-path-filter include-tags exclude-tags
+                  shard order seed retry timeout-ms)
   (call-with-collection-context
    suite
    name-filter
    location-filter
+   test-path-filter
    include-tags
    exclude-tags
    shard

@@ -107,6 +107,72 @@
         (expect (cl-weave::selective-watch-location-filter (list test-file new-file))
                 :to-be nil))))
 
+  (it "selects only tests that declare a changed watch dependency"
+    (let* ((test-file #P"/tmp/cl-weave/tests/watch-dependencies.lisp")
+           (helper-a #P"/tmp/cl-weave/src/helper-a.lisp")
+           (helper-b #P"/tmp/cl-weave/src/helper-b.lisp")
+           (root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "watch" :parent root))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "helper-a test"
+        :location (list :file (namestring test-file))
+        :watch-dependencies (list helper-a)
+        :function (lambda () t)))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "helper-b test"
+        :location (list :file (namestring test-file))
+        :watch-dependencies (list helper-b)
+        :function (lambda () t)))
+      (multiple-value-bind (paths selectivep)
+          (cl-weave::watch-test-path-selection root (list helper-a))
+        (expect selectivep :to-be-truthy)
+        (expect paths :to-equal '(("watch" "helper-a test"))))
+      (multiple-value-bind (paths selectivep)
+          (cl-weave::watch-test-path-selection
+           root
+           (list helper-a #P"/tmp/cl-weave/src/unknown.lisp"))
+        (expect paths :to-be nil)
+        (expect selectivep :to-be nil))))
+
+  (it "normalizes relative watch dependencies against the test definition file"
+    (let ((dependencies
+            (cl-weave::normalize-watch-dependencies
+             '("../src/parser.lisp")
+             '(:file "/tmp/cl-weave/tests/parser-test.lisp"))))
+      (expect dependencies
+              :to-equal (list #P"/tmp/cl-weave/src/parser.lisp"))))
+
+  (it "builds a dependency-filtered watch plan"
+    (let* ((test-file #P"/tmp/cl-weave/tests/watch-plan.lisp")
+           (helper #P"/tmp/cl-weave/src/watch-helper.lisp")
+           (root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root
+                   (cl-weave::make-suite :name "watch" :parent root)))
+           (old-state (list (cons helper 1)))
+           (new-state (list (cons helper 2))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "dependent"
+        :location (list :file (namestring test-file))
+        :watch-dependencies (list helper)
+        :function (lambda () t)))
+      (let ((cl-weave::*root-suite* root))
+        (expect (cl-weave::watch-cycle-plan old-state new-state)
+                :to-equal
+                (list :changed (list helper)
+                      :location-filter nil
+                      :test-path-filter '(("watch" "dependent"))
+                      :scope :changed-tests
+                      :new-state new-state)))))
+
   (it "derives a changed-tests watch plan from registered file changes"
     (let* ((test-file #P"/tmp/cl-weave/watch-plan-target.lisp")
            (root (cl-weave::make-suite :name "root"))

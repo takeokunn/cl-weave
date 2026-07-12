@@ -114,27 +114,66 @@
                       changed))
       changed)))
 
-(defun watch-scope (location-filter)
-  (if location-filter :changed-tests :full-suite))
+(defun test-effective-watch-dependencies (test)
+  (let ((source (test-location-pathname test)))
+    (remove-duplicates
+     (if source
+         (cons source (test-case-watch-dependencies test))
+         (copy-list (test-case-watch-dependencies test)))
+     :test #'equal)))
+
+(defun watch-test-path-selection (suite changed)
+  "Return selected test paths and true when every changed file is declared."
+  (let ((entries '()))
+    (labels ((visit (current-suite)
+               (dolist (child (suite-children current-suite))
+                 (cond
+                   ((suite-p child) (visit child))
+                   ((test-case-p child)
+                    (push (cons (test-path current-suite child)
+                                (test-effective-watch-dependencies child))
+                          entries))))))
+      (visit suite))
+    (let ((selected '()))
+      (dolist (pathname changed (values (nreverse selected) t))
+        (let ((matches
+                (loop for (path . dependencies) in entries
+                      when (member pathname dependencies :test #'equal)
+                        collect path)))
+          (unless matches
+            (return-from watch-test-path-selection (values nil nil)))
+          (dolist (path matches)
+            (pushnew path selected :test #'equal)))))))
+
+(defun watch-scope (location-filter test-path-filter)
+  (if (or location-filter test-path-filter) :changed-tests :full-suite))
 
 (defun watch-cycle-plan (state new-state)
   (let* ((changed (if state
                       (changed-pathnames state new-state)
                       (mapcar #'car new-state)))
          (location-filter (and state (selective-watch-location-filter changed))))
-    (list :changed changed
-          :location-filter location-filter
-          :scope (watch-scope location-filter)
-          :new-state new-state)))
+    (multiple-value-bind (test-path-filter selectivep)
+        (if (and state (null location-filter))
+            (watch-test-path-selection (root-suite) changed)
+            (values nil nil))
+      (declare (ignore selectivep))
+      (append (list :changed changed
+                    :location-filter location-filter)
+              (when test-path-filter
+                (list :test-path-filter test-path-filter))
+              (list :scope (watch-scope location-filter test-path-filter)
+                    :new-state new-state)))))
 
 (defun watch-sleep (seconds)
   (sleep seconds))
 
 (defun run-system-argument-pairs (&key reporter stream name-filter location-filter
+                                    test-path-filter
                                     shard order seed bail coverage
                                     coverage-output pass-with-no-tests retry
                                     timeout-ms max-workers)
-  (list :reporter reporter
+  (append (list :reporter reporter
         :stream stream
         :name-filter name-filter
         :location-filter location-filter
@@ -147,12 +186,15 @@
         :pass-with-no-tests pass-with-no-tests
         :retry retry
         :timeout-ms timeout-ms
-        :max-workers max-workers))
+                :max-workers max-workers)
+          (when test-path-filter
+            (list :test-path-filter test-path-filter))))
 
 (defun run-system (system &key (reporter :spec)
                          (stream *standard-output*)
                          (name-filter *test-name-filter*)
                          location-filter
+                         test-path-filter
                          shard
                          order
                          seed
@@ -172,6 +214,7 @@
           :stream stream
           :name-filter name-filter
           :location-filter location-filter
+          :test-path-filter test-path-filter
           :shard shard
           :order order
           :seed seed
@@ -194,6 +237,7 @@
                                   max-workers once)
   (let ((changed (getf plan :changed))
         (location-filter (getf plan :location-filter))
+        (test-path-filter (getf plan :test-path-filter))
         (scope (getf plan :scope)))
     (if (null changed)
         (values nil t)
@@ -210,6 +254,7 @@
                           :stream stream
                           :name-filter name-filter
                           :location-filter location-filter
+                          :test-path-filter test-path-filter
                           :shard shard
                           :order order
                           :seed seed

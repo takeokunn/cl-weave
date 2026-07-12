@@ -179,6 +179,17 @@
                      (tree-contains-p form :tags)
                      (tree-contains-p form 'dynamic-tag))))))
 
+  (it "preserves watch dependency expressions in test registration"
+    (let ((expansion
+            (macroexpand-1
+             '(it "watched" (:watch-depends-on (list "../src/parser.lisp" helper))
+                (expect :ok :to-be :ok)))))
+      (expect expansion :to-satisfy
+              (lambda (form)
+                (and (tree-contains-p form 'cl-weave::register-test)
+                     (tree-contains-p form :watch-depends-on)
+                     (tree-contains-p form 'helper))))))
+
   (it "rejects removed compatibility metadata options"
     (dolist (option '(:depends-on :concurrent))
       (expect (lambda ()
