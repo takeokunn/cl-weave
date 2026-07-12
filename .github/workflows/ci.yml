@@ -71,6 +71,11 @@ jobs:
         run: |
           nix develop --command sh scripts/run-coverage-gate.sh
 
+      - name: Run coverage gate unit tests
+        timeout-minutes: 1
+        run: |
+          nix develop --command perl scripts/test-coverage-gate.pl
+
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
         run: |

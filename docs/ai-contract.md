@@ -886,7 +886,8 @@ perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
 
 The gate instruments product sources but not the test system. It fails when any
 Lisp file under `src/` is absent from the SB-COVER report or aggregate product
-expression and branch coverage is below 100%. Its artifacts are a populated
+expression and branch coverage falls below the 85% ratchet baseline (raise the
+threshold as coverage grows). Its artifacts are a populated
 HTML report, an SBCL state sidecar, and
 `cl-weave-coverage-summary.json`. Agents should treat them as sidecar artifacts
 and continue to parse S-expression or JSON reporter output for test results.

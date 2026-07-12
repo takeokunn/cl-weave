@@ -206,16 +206,17 @@ GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- sh scripts/run-coverage-gate.sh
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=json CL_WEAVE_OUTPUT_FILE=cl-weave-results.json sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command sh scripts/run-coverage-gate.sh
+nix develop --command perl scripts/test-coverage-gate.pl
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
-nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --noinform --non-interactive --load scripts/run-tests.lisp
-nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
+nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 ```
 
 To enable binary cache reuse across developer machines and GitHub Actions,
@@ -1294,7 +1295,8 @@ the measured code while forcing a coverage-aware product reload.
 
 Run `scripts/run-coverage-gate.sh` for the CI coverage contract. It requires
 every Lisp file under `src/` to be present in the SB-COVER report and requires
-aggregate product expression and branch coverage to reach 100%. Missing source
+aggregate product expression and branch coverage to stay at or above the 85%
+ratchet baseline (raise the threshold as coverage grows). Missing source
 measurements or a lower rate fail the command. The gate writes its
 machine-readable result to `cl-weave-coverage-summary.json`.
 

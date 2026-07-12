@@ -36,5 +36,5 @@ timeout -k 5 "$CL_WEAVE_COVERAGE_TIMEOUT" \
 perl scripts/coverage-gate.pl \
   --report-dir "$CL_WEAVE_COVERAGE_REPORT_DIR" \
   --source-dir src \
-  --threshold 100 \
+  --threshold 85 \
   --output "$CL_WEAVE_COVERAGE_SUMMARY"

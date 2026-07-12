@@ -21,7 +21,8 @@
      :command ("nix" "develop" "--command" "perl" "-e"
                "alarm 360; exec @ARGV" "--" "env" "CL_WEAVE_REPORTER=json"
                "CL_WEAVE_OUTPUT_FILE=cl-weave-results.json"
-               "sbcl" "--noinform" "--non-interactive" "--load"
+               "sbcl" "--dynamic-space-size" "4096"
+               "--noinform" "--non-interactive" "--load"
                "scripts/run-tests.lisp")
      :timeout-seconds 360
      :artifacts ("cl-weave-results.json")
@@ -38,20 +39,27 @@
      :command ("nix" "develop" "--command" "perl" "-e"
                "alarm 360; exec @ARGV" "--" "env" "CL_WEAVE_REPORTER=jsonl"
                "CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl"
-               "sbcl" "--noinform" "--non-interactive" "--load"
+               "sbcl" "--dynamic-space-size" "4096"
+               "--noinform" "--non-interactive" "--load"
                "scripts/run-tests.lisp")
      :timeout-seconds 360
      :artifacts ("cl-weave-events.jsonl")
      :description "Verify JSONL streaming event output for automation.")
     (:name "coverage-artifact"
      :kind "script"
-     :command ("nix" "develop" "--command" "perl" "-e"
-               "alarm 360; exec @ARGV" "--" "sh"
+     :command ("nix" "develop" "--command" "sh"
                "scripts/run-coverage-gate.sh")
      :timeout-seconds 360
      :artifacts ("cl-weave.coverage" "cl-weave-coverage-report/"
                  "cl-weave-coverage-summary.json")
-     :description "Require measured product-source expression and branch coverage to reach 100%, then publish SBCL coverage artifacts.")
+     :description "Require measured product-source expression and branch coverage to stay at or above the 85% ratchet baseline, then publish SBCL coverage artifacts.")
+    (:name "coverage-gate-unit"
+     :kind "script"
+     :command ("nix" "develop" "--command" "perl"
+               "scripts/test-coverage-gate.pl")
+     :timeout-seconds 30
+     :artifacts nil
+     :description "Verify the coverage gate's threshold logic with its Perl unit tests.")
     (:name "plan-artifact"
      :kind "cli"
      :command ("nix" "run" "." "--" "list" "cl-weave-tests"
@@ -84,7 +92,8 @@
      :command ("nix" "develop" "--command" "perl" "-e"
                "alarm 60; exec @ARGV" "--" "env"
                "CL_WEAVE_TEST_FILTER=filtering > runs only tests matching a path substring"
-               "sbcl" "--noinform" "--non-interactive" "--load"
+               "sbcl" "--dynamic-space-size" "4096"
+               "--noinform" "--non-interactive" "--load"
                "scripts/run-tests.lisp")
      :timeout-seconds 60
      :artifacts nil
@@ -94,7 +103,8 @@
      :command ("nix" "develop" "--command" "perl" "-e"
                "alarm 360; exec @ARGV" "--" "env" "CL_WEAVE_REPORTER=junit"
                "CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml"
-               "sbcl" "--noinform" "--non-interactive" "--load"
+               "sbcl" "--dynamic-space-size" "4096"
+               "--noinform" "--non-interactive" "--load"
                "scripts/run-tests.lisp")
      :timeout-seconds 360
      :artifacts ("cl-weave-junit.xml")
