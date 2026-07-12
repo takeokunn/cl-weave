@@ -2,21 +2,28 @@
 
 (describe "cli metadata contracts"
   (it "keeps README adoption and CI contracts synchronized with metadata"
-    (let* ((readme (read-text-file (merge-pathnames #P"README.md"
-                                                    (uiop:getcwd))))
-           (normalized-readme (normalize-shell-text readme))
+    (let* ((adoption-document (read-text-file
+                                (merge-pathnames #P"docs/src/adoption.md"
+                                                 (uiop:getcwd))))
+           (ai-discovery-document (read-text-file
+                                    (merge-pathnames #P"docs/src/ai-discovery.md"
+                                                     (uiop:getcwd))))
+           (ci-document (read-text-file
+                         (merge-pathnames #P"docs/src/reporters-and-ci.md"
+                                          (uiop:getcwd))))
+           (normalized-ci-document (normalize-shell-text ci-document))
            (metadata (cl-weave/metadata:framework-metadata))
            (gates (getf metadata :quality-gates)))
-      (expect readme :to-contain "## Adoption")
-      (expect readme :to-contain "### AI Discovery")
-      (expect readme :to-contain "## CI")
+      (expect adoption-document :to-contain "# Adoption Guide")
+      (expect ai-discovery-document :to-contain "# AI Discovery")
+      (expect ci-document :to-contain "## CI")
       (dolist (gate gates)
-        (expect normalized-readme
+        (expect normalized-ci-document
                 :to-contain
                 (normalize-shell-text
                  (workflow-command-string (getf gate :command))))
         (dolist (artifact (getf gate :artifacts))
-          (expect readme :to-contain artifact)))))
+          (expect ci-document :to-contain artifact)))))
 
   (it "keeps mutation artifact schema aligned with mutation reporters"
     (let* ((schema (find "mutations"

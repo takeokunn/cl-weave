@@ -14,5 +14,5 @@ Describe any public API, metadata, reporter, or platform compatibility changes.
 
 Call out any remaining risk, unsupported edge case, or intentional follow-up.
 
-See [docs/pull-request-template.md](../docs/pull-request-template.md) for the
-canonical review checklist and release-alignment guidance.
+See [the pull request template guide](../docs/src/pull-request-template.md) for
+the canonical review checklist and release-alignment guidance.

@@ -20,7 +20,7 @@ channels:
 
 ## Verification Expectations
 
-- Keep `README.md`, `docs/ai-contract.md`, and metadata `distributionChannels`
+- Keep `README.md`, `docs/src/ai-contract.md`, and metadata `distributionChannels`
   synchronized when install or run commands change.
 - Run the source checkout path before release so the repository still passes its
   bundled self-test suite.
@@ -32,7 +32,7 @@ channels:
   when Nix is available.
 - Do not describe a channel as release-ready while ASDF loading, source
   self-tests, or documented CLI entrypoints time out. Record the failing gate in
-  `README.md` or `docs/runtime-support.md` before publishing adoption guidance.
+  `README.md` or `docs/src/runtime-support.md` before publishing adoption guidance.
 
 ## Integrity And Scope
 

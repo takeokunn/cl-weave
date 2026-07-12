@@ -19,15 +19,15 @@ For public-surface discipline and migration expectations, see
 1. Run the full test suite.
 2. Run `nix flake check --print-build-logs` when Nix is available.
 3. Summarize user-visible changes in the release notes.
-4. Check that `README.md` and `docs/maintenance-policy.md` still match the
+4. Check that `README.md` and `docs/src/maintenance-policy.md` still match the
    current workflow.
-5. Review `docs/pull-request-template.md` and
+5. Review `docs/src/pull-request-template.md` and
    `.github/pull_request_template.md` so release-bound changes still capture
    public-surface notes, validation commands, and follow-up risk in a
    consistent format.
 6. Verify that `cl-weave metadata` still advertises the expected package links,
    reporter list, and schema versions.
-7. Verify that `docs/distribution-policy.md` still matches the documented
+7. Verify that `docs/src/distribution-policy.md` still matches the documented
    source and Nix install paths.
 8. Confirm the release notes mention any intentional public-surface breaks or
    migration steps.
@@ -39,6 +39,6 @@ For public-surface discipline and migration expectations, see
 - If release branches are introduced later, backports should follow the current
   maintenance policy.
 - Keep `distributionChannels`, `README.md`, and
-  `docs/distribution-policy.md` synchronized when install paths change.
-- Update tests and `docs/ai-contract.md` when a machine-readable contract
+  `docs/src/distribution-policy.md` synchronized when install paths change.
+- Update tests and `docs/src/ai-contract.md` when a machine-readable contract
   changes.
