@@ -54,11 +54,14 @@ reference; use this page to find everything else.
 The [flake.nix](../flake.nix) at the repository root packages `cl-weave` as a
 Nix flake:
 
-- `nix develop` — a devShell with SBCL and Perl.
+- `nix develop` — a devShell with SBCL, Perl, and
+  [`paredit-cli`](https://github.com/takeokunn/paredit-cli) for structural
+  S-expression edits.
 - `nix run . -- <command>` — the packaged CLI (`run`, `list`, `watch`,
   `doctor`, `metadata`, `version`, `help`).
 - `nix flake check` — every CI entrypoint (test suite, reporters, coverage
-  gate, AI metadata, CLI smoke tests) as reproducible derivations.
+  gate, AI metadata, CLI smoke tests, `paredit-lint` structural parse check)
+  as reproducible derivations.
 - `nix fmt` — formats `flake.nix` with `nixfmt`.
 
 Running `direnv allow` loads the devShell automatically; see

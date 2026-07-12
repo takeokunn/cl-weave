@@ -17,8 +17,9 @@ opening the issue or pull request.
 ## Development Loop
 
 If you use [direnv](https://direnv.net/), running `direnv allow` once loads the
-flake's `devShell` (SBCL and Perl) automatically whenever you `cd` into the
-repository.
+flake's `devShell` (SBCL, Perl, and
+[paredit-cli](https://github.com/takeokunn/paredit-cli)) automatically
+whenever you `cd` into the repository.
 
 Use the same commands locally that CI uses:
 
@@ -26,6 +27,13 @@ Use the same commands locally that CI uses:
 perl -e 'alarm 360; exec @ARGV' -- sbcl --noinform --non-interactive --load scripts/run-tests.lisp
 perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
 ```
+
+When editing `.lisp`/`.asd` sources, prefer `paredit-cli`'s structural
+commands (`paredit inspect ...`, `paredit refactor ...`) over hand-editing
+balanced delimiters, especially for renames and multi-file refactors. Run
+`paredit inspect check --file <path>` after manual edits to confirm the
+S-expressions still parse; `nix flake check` runs the same check repo-wide as
+the `paredit-lint` check.
 
 For focused CLI checks, prefer the packaged entrypoint:
 

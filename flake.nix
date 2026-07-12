@@ -2,9 +2,17 @@
   description = "cl-weave: a modern Common Lisp testing framework";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+  inputs.paredit-cli = {
+    url = "github:takeokunn/paredit-cli";
+    inputs.nixpkgs.follows = "nixpkgs";
+  };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      paredit-cli,
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -21,6 +29,7 @@
           packages = [
             pkgs.perl
             pkgs.sbcl
+            paredit-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
           ];
         };
       });
@@ -253,6 +262,11 @@
               "scripts/run-tests.lisp"
             ];
             artifacts = [ "cl-weave-junit.xml" ];
+          };
+
+          paredit-lint = paredit-cli.lib.${pkgs.stdenv.hostPlatform.system}.mkLintCheck {
+            src = self;
+            name = "cl-weave-paredit-lint";
           };
         }
       );
