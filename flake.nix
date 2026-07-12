@@ -274,7 +274,7 @@
       packages = forAllSystems (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
-          version = "0.1.0";
+          version = "0.2.0";
           src = self;
           dontBuild = true;
           installPhase = ''

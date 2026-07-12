@@ -7,6 +7,24 @@ framework, CLI, reporter, metadata, and Nix workflow changes.
 
 ### Release Classification
 
+- none yet
+
+### Public Surface Notes
+
+- No changes yet.
+
+### Migration Notes
+
+- No changes yet.
+
+### User-visible Changes
+
+- No changes yet.
+
+## 0.2.0 - 2026-07-12
+
+### Release Classification
+
 - breaking cleanup
 
 ### Public Surface Notes
@@ -34,6 +52,12 @@ framework, CLI, reporter, metadata, and Nix workflow changes.
   ratchet baseline; raise it as coverage grows.
 - Fixed registration syntax errors for circular literals: the message is now
   rendered eagerly so printing the condition can no longer exhaust the heap.
+- Fixed `scripts/run-tests.lisp` to register the project systems with ASDF
+  again, so ASDF-backed tests and `cl-weave version` work without an external
+  `CL_SOURCE_REGISTRY`.
+- Raised the coverage ratchet baseline to 87% after adding direct tests for
+  the public `run`, `list-tests`, and suite-designator APIs and for matcher
+  argument validation.
 - Suites and test cases now print readably (name plus child count or focus).
 - Added the `coverage-gate-unit` quality gate and CI step covering the
   coverage gate's own Perl unit tests.

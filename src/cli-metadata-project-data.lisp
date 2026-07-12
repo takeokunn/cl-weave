@@ -53,7 +53,7 @@
     :license "MIT"
     :repository-code "https://github.com/takeokunn/cl-weave"
     :url "https://github.com/takeokunn/cl-weave"
-    :version "0.1.0"
+    :version "0.2.0"
     :preferred-citation-path "CITATION.cff"))
 
 (defparameter *metadata-distribution-channels*
