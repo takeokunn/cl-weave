@@ -99,7 +99,7 @@ nix develop
 nix run . -- --help
 nix profile install .
 perl -e 'alarm 600; exec @ARGV' -- nix flake check
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter spec
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter spec
 ```
 
 Without cloning the repository first:
@@ -113,15 +113,15 @@ The packaged CLI is intended for local use, CI, and AI
 agents:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter jsonl --output cl-weave-events.jsonl
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
 perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'math > adds'
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'math > adds'
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
 perl -e 'alarm 120; exec @ARGV' -- nix run . -- doctor --reporter json --output cl-weave-doctor.json
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --bail=1 --sequence random --seed 12345
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave-tests --filter parser
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --bail=1 --sequence random --seed 12345
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --filter parser
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
 ```
 
 Lisp-side agents can read the full structured framework metadata with
@@ -143,7 +143,7 @@ Agents and generators should start from runtime metadata instead of scraping
 source files or examples:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
 ```
 
 The metadata payload advertises CLI commands, typed options, finite choices,
@@ -207,11 +207,11 @@ nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=j
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=jsonl CL_WEAVE_OUTPUT_FILE=cl-weave-events.jsonl sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command sh scripts/run-coverage-gate.sh
 nix develop --command perl scripts/test-coverage-gate.pl
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --reporter json --output cl-weave-metadata.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave-tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave-tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave-tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
+perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
 nix develop --command perl -e 'alarm 60; exec @ARGV' -- env CL_WEAVE_TEST_FILTER='filtering > runs only tests matching a path substring' sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 nix develop --command perl -e 'alarm 360; exec @ARGV' -- env CL_WEAVE_REPORTER=junit CL_WEAVE_OUTPUT_FILE=cl-weave-junit.xml sbcl --dynamic-space-size 4096 --noinform --non-interactive --load scripts/run-tests.lisp
 ```

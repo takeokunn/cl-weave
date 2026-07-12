@@ -9,7 +9,7 @@
      :description "Run the complete Nix flake validation suite.")
     (:name "cli-json-results"
      :kind "cli"
-     :command ("nix" "run" "." "--" "run" "cl-weave-tests"
+     :command ("nix" "run" "." "--" "run" "cl-weave/tests"
                "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
                "--output" "cl-weave-cli-results.json")
@@ -29,7 +29,7 @@
      :description "Verify the in-repo script can emit JSON results for CI artifacts.")
     (:name "ai-metadata-artifact"
      :kind "cli"
-     :command ("nix" "run" "." "--" "metadata" "cl-weave-tests"
+     :command ("nix" "run" "." "--" "metadata" "cl-weave/tests"
                "--reporter" "json" "--output" "cl-weave-metadata.json")
      :timeout-seconds 120
      :artifacts ("cl-weave-metadata.json")
@@ -62,7 +62,7 @@
      :description "Verify the coverage gate's threshold logic with its Perl unit tests.")
     (:name "plan-artifact"
      :kind "cli"
-     :command ("nix" "run" "." "--" "list" "cl-weave-tests"
+     :command ("nix" "run" "." "--" "list" "cl-weave/tests"
                "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
                "--output" "cl-weave-plan.json")
@@ -71,7 +71,7 @@
      :description "Verify machine-readable test discovery output for agents.")
     (:name "watch-once-artifact"
      :kind "cli"
-     :command ("nix" "run" "." "--" "watch" "cl-weave-tests"
+     :command ("nix" "run" "." "--" "watch" "cl-weave/tests"
                "--once" "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
                "--output" "cl-weave-watch-once.json")
@@ -80,7 +80,7 @@
      :description "Verify one-shot watch mode through the packaged CLI.")
     (:name "tap-artifact"
      :kind "cli"
-     :command ("nix" "run" "." "--" "run" "cl-weave-tests"
+     :command ("nix" "run" "." "--" "run" "cl-weave/tests"
                "--reporter" "tap" "--filter"
                "filtering > runs only tests matching a path substring"
                "--output" "cl-weave-tap.txt")

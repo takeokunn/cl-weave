@@ -24,6 +24,11 @@
    #:assertion-failure
    #:before-all
    #:before-each
+   #:benchmark
+   #:benchmark-result
+   #:benchmark-result-iterations
+   #:benchmark-result-samples
+   #:benchmark-result-warmup
    #:clear-tests
    #:collect-test-plan
    #:collect-mutations
@@ -128,6 +133,11 @@
    #:matcher-description
    #:matcher-metadata
    #:matcher-name
+   #:maximum-ms
+   #:mean-ms
+   #:measure
+   #:median-ms
+   #:minimum-ms
    #:mutation
    #:mutation-form
    #:mutation-id

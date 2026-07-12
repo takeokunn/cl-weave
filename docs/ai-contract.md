@@ -10,7 +10,7 @@ before generating tests or interpreting project-specific matcher failures. The
 command loads the requested ASDF system and then emits JSON by default:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
 ```
 
 Agents embedded in a Lisp process can call `(cl-weave:framework-metadata)` to

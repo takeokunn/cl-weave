@@ -367,7 +367,7 @@
   (let ((root (project-root)))
     (pushnew root asdf:*central-registry* :test #'equal)
     (asdf:load-asd (merge-pathnames "cl-weave.asd" root))
-    (asdf:load-asd (merge-pathnames "cl-weave-tests.asd" root))
+    (asdf:load-asd (merge-pathnames "cl-weave/tests.asd" root))
     root))
 
 (defun load-project-systems (&key coverage)
@@ -378,10 +378,10 @@
      (load-system-sources "cl-weave.asd" :compile t)
      ;; Test code exercises the product but must not contribute to its score.
      (disable-coverage-compilation)
-     (load-system-sources "cl-weave-tests.asd"))
+     (load-system-sources "cl-weave/tests.asd"))
     (t
      (load-system-sources "cl-weave.asd")
-     (load-system-sources "cl-weave-tests.asd"))))
+     (load-system-sources "cl-weave/tests.asd"))))
 
 (load-project-systems :coverage (requested-coverage-p))
 
@@ -427,7 +427,7 @@
              :stream stream)))
          (sb-ext:exit :code 0))
         ((requested-watch-p)
-         (cl-weave:watch-system "cl-weave-tests"
+         (cl-weave:watch-system "cl-weave/tests"
                                 :reporter reporter
                                 :name-filter (requested-test-filter)
                                 :shard shard

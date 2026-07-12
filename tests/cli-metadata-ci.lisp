@@ -226,7 +226,7 @@
       (expect (getf coverage-gate :description) :to-contain "87%")
       (expect watch-once-gate :not :to-be nil)
       (expect (getf watch-once-gate :command)
-              :to-equal '("nix" "run" "." "--" "watch" "cl-weave-tests"
+              :to-equal '("nix" "run" "." "--" "watch" "cl-weave/tests"
                           "--once" "--reporter" "json" "--filter"
                           "filtering > runs only tests matching a path substring"
                           "--output" "cl-weave-watch-once.json"))

@@ -4,7 +4,7 @@
   (it "expands it-isolated into structured isolated execution"
     (expect (macroexpand-1
              '(it-isolated "child process"
-                  (:systems ("cl-weave-tests") :timeout 5)
+                  (:systems ("cl-weave/tests") :timeout 5)
                 (expect 1 :to-be 1)))
             :to-satisfy
             (lambda (form)
@@ -12,13 +12,13 @@
                    (tree-contains-p form 'cl-weave::signal-isolated-failure)))))
 
   (it-isolated "runs assertions in a child SBCL process"
-      (:systems ("cl-weave-tests") :timeout 180)
+      (:systems ("cl-weave/tests") :timeout 180)
     (expect (+ 2 3) :to-be 5))
 
   (it "reports child process failures without failing the parent process"
     (let ((result (run-isolated
                    '(error "child boom")
-                   :systems '("cl-weave-tests")
+                   :systems '("cl-weave/tests")
                    :package "CL-WEAVE/TESTS"
                    :timeout 180)))
       (expect (isolated-result-status result) :to-be :fail)
@@ -33,7 +33,7 @@
   (it "terminates isolated tests on timeout"
     (let ((result (run-isolated
                    '(sleep 2)
-                   :systems '("cl-weave-tests")
+                   :systems '("cl-weave/tests")
                    :package "CL-WEAVE/TESTS"
                    :timeout 0.1)))
       (expect (isolated-result-status result) :to-be :timeout)
@@ -76,7 +76,7 @@
                    '(progn
                       (format t "ok")
                       (format *error-output* "warn"))
-                   :systems '("cl-weave-tests")
+                   :systems '("cl-weave/tests")
                    :package "CL-WEAVE/TESTS"
                    :timeout 180
                    :keep-files t)))
@@ -102,13 +102,13 @@
   (it "keeps isolated artifacts only on failure when requested"
     (let ((pass-result (run-isolated
                         '(expect 1 :to-be 1)
-                        :systems '("cl-weave-tests")
+                        :systems '("cl-weave/tests")
                         :package "CL-WEAVE/TESTS"
                         :timeout 180
                         :keep-files :on-failure))
           (fail-result (run-isolated
                         '(error "keep failure artifacts")
-                        :systems '("cl-weave-tests")
+                        :systems '("cl-weave/tests")
                         :package "CL-WEAVE/TESTS"
                         :timeout 180
                         :keep-files :on-failure)))
@@ -136,7 +136,7 @@
   (it "passes keep-files through it-isolated"
     (expect (macroexpand-1
              '(it-isolated "child process"
-                  (:systems ("cl-weave-tests") :timeout 5 :keep-files :on-failure)
+                  (:systems ("cl-weave/tests") :timeout 5 :keep-files :on-failure)
                 (expect 1 :to-be 1)))
             :to-satisfy
             (lambda (form)

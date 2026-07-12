@@ -2,10 +2,10 @@
 
 (describe "cli entrypoint"
   (it "normalizes SBCL argument separators from nix run"
-    (let ((options (parse-cli '("--" "run" "cl-weave-tests" "--filter" "cli"))))
+    (let ((options (parse-cli '("--" "run" "cl-weave/tests" "--filter" "cli"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :run)
       (expect (cl-weave/cli::cli-options-systems options)
-              :to-equal '("cl-weave-tests"))
+              :to-equal '("cl-weave/tests"))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
 
   (it "prints Vitest-compatible version output without running tests"
@@ -73,7 +73,7 @@
               t)))
         (expect (with-output-to-string (*standard-output*)
                   (cl-weave/cli:main
-                   '("list" "cl-weave-tests"
+                   '("list" "cl-weave/tests"
                      "--reporter" "json"
                      "--filter" "cli"
                      "--shard" "2/4"
@@ -112,7 +112,7 @@
               t)))
         (expect (with-output-to-string (*standard-output*)
                   (cl-weave/cli:main
-                   '("watch" "cl-weave-tests"
+                   '("watch" "cl-weave/tests"
                      "--reporter" "jsonl"
                      "--filter" "watch"
                      "--coverage"
@@ -123,7 +123,7 @@
                      "--max-workers" "4")))
                 :to-equal "")
         (expect exit-code :to-be 0)
-        (expect observed-system :to-equal "cl-weave-tests")
+        (expect observed-system :to-equal "cl-weave/tests")
         (expect (getf observed-arguments :reporter) :to-be :jsonl)
         (expect (getf observed-arguments :name-filter) :to-equal "watch")
         (expect (getf observed-arguments :shard) :to-be nil)
@@ -182,7 +182,7 @@
                              (with-output-to-string (*error-output*)
                                (cl-weave/cli:main
                                 (list "watch"
-                                      "cl-weave-tests"
+                                      "cl-weave/tests"
                                       "--once"
                                       "--reporter" "json"
                                       "--filter" "watch"
@@ -233,7 +233,7 @@
         (setf stderr
               (with-output-to-string (*error-output*)
                 (cl-weave/cli:main
-                 '("watch" "--system" "cl-weave-tests" "--system" "sample-system")))))
+                 '("watch" "--system" "cl-weave/tests" "--system" "sample-system")))))
       (expect exit-code :to-be 2)
       (expect watch-called-p :to-be nil)
       (expect stderr :to-contain
@@ -242,7 +242,7 @@
 
   (it "rejects CI-incompatible list reporters early"
     (dolist (reporter '("github" "junit"))
-      (let ((options (parse-cli (list "list" "cl-weave-tests" "--reporter" reporter))))
+      (let ((options (parse-cli (list "list" "cl-weave/tests" "--reporter" reporter))))
         (expect (lambda ()
                   (cl-weave/cli::ensure-valid-reporter-for-command options))
                 :to-throw))))
@@ -252,7 +252,7 @@
       (let ((options (cl-weave/cli::make-cli-options
                       :command command
                       :reporter :unknown
-                      :systems '("cl-weave-tests")
+                      :systems '("cl-weave/tests")
                       :watch (eq command :watch))))
         (expect (lambda ()
                   (cl-weave/cli::ensure-valid-reporter-for-command options))
@@ -291,19 +291,19 @@
 
   (it "loads project systems through ASDF"
     (let* ((options (cl-weave/cli::make-cli-options
-                     :systems '("cl-weave-tests")))
+                     :systems '("cl-weave/tests")))
            (loaded-asdf-systems '()))
       (with-mocked-functions
           (((symbol-function 'asdf:find-system)
             (lambda (&rest args)
               (declare (ignore args))
-              :cl-weave-tests))
+              :cl-weave/tests))
            ((symbol-function 'asdf:load-system)
             (lambda (system)
               (push system loaded-asdf-systems)
               :loaded-asdf)))
         (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-asdf-systems :to-equal '("cl-weave-tests")))))
+        (expect loaded-asdf-systems :to-equal '("cl-weave/tests")))))
 
   (it "reports actionable CLI errors when requested systems remain unavailable"
     (let* ((cwd #P"/tmp/cl-weave-missing/")
@@ -342,7 +342,7 @@
                       (pathname-directory cwd))))))
 
   (it "normalizes metadata reporter spec to JSON output"
-    (let* ((options (parse-cli '("metadata" "cl-weave-tests" "--reporter" "spec")))
+    (let* ((options (parse-cli '("metadata" "cl-weave/tests" "--reporter" "spec")))
            (output (framework-metadata-output options)))
       (expect (cl-weave/cli::metadata-reporter options) :to-be :json)
       (expect output :to-contain "\"schemaVersion\":23")

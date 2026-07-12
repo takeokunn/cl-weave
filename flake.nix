@@ -152,7 +152,7 @@
             command = [
               packaged-cli
               "run"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--filter"
@@ -169,7 +169,7 @@
             command = [
               packaged-cli
               "metadata"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--output"
@@ -184,7 +184,7 @@
             command = [
               packaged-cli
               "list"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "json"
               "--filter"
@@ -201,7 +201,7 @@
             command = [
               packaged-cli
               "watch"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--once"
               "--reporter"
               "json"
@@ -219,7 +219,7 @@
             command = [
               packaged-cli
               "run"
-              "cl-weave-tests"
+              "cl-weave/tests"
               "--reporter"
               "tap"
               "--filter"
@@ -274,7 +274,7 @@
       packages = forAllSystems (pkgs: {
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
-          version = "0.2.0";
+          version = "0.3.0";
           src = self;
           dontBuild = true;
           installPhase = ''

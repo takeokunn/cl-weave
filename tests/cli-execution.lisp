@@ -32,8 +32,8 @@
           (delete-file output-file)))))
 
   (it "parses list and watch commands without executing tests"
-    (let ((list-options (parse-cli '("list" "cl-weave-tests" "--reporter" "sexp")))
-          (watch-options (parse-cli '("watch" "cl-weave-tests" "--watch-interval" "1.5"))))
+    (let ((list-options (parse-cli '("list" "cl-weave/tests" "--reporter" "sexp")))
+          (watch-options (parse-cli '("watch" "cl-weave/tests" "--watch-interval" "1.5"))))
       (expect (cl-weave/cli::cli-options-command list-options) :to-be :list)
       (expect (cl-weave/cli::cli-options-list list-options) :to-be t)
       (expect (cl-weave/cli::cli-options-reporter list-options) :to-be :sexp)

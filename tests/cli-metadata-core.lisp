@@ -2,10 +2,10 @@
 
 (describe "cli metadata rendering"
   (it "prints AI-friendly framework metadata"
-    (let ((options (parse-cli '("metadata" "cl-weave-tests"))))
+    (let ((options (parse-cli '("metadata" "cl-weave/tests"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :metadata)
       (expect (cl-weave/cli::cli-options-systems options)
-              :to-equal '("cl-weave-tests"))
+              :to-equal '("cl-weave/tests"))
       (let ((output (framework-metadata-output options)))
         (expect-text-contract
          output

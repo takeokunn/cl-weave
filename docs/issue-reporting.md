@@ -21,7 +21,7 @@ Please include:
 For CLI or metadata issues, capture the command output directly when possible:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave-tests --output cl-weave-metadata.json
+perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
 ```
 
 ## Report Template

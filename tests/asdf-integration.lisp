@@ -1,19 +1,30 @@
 (in-package #:cl-weave/tests)
 
 (describe "asdf integration"
-  (it "loads systems through ASDF during a run"
-    (let ((loaded-systems nil))
+  (it "reloads systems through ASDF without accumulating registered tests"
+    (let ((loaded-systems nil)
+          (suite-counts nil)
+          (cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test #'equal)))
       (with-mocked-functions
           (((symbol-function 'asdf:load-system)
             (lambda (system &key force)
               (push (list system force) loaded-systems)
+              (cl-weave::register-suite "loaded" (lambda () nil))
               t))
            ((symbol-function 'cl-weave:run-all)
             (lambda (&rest arguments)
               (declare (ignore arguments))
+              (push (length (cl-weave::suite-children
+                             (cl-weave::root-suite)))
+                    suite-counts)
               t)))
-        (expect (cl-weave:run-system "cl-weave-tests") :to-be-truthy)
-        (expect loaded-systems :to-equal '(("cl-weave-tests" t))))))
+        (expect (cl-weave:run-system "cl-weave/tests") :to-be-truthy)
+        (expect (cl-weave:run-system "cl-weave/tests") :to-be-truthy)
+        (expect (nreverse loaded-systems)
+                :to-equal '(("cl-weave/tests" t) ("cl-weave/tests" t)))
+        (expect (nreverse suite-counts) :to-equal '(1 1)))))
 
   (it "clears registered tests before each watched system reload"
     (let ((suite-counts nil))

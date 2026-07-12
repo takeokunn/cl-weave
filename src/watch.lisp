@@ -164,6 +164,7 @@
                          timeout-ms
                          max-workers)
   "Reload SYSTEM through ASDF, then run the currently registered cl-weave tests."
+  (clear-tests)
   (asdf:load-system system :force t)
   (apply #'run-all
          (run-system-argument-pairs
@@ -183,8 +184,7 @@
           :max-workers max-workers)))
 
 (defun run-watched-system (system &rest arguments)
-  "Replace registered tests before reloading SYSTEM for a watch cycle."
-  (clear-tests)
+  "Reload SYSTEM with a fresh test registry for a watch cycle."
   (apply #'run-system system arguments))
 
 (defun run-watch-cycle (system plan &key reporter stream status-stream
