@@ -11,6 +11,13 @@
 (defun focused-suite-p (suite)
   (some #'focused-child-p (suite-children suite)))
 
+(defstruct selection-filter
+  "Immutable per-run selection criteria threaded through suite traversal."
+  focus-enabled
+  name-filter
+  location-filter
+  shard-paths)
+
 (defun normalized-test-filter (filter)
   (when (and filter (not (string= filter "")))
     (string-downcase filter)))
@@ -56,14 +63,16 @@
         (and pathname
              (member pathname location-filter :test #'equal)))))
 
-(defun base-selected-test-case-p (suite test focus-enabled ancestor-focused name-filter location-filter)
-  (and (or (not focus-enabled)
+(defun base-selected-test-case-p (suite test filter ancestor-focused)
+  (and (or (not (selection-filter-focus-enabled filter))
            ancestor-focused
            (test-case-focus test))
-       (test-path-matches-filter-p (test-path suite test) name-filter)
-       (test-location-matches-filter-p test location-filter)))
+       (test-path-matches-filter-p (test-path suite test)
+                                   (selection-filter-name-filter filter))
+       (test-location-matches-filter-p test
+                                       (selection-filter-location-filter filter))))
 
-(defun collect-shard-paths (suite focus-enabled name-filter location-filter shard)
+(defun collect-shard-paths (suite filter shard)
   (when shard
     (let ((paths (make-hash-table :test #'equal))
           (ordinal 0))
@@ -74,12 +83,7 @@
                       (visit child (or ancestor-focused (suite-focus child))))
                      ((test-case-p child)
                       (when (base-selected-test-case-p
-                             current-suite
-                             child
-                             focus-enabled
-                             ancestor-focused
-                             name-filter
-                             location-filter)
+                             current-suite child filter ancestor-focused)
                         (incf ordinal)
                         (when (shard-includes-ordinal-p ordinal shard)
                           (setf (gethash (test-path current-suite child) paths)
@@ -138,57 +142,31 @@
   (or (null shard-paths)
       (gethash path shard-paths)))
 
-(defun selected-test-case-p (suite test focus-enabled ancestor-focused name-filter location-filter shard-paths)
+(defun selected-test-case-p (suite test filter ancestor-focused)
   (let ((path (test-path suite test)))
-    (and (base-selected-test-case-p suite test focus-enabled ancestor-focused name-filter location-filter)
-         (selected-path-p path shard-paths))))
+    (and (base-selected-test-case-p suite test filter ancestor-focused)
+         (selected-path-p path (selection-filter-shard-paths filter)))))
 
-(defun selected-suite-p (suite focus-enabled ancestor-focused name-filter location-filter shard-paths)
+(defun selected-suite-p (suite filter ancestor-focused)
   (some (lambda (child)
           (cond
             ((suite-p child)
              (let ((child-focused (or ancestor-focused (suite-focus child))))
-               (and (or (not focus-enabled)
+               (and (or (not (selection-filter-focus-enabled filter))
                         child-focused
                         (focused-child-p child))
-                    (selected-suite-p
-                     child
-                     focus-enabled
-                     child-focused
-                     name-filter
-                     location-filter
-                     shard-paths))))
+                    (selected-suite-p child filter child-focused))))
             ((test-case-p child)
-             (selected-test-case-p
-              suite
-              child
-              focus-enabled
-              ancestor-focused
-              name-filter
-              location-filter
-              shard-paths))
+             (selected-test-case-p suite child filter ancestor-focused))
             (t nil)))
         (suite-children suite)))
 
-(defun selected-child-suite-p
-    (child focus-enabled child-focused name-filter location-filter shard-paths)
-  (and (or (not focus-enabled)
+(defun selected-child-suite-p (child filter child-focused)
+  (and (or (not (selection-filter-focus-enabled filter))
            child-focused
            (focused-child-p child))
-       (selected-suite-p child
-                         focus-enabled
-                         child-focused
-                         name-filter
-                         location-filter
-                         shard-paths)))
+       (selected-suite-p child filter child-focused)))
 
-(defun selected-child-test-p
-    (suite child focus-enabled ancestor-focused name-filter location-filter shard-paths)
-  (selected-test-case-p suite
-                        child
-                        focus-enabled
-                        ancestor-focused
-                        name-filter
-                        location-filter
-                        shard-paths))
+(defun selected-child-test-p (suite child filter ancestor-focused)
+  (selected-test-case-p suite child filter ancestor-focused))
 

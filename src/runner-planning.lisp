@@ -41,12 +41,13 @@
        (eq (effective-test-execution-mode test inherited-mode) :concurrent)))
 
 (defun make-plan-entry
-    (suite test status reason focus-enabled ancestor-focused execution-mode)
+    (suite test status reason filter ancestor-focused execution-mode)
   (make-test-plan-entry
    :path (test-path suite test)
    :status status
    :reason reason
-   :focused (and focus-enabled (or ancestor-focused (test-case-focus test)))
+   :focused (and (selection-filter-focus-enabled filter)
+                 (or ancestor-focused (test-case-focus test)))
    :retry (retry-count test)
    :timeout-ms (effective-timeout-ms test)
    :concurrent (effective-concurrent-test-case-p test execution-mode)
@@ -57,18 +58,11 @@
        (null (execution-control-bail-limit control))))
 
 (defun collect-leading-concurrent-tests
-    (suite children focus-enabled ancestor-focused name-filter location-filter shard-paths execution-mode)
+    (suite children filter ancestor-focused execution-mode)
   (labels ((walk (remaining selected)
              (let ((child (first remaining)))
                (if (and (effective-concurrent-test-case-p child execution-mode)
-                        (selected-test-case-p
-                         suite
-                         child
-                         focus-enabled
-                         ancestor-focused
-                         name-filter
-                         location-filter
-                         shard-paths))
+                        (selected-test-case-p suite child filter ancestor-focused))
                    (walk (rest remaining) (cons child selected))
                    (values (nreverse selected) remaining)))))
     (walk children '())))
@@ -77,38 +71,24 @@
   kind
   focused)
 
-(defun classify-selected-child
-    (suite child focus-enabled ancestor-focused name-filter location-filter shard-paths)
+(defun classify-selected-child (suite child filter ancestor-focused)
   (cond
     ((suite-p child)
      (let ((child-focused (or ancestor-focused (suite-focus child))))
-       (if (selected-child-suite-p child
-                                   focus-enabled
-                                   child-focused
-                                   name-filter
-                                   location-filter
-                                   shard-paths)
+       (if (selected-child-suite-p child filter child-focused)
            (make-child-selection :kind :suite :focused child-focused)
            (make-child-selection :kind :skip))))
     ((test-case-p child)
      (make-child-selection
-      :kind (if (selected-child-test-p suite
-                                       child
-                                       focus-enabled
-                                       ancestor-focused
-                                       name-filter
-                                       location-filter
-                                       shard-paths)
+      :kind (if (selected-child-test-p suite child filter ancestor-focused)
                 :test
                 :skip)))
     (t
      (make-child-selection :kind :skip))))
 
 (defun describe-event-collection-step
-    (suite child children control focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
-  (let ((selection (classify-selected-child
-                    suite child focus-enabled ancestor-focused
-                    name-filter location-filter shard-paths)))
+    (suite child children control filter ancestor-focused suppressed-status suppressed-reason execution-mode)
+  (let ((selection (classify-selected-child suite child filter ancestor-focused)))
     (ecase (child-selection-kind selection)
       (:suite
        (values :collect-suite (child-selection-focused selection) nil nil))
@@ -117,14 +97,7 @@
                   (concurrent-batching-enabled-p control suppressed-status))
              (multiple-value-bind (tests rest-children)
                  (collect-leading-concurrent-tests
-                  suite
-                  children
-                  focus-enabled
-                  ancestor-focused
-                  name-filter
-                  location-filter
-                  shard-paths
-                  execution-mode)
+                  suite children filter ancestor-focused execution-mode)
                (values :collect-concurrent tests rest-children nil))
            (values :collect-test
                    (record-event/control
@@ -138,10 +111,8 @@
        (values :skip nil nil nil)))))
 
 (defun describe-plan-collection-step
-    (suite child focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
-  (let ((selection (classify-selected-child
-                    suite child focus-enabled ancestor-focused
-                    name-filter location-filter shard-paths)))
+    (suite child filter ancestor-focused suppressed-status suppressed-reason execution-mode)
+  (let ((selection (classify-selected-child suite child filter ancestor-focused)))
     (ecase (child-selection-kind selection)
       (:suite
        (values :collect-suite (child-selection-focused selection) nil))
@@ -153,7 +124,7 @@
                         child
                         status
                         reason
-                        focus-enabled
+                        filter
                         ancestor-focused
                         execution-mode)))
          (values :collect-test entry nil)))

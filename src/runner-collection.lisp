@@ -12,9 +12,9 @@
    :elapsed-internal-time 0))
 
 (defun collect-suite-events/k
-    (suite control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
+    (suite control continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
   (if (or (execution-control-stopped control)
-          (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths)))
+          (not (selected-suite-p suite filter ancestor-focused)))
       (funcall continue '())
       (let ((active-execution-mode
               (effective-suite-execution-mode suite inherited-execution-mode)))
@@ -26,11 +26,8 @@
                (ordered-children suite (suite-children suite))
                control
                continue
-               focus-enabled
+               filter
                ancestor-focused
-               name-filter
-               location-filter
-               shard-paths
                active-status
                active-reason
                active-execution-mode)
@@ -61,28 +58,22 @@
                        (ordered-children suite (suite-children suite))
                        control
                        #'finish
-                       focus-enabled
+                       filter
                        ancestor-focused
-                       name-filter
-                       location-filter
-                       shard-paths
                        nil
                        nil
                        active-execution-mode)))))))))
 
 (defun collect-children/k
-    (suite children control continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+    (suite children control continue filter &optional ancestor-focused suppressed-status suppressed-reason execution-mode)
   (macrolet ((recur (remaining next-continue)
                `(collect-children/k
                  suite
                  ,remaining
                  control
                  ,next-continue
-                 focus-enabled
+                 filter
                  ancestor-focused
-                 name-filter
-                 location-filter
-                 shard-paths
                  suppressed-status
                  suppressed-reason
                  execution-mode)))
@@ -105,11 +96,8 @@
                  child
                  children
                  control
-                 focus-enabled
+                 filter
                  ancestor-focused
-                 name-filter
-                 location-filter
-                 shard-paths
                  suppressed-status
                  suppressed-reason
                  execution-mode)
@@ -124,11 +112,8 @@
                     (if (execution-control-stopped control)
                         (funcall continue events)
                         (continue-with-tail events (rest children))))
-                  focus-enabled
+                  filter
                   payload
-                  name-filter
-                  location-filter
-                  shard-paths
                   suppressed-status
                   suppressed-reason
                   execution-mode))
@@ -143,31 +128,24 @@
 
 (defun call-with-collection-context
     (suite name-filter location-filter shard order seed retry timeout-ms max-workers continue)
-  (let* ((focus-enabled (focused-suite-p suite))
-         (normalized-filter (normalized-test-filter name-filter))
-         (normalized-location-filter (normalize-location-filter location-filter))
+  (let* ((filter (make-selection-filter
+                  :focus-enabled (focused-suite-p suite)
+                  :name-filter (normalized-test-filter name-filter)
+                  :location-filter (normalize-location-filter location-filter)))
          (normalized-shard (normalize-shard shard))
          (normalized-order (normalize-sequence-order order))
          (normalized-seed (normalize-sequence-seed seed))
          (normalized-retry (normalize-retry-count retry))
          (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
-         (normalized-max-workers (normalize-max-workers max-workers))
-         (shard-paths (collect-shard-paths
-                       suite
-                       focus-enabled
-                       normalized-filter
-                       normalized-location-filter
-                       normalized-shard)))
+         (normalized-max-workers (normalize-max-workers max-workers)))
+    (setf (selection-filter-shard-paths filter)
+          (collect-shard-paths suite filter normalized-shard))
     (let ((*test-sequence-order* normalized-order)
           (*test-sequence-seed* normalized-seed)
           (*default-retry* normalized-retry)
           (*default-timeout-ms* normalized-timeout-ms)
           (*max-workers* normalized-max-workers))
-      (funcall continue
-               focus-enabled
-               normalized-filter
-               normalized-location-filter
-               shard-paths))))
+      (funcall continue filter))))
 
 (defun collect-events (suite &key name-filter location-filter bail shard order seed retry timeout-ms max-workers)
   (with-runner-condition-propagation (nil)
@@ -181,22 +159,18 @@
      retry
      timeout-ms
      max-workers
-     (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
+     (lambda (filter)
        (collect-suite-events/k
         suite
         (make-execution-control :bail-limit (normalize-bail bail))
         #'identity
-        focus-enabled
-        nil
-        normalized-filter
-        normalized-location-filter
-        shard-paths)))))
+        filter)))))
 
-(declaim (ftype (function (suite list function &optional t t t t t t t t) *) collect-children-plan/k))
+(declaim (ftype (function (suite list function selection-filter &optional t t t t) *) collect-children-plan/k))
 
 (defun collect-suite-plan/k
-    (suite continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason inherited-execution-mode)
-  (if (not (selected-suite-p suite focus-enabled ancestor-focused name-filter location-filter shard-paths))
+    (suite continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
+  (if (not (selected-suite-p suite filter ancestor-focused))
       (funcall continue '())
       (let ((active-execution-mode
               (effective-suite-execution-mode suite inherited-execution-mode)))
@@ -206,27 +180,21 @@
            suite
            (ordered-children suite (suite-children suite))
            continue
-           focus-enabled
+           filter
            ancestor-focused
-           name-filter
-           location-filter
-           shard-paths
            active-status
            active-reason
            active-execution-mode)))))
 
 (defun collect-children-plan/k
-    (suite children continue &optional focus-enabled ancestor-focused name-filter location-filter shard-paths suppressed-status suppressed-reason execution-mode)
+    (suite children continue filter &optional ancestor-focused suppressed-status suppressed-reason execution-mode)
   (macrolet ((recur (remaining next-continue)
                `(collect-children-plan/k
                  suite
                  ,remaining
                  ,next-continue
-                 focus-enabled
+                 filter
                  ancestor-focused
-                 name-filter
-                 location-filter
-                 shard-paths
                  suppressed-status
                  suppressed-reason
                  execution-mode)))
@@ -245,11 +213,8 @@
                 (describe-plan-collection-step
                  suite
                  child
-                 focus-enabled
+                 filter
                  ancestor-focused
-                 name-filter
-                 location-filter
-                 shard-paths
                  suppressed-status
                  suppressed-reason
                  execution-mode)
@@ -260,11 +225,8 @@
                  (collect-suite-plan/k
                   child
                   #'continue-with-tail
-                  focus-enabled
+                  filter
                   payload
-                  name-filter
-                  location-filter
-                  shard-paths
                   suppressed-status
                   suppressed-reason
                   execution-mode))
@@ -282,12 +244,5 @@
    retry
    timeout-ms
    nil
-   (lambda (focus-enabled normalized-filter normalized-location-filter shard-paths)
-     (collect-suite-plan/k
-      suite
-      #'identity
-      focus-enabled
-      nil
-      normalized-filter
-      normalized-location-filter
-      shard-paths))))
+   (lambda (filter)
+     (collect-suite-plan/k suite #'identity filter))))
