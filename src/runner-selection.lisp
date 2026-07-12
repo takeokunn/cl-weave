@@ -16,6 +16,8 @@
   focus-enabled
   name-filter
   location-filter
+  include-tags
+  exclude-tags
   shard-paths)
 
 (defun normalized-test-filter (filter)
@@ -63,6 +65,13 @@
         (and pathname
              (member pathname location-filter :test #'equal)))))
 
+(defun test-tags-match-filter-p (test include-tags exclude-tags)
+  (let ((tags (test-case-tags test)))
+    (and (or (null include-tags)
+             (intersection tags include-tags :test #'string=))
+         (or (null exclude-tags)
+             (not (intersection tags exclude-tags :test #'string=))))))
+
 (defun base-selected-test-case-p (suite test filter ancestor-focused)
   (and (or (not (selection-filter-focus-enabled filter))
            ancestor-focused
@@ -70,7 +79,10 @@
        (test-path-matches-filter-p (test-path suite test)
                                    (selection-filter-name-filter filter))
        (test-location-matches-filter-p test
-                                       (selection-filter-location-filter filter))))
+                                       (selection-filter-location-filter filter))
+       (test-tags-match-filter-p test
+                                 (selection-filter-include-tags filter)
+                                 (selection-filter-exclude-tags filter))))
 
 (defun collect-shard-paths (suite filter shard)
   (when shard
@@ -169,4 +181,3 @@
 
 (defun selected-child-test-p (suite child filter ancestor-focused)
   (selected-test-case-p suite child filter ancestor-focused))
-

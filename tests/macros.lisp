@@ -168,8 +168,19 @@
                    (tree-contains-p form :execution-mode)
                    (tree-contains-p form :sequential)))))
 
+  (it "preserves runtime tag expressions in test registration"
+    (let ((expansion
+            (macroexpand-1
+             '(it "tagged" (:tags (list :fast dynamic-tag))
+                (expect :ok :to-be :ok)))))
+      (expect expansion :to-satisfy
+              (lambda (form)
+                (and (tree-contains-p form 'cl-weave::register-test)
+                     (tree-contains-p form :tags)
+                     (tree-contains-p form 'dynamic-tag))))))
+
   (it "rejects removed compatibility metadata options"
-    (dolist (option '(:tags :depends-on :concurrent))
+    (dolist (option '(:depends-on :concurrent))
       (expect (lambda ()
                 (macroexpand-1
                  `(it "removed metadata" (,option nil)

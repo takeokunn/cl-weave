@@ -1,6 +1,29 @@
 (in-package #:cl-weave/tests)
 
 (describe "list mode"
+  (it "carries normalized tags into plans and machine-readable reporters"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root (cl-weave::make-suite :name "tags" :parent root))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "case" :tags '("FAST" "UNIT") :function (lambda () t)))
+      (let* ((plan (cl-weave:collect-test-plan root))
+             (entry (first plan))
+             (sexp (with-output-to-string (stream)
+                     (cl-weave::report-plan-sexp plan stream)))
+             (json (with-output-to-string (stream)
+                     (cl-weave::report-plan-json plan stream)))
+             (jsonl (with-output-to-string (stream)
+                      (cl-weave::report-plan-jsonl plan stream))))
+        (expect (cl-weave:test-plan-entry-tags entry)
+                :to-equal '("FAST" "UNIT"))
+        (expect sexp :to-satisfy (lambda (text) (search ":TAGS (\"FAST\" \"UNIT\")" text)))
+        (dolist (text (list json jsonl))
+          (expect text :to-satisfy
+                  (lambda (output) (search "\"tags\":[\"FAST\",\"UNIT\"]" output)))))))
+
   (it "rejects CI-incompatible plan reporters before dispatch"
     (dolist (reporter '(:github :junit :tap))
       (expect (lambda ()

@@ -15,6 +15,7 @@
         :focused (test-plan-entry-focused entry)
         :retry (test-plan-entry-retry entry)
         :timeout-ms (test-plan-entry-timeout-ms entry)
+        :tags (test-plan-entry-tags entry)
         :concurrent (test-plan-entry-concurrent entry)))
 
 (defun report-plan-spec (plan stream)
@@ -66,6 +67,8 @@
         (write-string "null" stream)))
   (write-string ",\"concurrent\":" stream)
   (write-string (if (test-plan-entry-concurrent entry) "true" "false") stream)
+  (write-string ",\"tags\":" stream)
+  (json-write-sequence (test-plan-entry-tags entry) #'write-json-string stream)
   (write-string "}" stream))
 
 (defun report-plan-json (plan stream)

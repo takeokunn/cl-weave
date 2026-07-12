@@ -222,6 +222,7 @@
    #:test-plan-entry
    #:test-plan-entry-focused
    #:test-plan-entry-location
+   #:test-plan-entry-tags
    #:test-plan-entry-path
    #:test-plan-entry-reason
    #:test-plan-entry-retry

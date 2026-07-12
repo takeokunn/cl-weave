@@ -53,7 +53,7 @@
 
 (define-record-class test-case
   (name function focus skip-reason todo-reason retry timeout-ms execution-mode
-   expected-failure-reason location))
+   expected-failure-reason location tags))
 
 (defmethod print-object ((test test-case) stream)
   (print-unreadable-object (test stream :type t)
@@ -79,7 +79,7 @@
    elapsed-internal-time))
 
 (define-record-class test-plan-entry
-  (path status reason focused retry timeout-ms concurrent location))
+  (path status reason focused retry timeout-ms concurrent location tags))
 
 (define-record-class benchmark-result
   (samples iterations warmup))
@@ -182,9 +182,37 @@
         :skip-reason skip-reason
         :todo-reason todo-reason))
 
+(defun tag-proper-list-p (value)
+  (loop with slow = value
+        with fast = value
+        do (cond
+             ((null fast) (return t))
+             ((atom fast) (return nil))
+             ((null (cdr fast)) (return t))
+             ((atom (cdr fast)) (return nil)))
+           (setf slow (cdr slow)
+                 fast (cddr fast))
+           (when (eq slow fast)
+             (return nil))))
+
+(defun normalize-tags (tags &optional (description "tags"))
+  "Canonicalize tags to unique uppercase strings, comparing names case-insensitively."
+  (unless (tag-proper-list-p tags)
+    (error "cl-weave: ~A must be a proper list of keywords, symbols, or strings."
+           description))
+  (loop with normalized = '()
+        for tag in tags
+        for name = (etypecase tag
+                     (symbol (symbol-name tag))
+                     (string tag))
+        for canonical = (string-upcase name)
+        unless (member canonical normalized :test #'string=)
+          do (push canonical normalized)
+        finally (return (nreverse normalized))))
+
 (defun test-registration-initargs
     (name function focus skip-reason todo-reason retry timeout-ms
-     execution-mode expected-failure-reason location)
+     execution-mode expected-failure-reason location tags)
   (list :name name
         :function function
         :focus focus
@@ -194,7 +222,8 @@
         :timeout-ms timeout-ms
         :execution-mode (normalize-execution-mode execution-mode)
         :expected-failure-reason expected-failure-reason
-        :location location))
+        :location location
+        :tags (normalize-tags tags)))
 
 (defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
   (let* ((parent (current-or-root-suite))
@@ -209,14 +238,14 @@
 
 (defun register-test
   (name function &key focus skip-reason todo-reason retry timeout-ms
-       execution-mode expected-failure-reason location)
+       execution-mode expected-failure-reason location tags)
   (let ((suite (current-or-root-suite)))
     (add-child suite
                (apply #'make-test-case
                       (test-registration-initargs
                        name function focus skip-reason todo-reason retry
                        timeout-ms execution-mode expected-failure-reason
-                       location)))))
+                       location tags)))))
 
 (define-tail-registration register-before-all suite-before-all suite-before-all-tail)
 (define-tail-registration register-after-all suite-after-all suite-after-all-tail)

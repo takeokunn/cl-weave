@@ -66,6 +66,65 @@
         (expect (mapcar #'cl-weave::test-event-path events)
                 :to-equal '(("files" "target"))))))
 
+  (it "normalizes, includes, and excludes test tags"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root (cl-weave::make-suite :name "tagged" :parent root))))
+      (dolist (spec '(("fast unit" (:fast "UNIT" :FAST))
+                      ("fast db" (:fast :db))
+                      ("slow unit" (:slow :unit))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name (first spec)
+          :tags (cl-weave::normalize-tags (second spec))
+          :function (lambda () t))))
+      (let ((events (cl-weave::collect-events
+                     root :include-tags '(fast) :exclude-tags '("db"))))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("tagged" "fast unit"))))))
+
+  (it "combines tag, name, and location filters with AND semantics"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root (cl-weave::make-suite :name "combined" :parent root)))
+           (target #P"/tmp/cl-weave/combined-target.lisp"))
+      (dolist (name '("wanted" "other"))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name name :tags '("FAST")
+          :location (list :file (namestring target))
+          :function (lambda () t))))
+      (let ((events (cl-weave::collect-events
+                     root :include-tags '(:fast) :name-filter "wanted"
+                     :location-filter (list target))))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("combined" "wanted"))))))
+
+  (it "validates tag filters as proper lists of tag designators"
+    (dolist (filter (list :fast '(42) (cons :fast :slow)))
+      (expect (lambda ()
+                (cl-weave::collect-events
+                 (cl-weave::make-suite :name "root") :include-tags filter))
+              :to-throw)))
+
+  (it "applies tag filters before assigning shard ordinals"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite (cl-weave::add-child
+                   root (cl-weave::make-suite :name "sharded" :parent root))))
+      (dolist (spec '(("first" ("FAST"))
+                      ("ignored" ("SLOW"))
+                      ("second" ("FAST"))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name (first spec) :tags (second spec) :function (lambda () t))))
+      (let ((events (cl-weave::collect-events
+                     root :include-tags '(:fast) :shard '(2 2))))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("sharded" "second"))))))
+
   (it "can fail a run when no tests are selected"
     (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))
           (cl-weave::*current-suite* nil))
@@ -83,4 +142,3 @@
                :name-filter "missing"
                :pass-with-no-tests nil)
               :to-be nil))))
-

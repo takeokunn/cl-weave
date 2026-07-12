@@ -213,6 +213,8 @@
               (stream *standard-output*)
               (name-filter *test-name-filter*)
               location-filter
+              include-tags
+              exclude-tags
               shard
               order
               seed
@@ -224,6 +226,8 @@
                  (resolve-suite-designator suite-designator)
                  :name-filter name-filter
                  :location-filter location-filter
+                 :include-tags include-tags
+                 :exclude-tags exclude-tags
                  :shard shard
                  :order order
                  :seed seed
@@ -245,6 +249,8 @@
                   (stream *standard-output*)
                   (name-filter *test-name-filter*)
                   location-filter
+                  include-tags
+                  exclude-tags
                   shard
                   order
                   seed
@@ -268,6 +274,8 @@
                     (root-suite)
                     :name-filter name-filter
                     :location-filter location-filter
+                    :include-tags include-tags
+                    :exclude-tags exclude-tags
                     :shard shard
                     :order order
                     :seed seed
@@ -283,6 +291,8 @@
                      (stream *standard-output*)
                      (name-filter *test-name-filter*)
                      location-filter
+                     include-tags
+                     exclude-tags
                      shard
                      order
                      seed
@@ -293,6 +303,8 @@
                (root-suite)
                :name-filter name-filter
                :location-filter location-filter
+               :include-tags include-tags
+               :exclude-tags exclude-tags
                :shard shard
                :order order
                :seed seed

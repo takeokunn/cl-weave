@@ -127,11 +127,14 @@
                  (continue-with-event payload)))))))))
 
 (defun call-with-collection-context
-    (suite name-filter location-filter shard order seed retry timeout-ms max-workers continue)
+    (suite name-filter location-filter include-tags exclude-tags shard order seed
+     retry timeout-ms max-workers continue)
   (let* ((filter (make-selection-filter
                   :focus-enabled (focused-suite-p suite)
                   :name-filter (normalized-test-filter name-filter)
-                  :location-filter (normalize-location-filter location-filter)))
+                  :location-filter (normalize-location-filter location-filter)
+                  :include-tags (normalize-tags include-tags "include-tags")
+                  :exclude-tags (normalize-tags exclude-tags "exclude-tags")))
          (normalized-shard (normalize-shard shard))
          (normalized-order (normalize-sequence-order order))
          (normalized-seed (normalize-sequence-seed seed))
@@ -147,12 +150,16 @@
           (*max-workers* normalized-max-workers))
       (funcall continue filter))))
 
-(defun collect-events (suite &key name-filter location-filter bail shard order seed retry timeout-ms max-workers)
+(defun collect-events
+    (suite &key name-filter location-filter include-tags exclude-tags bail shard
+                  order seed retry timeout-ms max-workers)
   (with-runner-condition-propagation (nil)
     (call-with-collection-context
      suite
      name-filter
      location-filter
+     include-tags
+     exclude-tags
      shard
      order
      seed
@@ -233,11 +240,15 @@
                 (:collect-test
                  (continue-with-entry payload)))))))))
 
-(defun collect-test-plan (suite &key name-filter location-filter shard order seed retry timeout-ms)
+(defun collect-test-plan
+    (suite &key name-filter location-filter include-tags exclude-tags shard order
+                  seed retry timeout-ms)
   (call-with-collection-context
    suite
    name-filter
    location-filter
+   include-tags
+   exclude-tags
    shard
    order
    seed

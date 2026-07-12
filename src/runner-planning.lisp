@@ -51,7 +51,8 @@
    :retry (retry-count test)
    :timeout-ms (effective-timeout-ms test)
    :concurrent (effective-concurrent-test-case-p test execution-mode)
-   :location (test-case-location test)))
+   :location (test-case-location test)
+   :tags (test-case-tags test)))
 
 (defun concurrent-batching-enabled-p (control suppressed-status)
   (and (null suppressed-status)
