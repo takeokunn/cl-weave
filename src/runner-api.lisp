@@ -9,11 +9,18 @@
              (format stream "Coverage support is unavailable: ~A"
                      (coverage-unavailable-reason condition)))))
 
-(define-condition coverage-cleanup-failure (error)
+;; The base is a plain CONDITION, not an ERROR: during unwinds the cleanup
+;; failure is SIGNALed as a notification, and an ERROR subtype would be
+;; captured by enclosing ERROR handlers (matchers, the runner), replacing
+;; the primary control transfer.
+(define-condition coverage-cleanup-failure (condition)
   ((failures :initarg :failures :reader coverage-cleanup-failures))
   (:report (lambda (condition stream)
              (format stream "Coverage cleanup failed: ~{~A~^; ~}"
                      (mapcar #'cdr (coverage-cleanup-failures condition))))))
+
+;; When no control transfer is in flight the same failure is a real error.
+(define-condition coverage-cleanup-error (coverage-cleanup-failure error) ())
 
 (defun coverage-fbound-symbol (name &optional required-p)
   (let ((package (find-package "SB-COVER")))
@@ -100,7 +107,9 @@
 
 (defun handle-coverage-cleanup-failures (failures preserve-control-transfer-p)
   (when failures
-    (let ((condition (make-condition 'coverage-cleanup-failure
+    (let ((condition (make-condition (if preserve-control-transfer-p
+                                         'coverage-cleanup-failure
+                                         'coverage-cleanup-error)
                                      :failures failures)))
       (restart-case
           (if preserve-control-transfer-p
