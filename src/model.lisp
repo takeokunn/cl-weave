@@ -37,6 +37,12 @@
    around-each around-each-tail
    after-each after-each-tail))
 
+(defmethod print-object ((suite suite) stream)
+  (print-unreadable-object (suite stream :type t)
+    (format stream "~S :children ~D"
+            (suite-name suite)
+            (length (suite-children suite)))))
+
 (defmacro suite-hook (suite hook)
   (ecase hook
     (before-all `(suite-before-all ,suite))
@@ -48,6 +54,12 @@
 (define-record-class test-case
   (name function focus skip-reason todo-reason retry timeout-ms execution-mode
    expected-failure-reason location))
+
+(defmethod print-object ((test test-case) stream)
+  (print-unreadable-object (test stream :type t)
+    (format stream "~S :focus ~S"
+            (test-case-name test)
+            (test-case-focus test))))
 
 (define-record-class assertion-detail
   (form matcher actual expected negated pass))
