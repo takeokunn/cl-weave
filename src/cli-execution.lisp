@@ -94,7 +94,9 @@
 (defun load-requested-inputs (options)
   (dolist (system (cli-options-systems options))
     (ensure-requested-system-visible system options)
-    (asdf:load-system system))
+    (if (cli-options-coverage options)
+        (asdf:load-system system :force t)
+        (asdf:load-system system)))
   (dolist (file (cli-options-load-files options))
     (load file)))
 

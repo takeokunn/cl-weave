@@ -310,6 +310,23 @@
         (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
         (expect loaded-asdf-systems :to-equal '("cl-weave/tests")))))
 
+  (it "recompiles requested systems when coverage is enabled"
+    (let* ((options (cl-weave/cli::make-cli-options
+                     :systems '("cl-weave/tests")
+                     :coverage t))
+           (loaded-asdf-systems '()))
+      (with-mocked-functions
+          (((symbol-function 'asdf:find-system)
+            (lambda (&rest args)
+              (declare (ignore args))
+              :cl-weave/tests))
+           ((symbol-function 'asdf:load-system)
+            (lambda (system &key force)
+              (push (list system force) loaded-asdf-systems)
+              :loaded-asdf)))
+        (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
+        (expect loaded-asdf-systems :to-equal '(("cl-weave/tests" t))))))
+
   (it "reports actionable CLI errors when requested systems remain unavailable"
     (let* ((cwd #P"/tmp/cl-weave-missing/")
            (helper-file #P"/tmp/cl-weave-missing/support/helper.lisp")
