@@ -106,9 +106,11 @@ directly:
 If an existing suite still depends on legacy registration macros, migrate it by
 rewriting registration shape first and preserving only semantic metadata such as
 timeouts, tags, and dependency labels. In native `cl-weave`, `:timeout-ms`,
-`tags`, and `dependsOn` remain descriptive metadata; they do not enforce
-execution ordering or filtering. Keep behavior-sensitive ordering in the suite
-structure or runner command until those semantics are explicitly redesigned.
+and `dependsOn` remain descriptive metadata and do not enforce execution
+ordering. Tags can filter native runs through `:include-tags` and
+`:exclude-tags`; `:watch-depends-on` can narrow watch reruns for known file
+dependencies. Keep behavior-sensitive ordering in the suite structure or runner
+command.
 
 The state-restoration helpers above stay in scope because they encode generic
 test-fixture semantics rather than project logic: temporary function

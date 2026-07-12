@@ -27,7 +27,7 @@
         pkgs:
         pkgs.stdenvNoCC.mkDerivation {
           pname = "cl-weave-docs";
-          version = "0.4.0";
+          version = "0.5.0";
           src = pkgs.lib.fileset.toSource {
             root = ./docs;
             fileset = pkgs.lib.fileset.unions [
@@ -262,7 +262,7 @@
 
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
-          version = "0.4.0";
+          version = "0.5.0";
           src = self;
           dontBuild = true;
           installPhase = ''

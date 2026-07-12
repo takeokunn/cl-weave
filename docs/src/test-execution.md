@@ -81,8 +81,12 @@ emits `:run`, `:skip`, or `:todo` plan entries with `path`, `pathString`,
 `location`, `reason`, `focused`, `retry`, `timeout-ms`, `concurrent`, `tags`,
 and `dependsOn` metadata. `location` records the macro source file when
 available; JSON emits `null` for manually constructed tests without source
-metadata. `tags` and `dependsOn` are descriptive metadata only; cl-weave does
-not infer filtering or dependency ordering from them.
+metadata. cl-weave does not infer dependency ordering from `dependsOn`. Native
+test tags participate in
+selection through `:include-tags` and `:exclude-tags` on `run`, `run-all`, and
+`list-tests`. Inclusion accepts a test matching any requested tag; exclusion
+rejects a test matching any excluded tag. Tag selection is resolved before
+sharding.
 
 For command-line and CI usage, `list` prints the selected test plan
 and exits with status `0`:
@@ -216,10 +220,18 @@ artifacts are deleted before control returns to the parent process.
 system. `run-system` reloads the system with ASDF, then runs the currently
 registered cl-weave tests. `watch-system` uses ASDF dependency information and
 file write dates to rerun only after declared source files change. When every
-changed file is already a registered test-definition file, watch mode narrows
-the rerun to those files only. Changes to non-test files, newly added files, or
-deleted files fall back to a full-suite rerun so implementation edits cannot
-silently skip affected tests.
+changed file is a registered test-definition file or an explicit dependency,
+watch mode narrows the rerun to the affected tests. Declare dependencies on a
+test with `:watch-depends-on`; relative paths are resolved from the file that
+defines the test:
+
+```lisp
+(it "parses tokens" (:watch-depends-on '("../src/parser.lisp"))
+  (expect (parse-token "name") :to-equal '(:name "name")))
+```
+
+Changes to unknown files, newly added files, or deleted files fall back to a
+full-suite rerun so implementation edits cannot silently skip affected tests.
 Coverage collection and `:pass-with-no-tests` policy are forwarded on every
 watch rerun, so local watch sessions exercise the same success criteria and
 coverage artifact path as an equivalent one-shot `run-all`.

@@ -6,7 +6,7 @@
   :license "MIT"
   :homepage "https://github.com/takeokunn/cl-weave"
   :bug-tracker "https://github.com/takeokunn/cl-weave/issues"
-  :version "0.4.0"
+  :version "0.5.0"
   :serial t
   :components
   ((:module "src"

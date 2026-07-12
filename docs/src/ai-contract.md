@@ -43,7 +43,7 @@ verification and scope policy for those channels lives in
 {
   "schemaVersion": 23,
   "kind": "cl-weave-metadata",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "homepage": "https://github.com/takeokunn/cl-weave",
   "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
   "license": "MIT",
@@ -1637,6 +1637,12 @@ invocation. CI should keep `CL_WEAVE_WATCH` unset; watch mode is for local
 agents and REPL sessions. The CLI and script runner expose the same one-shot
 contract through `--once` and `CL_WEAVE_WATCH_ONCE=1`, which execute the
 initial watch run and exit without entering the polling loop.
+
+Tests may declare `:watch-depends-on` paths. Relative dependencies resolve from
+the defining test file. A watch cycle containing only registered test files or
+declared dependencies selects the affected test paths; any unknown changed file
+forces a full-suite rerun. This conservative fallback prevents incomplete
+dependency declarations from silently omitting tests.
 
 ## Property Failure Contract
 
