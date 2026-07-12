@@ -10,7 +10,7 @@ before generating tests or interpreting project-specific matcher failures. The
 command loads the requested ASDF system and then emits JSON by default:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
+timeout 120s nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
 ```
 
 Agents embedded in a Lisp process can call `(cl-weave:framework-metadata)` to
@@ -75,7 +75,7 @@ verification and scope policy for those channels lives in
     {
       "name": "adoption-guide",
       "path": "docs/src/adoption.md",
-      "description": "Migration guidance and downstream adoption plan."
+      "description": "Native adoption guide and downstream integration plan."
     },
     {
       "name": "license",
@@ -164,7 +164,7 @@ verification and scope policy for those channels lives in
         "Proposed Change",
         "Validation Plan",
         "Scope Check",
-        "Compatibility Notes"
+        "Public Surface Notes"
       ],
       "contactLinks": []
     },
@@ -201,7 +201,7 @@ verification and scope policy for those channels lives in
       "name": "pull-request-template",
       "kind": "github-pull-request-template",
       "path": ".github/pull_request_template.md",
-      "purpose": "Default PR body that mirrors the canonical review checklist and compatibility prompts.",
+      "purpose": "Default PR body that mirrors the canonical review checklist and public-surface prompts.",
       "references": [
         "docs/src/community-health.md",
         "docs/src/pull-request-template.md"
@@ -209,7 +209,7 @@ verification and scope policy for those channels lives in
       "requiredSections": [
         "Summary",
         "Validation",
-        "Compatibility Impact",
+        "Public Surface Impact",
         "Follow-up Risk"
       ],
       "contactLinks": []
@@ -247,7 +247,7 @@ verification and scope policy for those channels lives in
     "reviewOwnership": ".github/CODEOWNERS",
     "maintainerResponsibilities": [
       "Triaging issues and pull requests against the documented project scope and support boundaries.",
-      "Protecting compatibility expectations recorded in the versioning policy.",
+      "Protecting documented public-surface expectations recorded in the versioning policy.",
       "Keeping machine-readable metadata, release notes, and policy documents synchronized.",
       "Requiring regression coverage for public-surface changes when practical.",
       "Handling security-sensitive reports through private GitHub security advisories."
@@ -268,7 +268,7 @@ verification and scope policy for those channels lives in
     "supportedTargets": [
       {
         "implementation": "SBCL",
-        "platforms": ["Linux", "macOS"],
+        "platforms": ["Linux"],
         "status": "supported"
       }
     ],
@@ -538,8 +538,8 @@ scraping `package.lisp`.
 support, and licensing links; agents should prefer them over ad hoc repository
 guesses when linking, filing issues, or summarizing project governance.
 `referenceDocuments` lists the canonical non-policy documents that external
-tools should read first for CLI usage, machine contracts, migration planning,
-release notes, and licensing. Agents should prefer these explicit paths over
+tools should read first for CLI usage, machine contracts, native adoption
+planning, release notes, and licensing. Agents should prefer these explicit paths over
 README section scraping when linking project materials.
 `supportChannels` identifies the public support surfaces and intended routing
 for bugs, contribution review, and support-boundary questions. Agents should
@@ -568,7 +568,7 @@ describe maintainer authority, issue handling, release flow, support
 boundaries, and project scope. The example root mirrors the runtime metadata
 and should stay aligned with the CLI contract as new policy documents are
 added. For project scope, governance, issue handling, release flow, and
-compatibility expectations, agents should prefer the policy documents in
+public-surface expectations, agents should prefer the policy documents in
 `docs/src/` over README summaries.
 
 ## DSL Naming Contract
@@ -786,7 +786,7 @@ For Nix CLI CI and agent runs, the packaged application writes the same
 reporter payload directly to an artifact file:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
+timeout 360s nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
 ```
 
 `--output` affects only reporter output. The process still exits
@@ -799,7 +799,7 @@ External snapshots are sidecar artifacts controlled by dynamic bindings or
 CLI/environment settings:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
+timeout 360s nix run . -- run cl-weave/tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
 ```
 
 Snapshot files are Lisp-readable alists keyed by the explicit snapshot key
@@ -849,7 +849,7 @@ side.
 Coverage output is a separate artifact, not a reporter schema field:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
+timeout 360s nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage
 ```
 
 The CLI instruments product sources but not the test system and saves an SBCL
@@ -1377,7 +1377,7 @@ Agents can discover selected tests without executing hooks or test bodies:
 The packaged CLI exposes the same discovery mode:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter parser --shard 1/2 --sequence random --seed 12345
+timeout 120s nix run . -- list cl-weave/tests --reporter json --filter parser --shard 1/2 --sequence random --seed 12345
 ```
 
 The JSON test plan reporter prints one object:
@@ -1541,16 +1541,15 @@ final event status is `:fail`, `:condition` prints a `test-timeout`, and
 Command runners can set a global timeout default with `--test-timeout-ms N`,
 `CL_WEAVE_TEST_TIMEOUT_MS=N`, or `CL_WEAVE_TEST_TIMEOUT=N`. Local `:timeout-ms`
 wins over the global default. List mode and structured test-plan reporters
-expose the effective retry and timeout values after applying these defaults,
-plus declaration `tags` and `dependsOn` metadata.
+expose the effective retry and timeout values after applying these defaults.
 
 Command runners can bound adjacent concurrent batches with `--max-workers N` or
 `CL_WEAVE_MAX_WORKERS=N`. List mode remains discovery-only and does not consume
 the worker setting.
 
-`:concurrent t` and `it-concurrent` mark a case as safe for
-parallel execution with adjacent concurrent cases. `describe-concurrent` /
-`describe-concurrent` applies the same mode to descendants, while
+`(:execution-mode :concurrent)` and `it-concurrent` mark a case as safe for
+parallel execution with adjacent concurrent cases. `describe-concurrent` applies
+the same mode to descendants, while
 `it-sequential` opts individual cases out.
 Reporter schemas continue to expose the effective mode as the stable
 `concurrent` boolean. Event arrays and test-plan arrays remain in selected

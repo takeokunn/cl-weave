@@ -6,8 +6,8 @@
 nix develop
 nix run . -- --help
 nix profile install .
-perl -e 'alarm 600; exec @ARGV' -- nix flake check
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter spec
+timeout 600s nix flake check
+timeout 360s nix run . -- run cl-weave/tests --reporter spec
 ```
 
 ## Without Cloning The Repository
@@ -21,7 +21,7 @@ The packaged CLI is intended for local use, CI, and AI agents.
 
 ## Supported Runtime
 
-`cl-weave` targets SBCL first. Linux and macOS are supported platforms, and
+`cl-weave` targets SBCL first. Linux is the supported platform, and
 SBCL-specific features such as subprocess isolation and coverage handling are
 documented in [Runtime Support](runtime-support.md). A platform is
 release-ready only when the ASDF load gate and the relevant CI entrypoints

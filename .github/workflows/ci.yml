@@ -46,57 +46,57 @@ jobs:
 
       - name: Run flake checks
         timeout-minutes: 10
-        run: perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs --max-jobs 1
+        run: timeout 600s nix flake check --print-build-logs --max-jobs 1
 
       - name: Run JSON reporter
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
+          timeout 360s nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
 
       - name: Run JSONL reporter
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
+          timeout 360s nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
 
       - name: Run packaged CLI smoke test
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
+          timeout 360s nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-cli-results.json
 
       - name: Generate AI metadata
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
+          timeout 120s nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
 
       - name: Run AI discovery smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
+          timeout 120s nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-plan.json
 
       - name: Run watch once smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
+          timeout 120s nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-watch-once.json
 
       - name: Run TAP reporter smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
+          timeout 120s nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-tap.txt
 
       - name: Run filtered smoke test
         timeout-minutes: 2
         run: |
-          perl -e 'alarm 60; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring'
+          timeout 60s nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests
 
       - name: Run JUnit reporter
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
+          timeout 360s nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
 
       - name: Generate coverage artifacts
         timeout-minutes: 8
         run: |
-          perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
+          timeout 360s nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
 
       - name: Upload test reports
         if: always()

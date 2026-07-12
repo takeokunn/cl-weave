@@ -71,9 +71,14 @@
 (defun resolve-logic-value (value bindings)
   (let ((value (logic-walk value bindings)))
     (if (consp value)
-        (let ((resolved '()))
-          (dolist (part value (nreverse resolved))
-            (push (resolve-logic-value part bindings) resolved)))
+        (let ((resolved '())
+              (cursor value))
+          (loop while (consp cursor)
+                do (push (resolve-logic-value (car cursor) bindings) resolved)
+                   (setf cursor (cdr cursor))
+                finally
+                   (return (nreconc resolved
+                                     (resolve-logic-value cursor bindings)))))
         value)))
 
 (defun normalize-logic-bindings (bindings)

@@ -32,6 +32,12 @@
         (declare (ignore symbol))
         (expect-not status :to-be :external))))
 
+  (it "keeps FiveAM-style aliases out of the public package"
+    (dolist (name '("DEF-SUITE" "IN-SUITE" "TEST" "IS"))
+      (multiple-value-bind (symbol status) (find-symbol name "CL-WEAVE")
+        (declare (ignore symbol))
+        (expect-not status :to-be :external))))
+
   (it "represents suite and test metadata as readable structures"
     (let* ((test (cl-weave::make-test-case
                   :name "works"

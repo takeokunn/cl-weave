@@ -31,7 +31,7 @@
                            :description "Machine-readable contract and metadata normalization guide.")
                           (:name "adoption-guide"
                            :path "docs/src/adoption.md"
-                           :description "Migration guidance and downstream adoption plan.")
+                           :description "Native adoption guide and downstream integration plan.")
                           (:name "license"
                            :path "LICENSE"
                            :description "Canonical project license text.")))
@@ -95,7 +95,7 @@
                                                "Proposed Change"
                                                "Validation Plan"
                                                "Scope Check"
-                                               "Compatibility Notes")
+                                               "Public Surface Notes")
                            :contact-links nil)
                           (:name "issue-template-config"
                            :kind "github-issue-template-config"
@@ -117,12 +117,12 @@
                           (:name "pull-request-template"
                            :kind "github-pull-request-template"
                            :path ".github/pull_request_template.md"
-                           :purpose "Default PR body that mirrors the canonical review checklist and compatibility prompts."
+                           :purpose "Default PR body that mirrors the canonical review checklist and public-surface prompts."
                            :references ("docs/src/community-health.md"
                                         "docs/src/pull-request-template.md")
                            :required-sections ("Summary"
                                                "Validation"
-                                               "Compatibility Impact"
+                                               "Public Surface Impact"
                                                "Follow-up Risk")
                            :contact-links nil)
                           (:name "codeowners"
@@ -149,7 +149,7 @@
                           :review-ownership ".github/CODEOWNERS"
                           :maintainer-responsibilities
                           ("Triaging issues and pull requests against the documented project scope and support boundaries."
-                           "Protecting compatibility expectations recorded in the versioning policy."
+                           "Protecting documented public-surface expectations recorded in the versioning policy."
                            "Keeping machine-readable metadata, release notes, and policy documents synchronized."
                            "Requiring regression coverage for public-surface changes when practical."
                            "Handling security-sensitive reports through private GitHub security advisories.")
@@ -167,7 +167,7 @@
               :to-equal '(:policy-document "docs/src/runtime-support.md"
                           :primary-implementation "SBCL"
                           :supported-targets ((:implementation "SBCL"
-                                               :platforms ("Linux" "macOS")
+                                               :platforms ("Linux")
                                                :status "supported"))
                           :best-effort-targets
                           ((:implementation "Other Common Lisp implementations"

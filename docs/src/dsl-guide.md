@@ -258,7 +258,7 @@ reported normally.
 (it-concurrent "fetches account metadata" (:timeout-ms 1000)
   (expect (fetch-account) :to-satisfy #'account-ready-p))
 
-(it "uses option form when macros generate cases" (:concurrent t :retry 1)
+(it "uses option form when macros generate cases" (:execution-mode :concurrent :retry 1)
   (expect (probe-cache) :to-be :warm))
 
 (describe-concurrent "parallel-safe API checks"
@@ -267,9 +267,9 @@ reported normally.
     (expect (probe-rate-limit) :to-be :available)))
 ```
 
-`it-concurrent` and `(:concurrent t)` mark a case as safe
-to run beside adjacent concurrent cases. `describe-concurrent` /
-`describe-concurrent` applies the same execution mode to descendants, and
+`it-concurrent` and `(:execution-mode :concurrent)` mark a case as safe
+to run beside adjacent concurrent cases. `describe-concurrent` sets the same
+execution mode for descendant cases, and
 `it-sequential` opts a single case back out. Report order
 stays deterministic: events are emitted in the selected definition order. When
 `:bail` is enabled, concurrent batching is disabled so fast-fail behavior

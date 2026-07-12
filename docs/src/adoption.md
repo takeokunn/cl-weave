@@ -39,28 +39,9 @@ framework through ASDF.
                 #:it-isolated))
 ```
 
-## Minimal Test Migration
+## Native Public Surface
 
-FiveAM-style tests usually map cleanly to the core DSL:
-
-```lisp
-;;;; before
-(fiveam:test math/adds)
-
-;;;; after
-(describe "math"
-  (it "adds numbers"
-    (expect (+ 1 1) :to-be 2)))
-```
-
-Migrate suite-by-suite rather than rewriting everything at once. That lets you
-keep existing test investment while introducing snapshots, properties, mutation
-checks, or isolation only where they help.
-
-## Native Migration Surface
-
-`cl-weave` no longer carries a compatibility registration layer. Migrations
-should move directly onto the native suite DSL:
+`cl-weave` exposes a native suite DSL only. The supported public surface is:
 
 - `describe`
 - `it`
@@ -92,8 +73,7 @@ reusable isolation semantics:
 - `with-restored-hash-table`
 - `with-cleared-hash-table`
 
-Property-style migrations should target `cl-weave`'s native property surface
-directly:
+The native property surface consists of:
 
 - `it-property`
 - `gen-integer`
@@ -103,25 +83,18 @@ directly:
 - `gen-vector`
 - `gen-state-machine`
 
-If an existing suite still depends on legacy registration macros, migrate it by
-rewriting registration shape first and preserving only semantic metadata such as
-timeouts, tags, and dependency labels. In native `cl-weave`, `:timeout-ms`,
-and `dependsOn` remain descriptive metadata and do not enforce execution
-ordering. Tags can filter native runs through `:include-tags` and
-`:exclude-tags`; `:watch-depends-on` can narrow watch reruns for known file
-dependencies. Keep behavior-sensitive ordering in the suite structure or runner
-command.
-
 The state-restoration helpers above stay in scope because they encode generic
 test-fixture semantics rather than project logic: temporary function
-replacement, dynamic binding restoration, and hash-table snapshot/reset flows
-can migrate directly onto `cl-weave` without preserving a downstream wrapper
-layer.
+replacement, dynamic binding restoration, and hash-table snapshot/reset flows.
 
-The native migration surface intentionally stops at generic testing semantics.
+Native `cl-weave` keeps only the option surface implemented by the current DSL.
+Execution-sensitive structure belongs in the suite tree and runner commands
+rather than in compatibility-oriented metadata.
+
+The public surface intentionally stops at generic testing semantics.
 Project-specific helpers, such as compiler assertions or domain fixtures,
 should remain in the downstream project and call `cl-weave` assertions
-internally during migration.
+internally.
 
 ## Nix Entry Points
 

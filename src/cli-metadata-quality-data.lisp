@@ -12,7 +12,7 @@
      :command ("nix" "run" "." "--" "run" "cl-weave/tests"
                "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
-               "--output" "cl-weave-cli-results.json")
+               "--fail-with-no-tests" "--output" "cl-weave-cli-results.json")
      :timeout-seconds 360
      :artifacts ("cl-weave-cli-results.json")
      :description "Verify the packaged CLI can emit schema-versioned JSON results.")
@@ -42,7 +42,7 @@
      :command ("nix" "run" "." "--" "list" "cl-weave/tests"
                "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
-               "--output" "cl-weave-plan.json")
+               "--fail-with-no-tests" "--output" "cl-weave-plan.json")
      :timeout-seconds 120
      :artifacts ("cl-weave-plan.json")
      :description "Verify machine-readable test discovery output for agents.")
@@ -51,7 +51,7 @@
      :command ("nix" "run" "." "--" "watch" "cl-weave/tests"
                "--once" "--reporter" "json" "--filter"
                "filtering > runs only tests matching a path substring"
-               "--output" "cl-weave-watch-once.json")
+               "--fail-with-no-tests" "--output" "cl-weave-watch-once.json")
      :timeout-seconds 120
      :artifacts ("cl-weave-watch-once.json")
      :description "Verify one-shot watch mode through the packaged CLI.")
@@ -60,14 +60,15 @@
      :command ("nix" "run" "." "--" "run" "cl-weave/tests"
                "--reporter" "tap" "--filter"
                "filtering > runs only tests matching a path substring"
-               "--output" "cl-weave-tap.txt")
+               "--fail-with-no-tests" "--output" "cl-weave-tap.txt")
      :timeout-seconds 120
      :artifacts ("cl-weave-tap.txt")
      :description "Verify TAP output for line-oriented CI logs.")
     (:name "filtered-smoke"
      :kind "cli"
      :command ("nix" "run" "." "--" "run" "cl-weave/tests"
-               "--filter" "filtering > runs only tests matching a path substring")
+               "--filter" "filtering > runs only tests matching a path substring"
+               "--fail-with-no-tests")
      :timeout-seconds 60
      :artifacts nil
      :description "Verify filtered execution through the packaged CLI.")

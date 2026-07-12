@@ -309,7 +309,7 @@
       (expect readme :to-contain "## Supported Runtime")
       (expect readme :to-contain "[Runtime Support](runtime-support.md)")
       (expect readme :to-contain (getf runtime-support :primary-implementation))
-      (expect readme :to-contain "Linux and macOS")
+      (expect readme :to-contain "Linux")
       (expect readme :to-contain "subprocess isolation")
       (expect readme :to-contain "coverage handling")
       (expect runtime-document

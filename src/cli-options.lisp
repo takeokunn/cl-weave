@@ -1,5 +1,9 @@
 (in-package #:cl-weave/cli)
 
+(defvar *cli-option-specs*)
+(defvar *cli-environment-specs*)
+(defvar cl-weave/metadata::*metadata-cli-options*)
+
 (define-condition cli-error (error)
   ((message :initarg :message :reader cli-error-message))
   (:report (lambda (condition stream)

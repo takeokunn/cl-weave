@@ -22,21 +22,21 @@
 Run the self-test suite:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests
+timeout 360s nix run . -- run cl-weave/tests
 ```
 
 ## Common CLI Invocations
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'math > adds'
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- doctor --reporter json --output cl-weave-doctor.json
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --bail=1 --sequence random --seed 12345
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --filter parser
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
+timeout 360s nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json --retry 2 --test-timeout-ms 10000
+timeout 360s nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
+timeout 360s nix run . -- run my-project-tests --update-snapshots --snapshot-dir tests/__snapshots__/ --snapshot-file snapshots.sexp
+timeout 120s nix run . -- list cl-weave/tests --reporter json --filter 'math > adds'
+timeout 120s nix run . -- metadata cl-weave/tests --output cl-weave-metadata.json
+timeout 120s nix run . -- doctor --reporter json --output cl-weave-doctor.json
+timeout 360s nix run . -- run cl-weave/tests --bail=1 --sequence random --seed 12345
+timeout 360s nix run . -- watch cl-weave/tests --filter parser
+timeout 120s nix run . -- watch cl-weave/tests --once --reporter json --filter 'math > adds' --output cl-weave-watch-once.json
 ```
 
 Lisp-side agents can read the full structured framework metadata with

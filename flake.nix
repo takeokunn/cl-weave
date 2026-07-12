@@ -22,6 +22,11 @@
       ];
       forAllSystems =
         function: nixpkgs.lib.genAttrs systems (system: function (import nixpkgs { inherit system; }));
+      source = nixpkgs.lib.cleanSourceWith {
+        src = self;
+        filter =
+          path: type: nixpkgs.lib.cleanSourceFilter path type && builtins.baseNameOf path != ".direnv";
+      };
 
       mkDocs =
         pkgs:
@@ -53,7 +58,7 @@
       devShells = forAllSystems (pkgs: {
         default = pkgs.mkShell {
           packages = [
-            pkgs.perl
+            pkgs.coreutils
             pkgs.sbcl
             paredit-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
           ];
@@ -76,17 +81,16 @@
             }:
             pkgs.stdenv.mkDerivation {
               inherit name;
-              src = self;
+              src = source;
               nativeBuildInputs = [
-                pkgs.perl
+                pkgs.coreutils
                 pkgs.sbcl
               ];
               buildPhase = ''
                 export HOME="$TMPDIR/home"
                 mkdir -p "$HOME"
                 export CL_SOURCE_REGISTRY="$PWD//:"
-                perl -e 'alarm shift; exec @ARGV' -- \
-                  ${toString timeoutSeconds} \
+                timeout ${toString timeoutSeconds}s \
                   ${lib.escapeShellArgs command}
                 ${lib.concatMapStringsSep "\n" (artifact: "test -e ${lib.escapeShellArg artifact}") artifacts}
               '';
@@ -150,6 +154,7 @@
               "json"
               "--filter"
               "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-cli-results.json"
             ];
@@ -182,6 +187,7 @@
               "json"
               "--filter"
               "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-plan.json"
             ];
@@ -200,6 +206,7 @@
               "json"
               "--filter"
               "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-watch-once.json"
             ];
@@ -217,6 +224,7 @@
               "tap"
               "--filter"
               "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-tap.txt"
             ];
@@ -232,6 +240,7 @@
               "cl-weave/tests"
               "--filter"
               "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
             ];
           };
 
@@ -276,7 +285,7 @@
           };
 
           paredit-lint = paredit-cli.lib.${pkgs.stdenv.hostPlatform.system}.mkLintCheck {
-            src = self;
+            src = source;
             name = "cl-weave-paredit-lint";
           };
         }
@@ -288,7 +297,7 @@
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
           version = "0.5.0";
-          src = self;
+          src = source;
           dontBuild = true;
           installPhase = ''
             mkdir -p $out/share/common-lisp/source/cl-weave
