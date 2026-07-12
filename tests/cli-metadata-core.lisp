@@ -25,7 +25,7 @@
            "\"command\":[\"nix\",\"flake\",\"check\",\"--print-build-logs\"]" "\"timeoutSeconds\":600"
            "\"name\":\"ai-metadata-artifact\"" "\"cl-weave-metadata.json\"" "\"name\":\"tap-artifact\""
            "\"Verify TAP output for line-oriented CI logs.\"" "\"name\":\"filtered-smoke\""
-           "\"nix\",\"run\",\".\",\"--\",\"run\",\"cl-weave\\/tests\",\"--filter\",\"filtering > runs only tests matching a path substring\""
+           "\"nix\",\"run\",\".\",\"--\",\"run\",\"cl-weave\\/tests\",\"--filter\",\"filtering > runs only tests matching a path substring\",\"--fail-with-no-tests\""
            "\"options\"" "\"listReporters\"" "\"valueKind\"" "\"commandChoices\""
            "\"name\":\"--reporter\"" "\"command\":\"metadata\"" "\"choices\":[\"json\",\"sexp\"]"
            "\"--filter\"" "\"CL_WEAVE_TEST_FILTER\"" "\"--update-snapshots\"" "\"matchers\""

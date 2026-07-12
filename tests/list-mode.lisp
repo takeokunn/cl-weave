@@ -306,6 +306,30 @@
       (declare (ignore bindings))
       (expect matched-p :to-be nil)))
 
+  (it "resolves variables in dotted logic pairs without losing the tail"
+    (multiple-value-bind (bindings matched-p)
+        (cl-weave::unify-logic-values '(:pair ?head . ?tail)
+                                      '(:pair :left . :right)
+                                      nil)
+      (expect matched-p :to-be t)
+      (expect (cl-weave::resolve-logic-value '(:pair ?head . ?tail) bindings)
+              :to-equal '(:pair :left . :right))))
+
+  (it "resolves long proper lists without consuming stack per element"
+    (let* ((length 100000)
+           (value (make-list length :initial-element '?value))
+           (resolved (cl-weave::resolve-logic-value
+                      value '((?value . :resolved)))))
+      (expect (length resolved) :to-be length)
+      (expect (every (lambda (part) (eq part :resolved)) resolved)
+              :to-be t)))
+
+  (it "recursively resolves a dotted tail after iterating the list spine"
+    (expect (cl-weave::resolve-logic-value
+             '(:first ?head . ?tail)
+             '((?head . :middle) (?tail . (:tail ?value)) (?value . :end)))
+            :to-equal '(:first :middle :tail :end)))
+
   (it "bounds recursive logic searches with explicit recovery restarts"
     (let ((program (logic-program
                     (:- (:loop ?value)

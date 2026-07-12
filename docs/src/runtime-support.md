@@ -6,7 +6,7 @@ validation.
 
 ## Supported Platforms
 
-- SBCL on Linux and macOS is the supported target for the current release
+- SBCL on Linux is the supported target for the current release
   line.
 - Other Common Lisp implementations may work for the dependency-free core, but
   they are best-effort and can lag behind SBCL-specific behavior.

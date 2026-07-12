@@ -1,5 +1,7 @@
 (in-package #:cl-weave)
 
+(defvar *reporter-artifact-schemas*)
+
 (defun event-duration-seconds (event)
   (/ (test-event-elapsed-internal-time event)
      internal-time-units-per-second))

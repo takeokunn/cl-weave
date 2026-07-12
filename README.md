@@ -32,7 +32,7 @@ contract, and every governance and policy document, is published at
 ```
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests
+timeout 360s nix run . -- run cl-weave/tests
 ```
 
 See [Quick Start](https://takeokunn.github.io/cl-weave/quick-start.html) for

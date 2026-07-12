@@ -35,7 +35,7 @@ with `--coverage-min-expression` and `--coverage-min-branch`, each from 0 to 100
 An unmet gate exits nonzero even when no HTML report was requested.
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-system cl-weave --coverage-min-expression 80 --coverage-min-branch 70 --coverage-output cl-weave.coverage
+timeout 360s nix run . -- run cl-weave/tests --coverage --coverage-system cl-weave --coverage-min-expression 80 --coverage-min-branch 70 --coverage-output cl-weave.coverage
 ```
 
 The `:sexp` reporter is the stable Lisp-native AI interface. The `:json`
@@ -67,17 +67,17 @@ The CLI uses kebab-case flags consistently, including `--test-name-pattern`,
 GitHub Actions runs the same Nix entrypoints used locally:
 
 ```sh
-perl -e 'alarm 600; exec @ARGV' -- nix flake check --print-build-logs
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-cli-results.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-plan.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --output cl-weave-watch-once.json
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --output cl-weave-tap.txt
-perl -e 'alarm 60; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring'
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
+timeout 600s nix flake check --print-build-logs
+timeout 360s nix run . -- run cl-weave/tests --coverage --coverage-output cl-weave.coverage --coverage-report-directory cl-weave-coverage-report/
+timeout 360s nix run . -- run cl-weave/tests --reporter json --output cl-weave-results.json
+timeout 360s nix run . -- run cl-weave/tests --reporter jsonl --output cl-weave-events.jsonl
+timeout 360s nix run . -- run cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-cli-results.json
+timeout 120s nix run . -- metadata cl-weave/tests --reporter json --output cl-weave-metadata.json
+timeout 120s nix run . -- list cl-weave/tests --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-plan.json
+timeout 120s nix run . -- watch cl-weave/tests --once --reporter json --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-watch-once.json
+timeout 120s nix run . -- run cl-weave/tests --reporter tap --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests --output cl-weave-tap.txt
+timeout 60s nix run . -- run cl-weave/tests --filter 'filtering > runs only tests matching a path substring' --fail-with-no-tests
+timeout 360s nix run . -- run cl-weave/tests --reporter junit --output cl-weave-junit.xml
 ```
 
 To enable binary cache reuse across developer machines and GitHub Actions,

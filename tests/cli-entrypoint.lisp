@@ -8,7 +8,7 @@
               :to-equal '("cl-weave/tests"))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
 
-  (it "prints Vitest-compatible version output without running tests"
+  (it "prints canonical version output without running tests"
     (let ((flag-options (parse-cli '("--version")))
           (command-options (parse-cli '("version")))
           (exit-code nil)

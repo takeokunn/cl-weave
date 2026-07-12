@@ -269,26 +269,25 @@
                           pass-with-no-tests retry timeout-ms max-workers)
                     calls)
               t)))
-        (setf output
-              (with-output-to-string (stream)
-                (expect (cl-weave:watch-system
-                         "cl-weave"
-                         :reporter :json
-                         :stream stream
-                         :status-stream stream
-                         :name-filter "expect"
-                         :shard '(1 2)
-                         :order :random
-                         :seed 123
-                         :bail 1
-                         :coverage t
-                         :coverage-output "watch.coverage.sexp"
-                         :pass-with-no-tests t
-                         :retry 2
-                         :timeout-ms 250
-                         :max-workers 3
-                        :once t)
-                        :to-be-truthy))))
+        (with-captured-output (output stream)
+          (expect (cl-weave:watch-system
+                   "cl-weave"
+                   :reporter :json
+                   :stream stream
+                   :status-stream stream
+                   :name-filter "expect"
+                   :shard '(1 2)
+                   :order :random
+                   :seed 123
+                   :bail 1
+                   :coverage t
+                   :coverage-output "watch.coverage.sexp"
+                   :pass-with-no-tests t
+                   :retry 2
+                   :timeout-ms 250
+                   :max-workers 3
+                  :once t)
+                  :to-be-truthy)))
       (expect calls
               :to-equal '(("cl-weave" :json "expect" (1 2) :random 123 1 nil t
                            "watch.coverage.sexp" t 2 250 3)))
@@ -349,16 +348,14 @@
               (lambda (seconds)
                 (declare (ignore seconds))
                 nil)))
-          (setf output
-                (with-output-to-string (stream)
-                  (catch 'watch-stop
-                    (cl-weave:watch-system
-                     "cl-weave"
-                     :reporter :json
-                     :stream stream
-                     :status-stream stream
-                     :name-filter "watch"
-                     :once nil))))))
+          (with-captured-output (output stream :stop-tag 'watch-stop)
+            (cl-weave:watch-system
+             "cl-weave"
+             :reporter :json
+             :stream stream
+             :status-stream stream
+             :name-filter "watch"
+             :once nil))))
       (expect (reverse calls)
               :to-satisfy
               (lambda (value)
@@ -426,16 +423,14 @@
               (lambda (seconds)
                 (declare (ignore seconds))
                 nil)))
-          (setf output
-                (with-output-to-string (stream)
-                  (catch 'watch-stop
-                    (cl-weave:watch-system
-                     "cl-weave"
-                     :reporter :json
-                     :stream stream
-                     :status-stream stream
-                     :name-filter "watch"
-                     :once nil))))))
+          (with-captured-output (output stream :stop-tag 'watch-stop)
+            (cl-weave:watch-system
+             "cl-weave"
+             :reporter :json
+             :stream stream
+             :status-stream stream
+             :name-filter "watch"
+             :once nil))))
       (expect (reverse calls)
               :to-satisfy
               (lambda (value)

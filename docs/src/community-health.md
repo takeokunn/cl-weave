@@ -13,10 +13,10 @@ entrypoints for bugs, feature proposals, and pull requests.
 - Feature requests use
   [.github/ISSUE_TEMPLATE/feature_request.md](../../.github/ISSUE_TEMPLATE/feature_request.md)
   and must include `Problem`, `Proposed Change`, `Validation Plan`,
-  `Scope Check`, and `Compatibility Notes`.
+  `Scope Check`, and `Public Surface Notes`.
 - Pull requests use
   [.github/pull_request_template.md](../../.github/pull_request_template.md) and
-  must include `Summary`, `Validation`, `Compatibility Impact`, and
+  must include `Summary`, `Validation`, `Public Surface Impact`, and
   `Follow-up Risk`.
 - Issue chooser routing lives in
   [.github/ISSUE_TEMPLATE/config.yml](../../.github/ISSUE_TEMPLATE/config.yml) and

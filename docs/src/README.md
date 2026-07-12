@@ -15,7 +15,7 @@ surface.
 
 Pre-1.0. The capability list below is the intended public surface, and it is
 validated by the CI entrypoints documented in [Reporters and CI](reporters-and-ci.md)
-on Linux and macOS. Pre-1.0 releases may still introduce deliberate breaking
+on Linux. Pre-1.0 releases may still introduce deliberate breaking
 changes; the expectations are documented in [Versioning Policy](versioning-policy.md):
 
 - `describe` / `it` hierarchical test DSL
@@ -41,7 +41,6 @@ changes; the expectations are documented in [Versioning Policy](versioning-polic
 - Vitest-style per-test `:retry` and `:timeout-ms` controls
 - Vitest-style `it-concurrent` / `describe-concurrent` parallel execution modes
 - Vitest-style `it-fails` expected-failure cases
-- FiveAM-style migration guidance for the native suite DSL
 - Vitest-style length, instance, inline snapshot, and external snapshot matchers
 - CI-friendly thunk runtime and allocation assertions
 - SBCL `sb-cover` reset/save integration for CI coverage artifacts
@@ -75,7 +74,7 @@ changes; the expectations are documented in [Versioning Policy](versioning-polic
 The [flake.nix](https://github.com/takeokunn/cl-weave/blob/main/flake.nix) at
 the repository root packages `cl-weave` as a Nix flake:
 
-- `nix develop` — a devShell with SBCL, Perl, and
+- `nix develop` — a devShell with SBCL and GNU coreutils, and
   [`paredit-cli`](https://github.com/takeokunn/paredit-cli) for structural
   S-expression edits.
 - `nix run . -- <command>` — the packaged CLI (`run`, `list`, `watch`,

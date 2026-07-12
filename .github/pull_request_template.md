@@ -6,9 +6,9 @@ Describe the change in terms of user-visible behavior or contract impact.
 
 List the narrowest commands that demonstrate the change.
 
-## Compatibility Impact
+## Public Surface Impact
 
-Describe any public API, metadata, reporter, or platform compatibility changes.
+Describe any public API, metadata, reporter, or platform changes.
 
 ## Follow-up Risk
 

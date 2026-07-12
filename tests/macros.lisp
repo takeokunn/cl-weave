@@ -190,7 +190,7 @@
                      (tree-contains-p form :watch-depends-on)
                      (tree-contains-p form 'helper))))))
 
-  (it "rejects removed compatibility metadata options"
+  (it "rejects removed metadata options"
     (dolist (option '(:depends-on :concurrent))
       (expect (lambda ()
                 (macroexpand-1
@@ -426,7 +426,7 @@
               (and (tree-contains-p form 'cl-weave::describe)
                    (tree-contains-p form 'destructuring-bind)))))
 
-  (it "does not export removed Vitest compatibility aliases"
+  (it "does not export removed legacy aliases"
     (dolist (name '("IT.CONCURRENT" "TEST.ONLY" "DESCRIBE.EACH" "VI.FN"))
       (expect (nth-value 1 (find-symbol name :cl-weave))
               :not :to-be :external)))

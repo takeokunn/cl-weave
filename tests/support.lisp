@@ -184,6 +184,15 @@
               `((,expected (cl-weave::assertion-detail-expected ,detail)))))
      ,@assertions))
 
+(defmacro with-captured-output ((output stream &key stop-tag) &body body)
+  "Capture BODY output in OUTPUT using STREAM.
+When STOP-TAG is provided, wrap BODY in a CATCH for that tag."
+  `(setf ,output
+         (with-output-to-string (,stream)
+           ,(if stop-tag
+                `(catch ,stop-tag ,@body)
+                `(progn ,@body)))))
+
 (defun tree-contains-p (tree value)
   (cond
     ((equal tree value) t)

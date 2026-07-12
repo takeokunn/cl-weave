@@ -215,7 +215,7 @@
               :to-equal '("nix" "run" "." "--" "watch" "cl-weave/tests"
                           "--once" "--reporter" "json" "--filter"
                           "filtering > runs only tests matching a path substring"
-                          "--output" "cl-weave-watch-once.json"))
+                          "--fail-with-no-tests" "--output" "cl-weave-watch-once.json"))
       (expect (getf watch-once-gate :timeout-seconds) :to-be 120)
       (expect (getf watch-once-gate :artifacts)
               :to-equal '("cl-weave-watch-once.json"))

@@ -14,7 +14,7 @@ name filter selects matching paths.
 For command-line and CI usage, use `--filter`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --filter 'math > adds'
+timeout 120s nix run . -- run cl-weave/tests --filter 'math > adds'
 ```
 
 Suites with no selected descendants do not run `before-all` or `after-all`, so
@@ -38,7 +38,7 @@ tests. A test belongs to shard `INDEX` when its ordinal maps to that slot.
 For command-line and CI usage, `--shard` uses `INDEX/COUNT`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --shard 1/3 --reporter json
+timeout 120s nix run . -- run cl-weave/tests --shard 1/3 --reporter json
 ```
 
 Sharding composes with filtering, list mode, bail, ASDF `run-system`, and watch
@@ -65,7 +65,7 @@ reproduce order-dependent failures.
 For command-line and CI usage:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- run cl-weave/tests --sequence random --seed 12345
+timeout 360s nix run . -- run cl-weave/tests --sequence random --seed 12345
 ```
 
 ## Test Listing
@@ -92,7 +92,7 @@ For command-line and CI usage, `list` prints the selected test plan
 and exits with status `0`:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- list cl-weave/tests --reporter json --filter 'math'
+timeout 120s nix run . -- list cl-weave/tests --reporter json --filter 'math'
 ```
 
 List mode supports `spec`, `sexp`, `json`, and `jsonl` reporters. `--output FILE`
@@ -110,7 +110,7 @@ AI agents can also query plans as plain Lisp facts:
 ```
 
 `test-plan-facts` emits data such as `(:test path)`, `(:status path status)`,
-`:focused`, `:reason`, `:retry`, `:timeout-ms`, `:concurrent`, and `:location`.
+`:focused`, `:reason`, `:retry`, `:timeout-ms`, and `:location`.
 `logic-where`, `logic-program`, `logic-run`, and `test-plan-where` keep data and
 logic separate: relations stay plain lists, while query and rule syntax stays in
 macros. Variables are symbols whose names start with `?`, clauses are matched
@@ -164,7 +164,7 @@ For command-line and CI usage, `--bail` accepts `true`, `yes`, `on`,
 `t`, `false`, `no`, `off`, `0`, `nil`, or a positive integer:
 
 ```sh
-perl -e 'alarm 120; exec @ARGV' -- nix run . -- run cl-weave/tests --bail 1
+timeout 120s nix run . -- run cl-weave/tests --bail 1
 ```
 
 Bail composes with focus and filtering. Reporters emit only the events that were
@@ -241,9 +241,9 @@ defaults to `*error-output*`.
 The script runner enables watch mode with environment variables:
 
 ```sh
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --once
-perl -e 'alarm 360; exec @ARGV' -- nix run . -- watch cl-weave/tests --watch-interval 0.25
+timeout 360s nix run . -- watch cl-weave/tests
+timeout 360s nix run . -- watch cl-weave/tests --once
+timeout 360s nix run . -- watch cl-weave/tests --watch-interval 0.25
 ```
 
 CI should use `run` rather than `watch`, with `--reporter junit`, `tap`,

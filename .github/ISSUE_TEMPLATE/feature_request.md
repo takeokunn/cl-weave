@@ -21,9 +21,9 @@ Describe how the change should be tested or demonstrated.
 
 Explain why this request fits [the project scope](../../docs/src/project-scope.md).
 
-## Compatibility Notes
+## Public Surface Notes
 
-Call out any public API, reporter, metadata, or platform compatibility impact.
+Call out any public API, reporter, metadata, or platform impact.
 
 Before submitting, review [the support policy](../../docs/src/support-policy.md)
 so the request matches the project's supported contribution and escalation paths.

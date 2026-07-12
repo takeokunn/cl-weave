@@ -10,7 +10,7 @@ Maintainers are responsible for:
 
 - triaging issues and pull requests against [project-scope.md](project-scope.md)
   and [support-policy.md](support-policy.md)
-- protecting compatibility expectations documented in
+- protecting documented public-surface expectations in
   [versioning-policy.md](versioning-policy.md)
 - keeping machine-readable metadata, release notes, and policy documents in sync
 - requiring regression coverage for public-surface changes when practical
@@ -26,18 +26,18 @@ change affects public contracts, release process, or downstream adoption.
 - Scope decisions follow [project-scope.md](project-scope.md).
 - Support and escalation decisions follow [support-policy.md](support-policy.md)
   and [triage-policy.md](triage-policy.md).
-- Compatibility-sensitive decisions follow
+- Public-surface-sensitive decisions follow
   [versioning-policy.md](versioning-policy.md).
 - Release readiness decisions follow [release-process.md](release-process.md).
 
 When a change touches multiple policies, maintainers should choose the narrowest
-decision that preserves documented compatibility and keeps metadata contracts
-accurate.
+decision that preserves documented public-surface expectations and keeps
+metadata contracts accurate.
 
 ## Review And Merge Expectations
 
 - Submissions should arrive through the canonical issue and pull request paths.
-- Pull requests should explain user-visible impact, compatibility risk, and the
+- Pull requests should explain user-visible impact, public-surface risk, and the
   validating commands that were run.
 - Maintainers should avoid merging changes that alter public CLI behavior,
   reporter shapes, metadata fields, or exported symbols without matching tests

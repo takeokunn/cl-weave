@@ -1,7 +1,7 @@
 (in-package #:cl-weave/tests)
 
 (describe "cli options"
-  (it "parses Vitest-shaped run options into explicit data"
+  (it "parses canonical run options into explicit data"
     (let ((options (parse-cli '("run"
                       "cl-weave/tests"
                       "--reporter=json"
@@ -92,7 +92,7 @@
               :to-equal "cli.snapshots")
       (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t)))
 
-  (it "rejects removed CLI compatibility aliases"
+  (it "rejects removed CLI aliases"
     (dolist (argv '(("run" "--testNamePattern" "cli")
                     ("run" "--outputFile=vitest-results.json")
                     ("run" "--testTimeout=1500")
