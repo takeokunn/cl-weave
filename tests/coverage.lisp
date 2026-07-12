@@ -34,7 +34,7 @@
                   (lambda ()
                     (values :first :second))))
                 :to-equal '(:first :second)))
-      (expect calls :to-be-nil)))
+      (expect calls :to-be-null)))
 
   (it "wraps run-all with coverage reset and save hooks"
     (let ((root (cl-weave::make-suite :name "root"))

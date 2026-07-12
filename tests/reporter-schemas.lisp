@@ -108,15 +108,13 @@
                      (cl-weave:reporter-artifact-schemas)
                      :key (lambda (entry) (getf entry :kind))
                      :test #'string=)))
-      (let* ((events (list (cl-weave::make-test-event
+      (let* ((events (list (make-sample-event
                             :status :pass
-                            :path '("schema" "result")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :path '("schema" "result"))
+                           (make-sample-event
                             :status :fail
                             :path '("schema" "failure")
-                            :reason "boom"
-                            :elapsed-internal-time 0)))
+                            :reason "boom")))
              (plan (list (cl-weave::make-test-plan-entry
                           :status :run
                           :path '("schema" "plan")

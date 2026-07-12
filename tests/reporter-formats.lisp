@@ -11,31 +11,26 @@
   (it "prints AI-readable S-expression results"
     (let ((output (with-output-to-string (stream)
                       (cl-weave::report-sexp
-                      (list (cl-weave::make-test-event
+                      (list (make-sample-event
                              :status :pass
                              :path '("reporters" "prints")
-                             :location '(:file "tests/reporters.lisp")
-                             :elapsed-internal-time 0)
-                            (cl-weave::make-test-event
+                             :location '(:file "tests/reporters.lisp"))
+                            (make-sample-event
                              :status :skip
                              :path '("reporters" "skips")
-                             :reason "example"
-                             :elapsed-internal-time 0)
-                            (cl-weave::make-test-event
+                             :reason "example")
+                            (make-sample-event
                             :status :todo
                             :path '("reporters" "todos")
-                            :reason "pending"
-                             :elapsed-internal-time 0)
-                            (cl-weave::make-test-event
+                            :reason "pending")
+                            (make-sample-event
                              :status :fail
                              :path '("reporters" "fails")
                              :reason "bad"
-                             :secondary-conditions '("cleanup one" "cleanup two")
-                             :elapsed-internal-time 0)
-                            (cl-weave::make-test-event
+                             :secondary-conditions '("cleanup one" "cleanup two"))
+                            (make-sample-event
                              :status :error
-                             :path '("reporters" "errors")
-                             :elapsed-internal-time 0))
+                             :path '("reporters" "errors")))
                       stream))))
       (expect output :to-contain ":CL-WEAVE/RESULTS")
       (expect output :to-contain ":SCHEMA-VERSION 4")
@@ -49,18 +44,18 @@
       (expect output :to-contain "\"reporters > fails\"")
       (expect output :to-contain ":ERRORED-PATHS")
       (expect output :to-contain "\"reporters > errors\"")
-      (expect output :to-contain
+      ;; The pretty printer may wrap between the key and its value.
+      (expect (normalize-command-document-text output) :to-contain
               ":SECONDARY-CONDITIONS (\"cleanup one\" \"cleanup two\")")))
 
   (it "prints secondary conditions in order in spec output"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-spec
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :fail
                             :path '("reporters" "cleanup")
                             :condition "primary"
-                            :secondary-conditions '("cleanup one" "cleanup two")
-                            :elapsed-internal-time 0))
+                            :secondary-conditions '("cleanup one" "cleanup two")))
                      stream))))
       (expect output :to-contain
               (format nil "secondary condition: cleanup one~%    secondary condition: cleanup two"))))
@@ -68,26 +63,22 @@
   (it "prints AI-readable JSON results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-json
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :pass
                             :path '("reporters" "json")
-                            :location '(:file "tests/reporters.lisp")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :location '(:file "tests/reporters.lisp"))
+                           (make-sample-event
                             :status :skip
                             :path '("reporters" "quotes")
-                            :reason "needs \"escaping\""
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "needs \"escaping\"")
+                           (make-sample-event
                             :status :fail
                             :path '("reporters" "fails")
                             :reason "bad"
-                            :secondary-conditions '("cleanup one" "cleanup two")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :secondary-conditions '("cleanup one" "cleanup two"))
+                           (make-sample-event
                             :status :error
-                            :path '("reporters" "errors")
-                            :elapsed-internal-time 0))
+                            :path '("reporters" "errors")))
                      stream))))
       (expect output :to-contain "\"schemaVersion\":6")
       (expect output :to-contain "\"kind\":\"test-results\"")
@@ -111,7 +102,7 @@
   (it "serializes assertion payloads as structured JSON data"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-json
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :fail
                             :path '("reporters" "isolated")
                             :condition "isolated process failed"
@@ -130,8 +121,7 @@
                                                   :home-path "/tmp/cl-weave-home/")
                                         :expected '(:status :pass :exit-code 0)
                                         :negated nil
-                                        :pass nil)
-                            :elapsed-internal-time 0))
+                                        :pass nil)))
                      stream))))
       (expect output :to-contain "\"schemaVersion\":6")
       (expect output :to-contain "\"matcher\":\":ISOLATED\"")
@@ -147,19 +137,17 @@
   (it "prints AI-readable JSONL result streams"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-jsonl
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :pass
                             :path '("reporters" "jsonl")
-                            :location '(:file "tests/reporters.lisp")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :location '(:file "tests/reporters.lisp"))
+                           (make-sample-event
                            :status :fail
                            :path '("reporters" "fails")
                            :reason "bad"
                             :secondary-conditions
                             (list (make-condition 'simple-error
-                                                  :format-control "cleanup"))
-                            :elapsed-internal-time 0))
+                                                  :format-control "cleanup"))))
                      stream))))
       (expect (with-input-from-string (stream output)
                 (loop for line = (read-line stream nil nil)

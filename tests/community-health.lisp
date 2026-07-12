@@ -87,8 +87,8 @@
                  (versioning-document #P"docs/versioning-policy.md" :normalize t))
      :required ((changelog ("## Unreleased" "### Release Classification"
                             "### Public Surface Notes" "### Migration Notes"
-                            "### User-visible Changes" "additive only"
-                            "No downstream migration steps are currently required."
+                            "### User-visible Changes" "breaking cleanup"
+                            "Replace legacy assertion aliases with the canonical expectation macros."
                             "Existing CLI output, reporter shapes, and machine-readable metadata remain the expected public surface"))
                 (maintenance-document ("public-surface discipline"
                                        "migration steps" "user-visible changes"))

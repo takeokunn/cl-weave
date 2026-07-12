@@ -42,9 +42,9 @@
 
   (it "derives artifact schema metadata from reporter contracts"
     (expect (cl-weave:reporter-artifact-schemas)
-            :to-be cl-weave::*reporter-artifact-schemas*)
+            :to-equal cl-weave::*reporter-artifact-schemas*)
     (expect (getf (cl-weave/metadata:framework-metadata) :artifact-schemas)
-            :to-be (cl-weave:reporter-artifact-schemas)))
+            :to-equal (cl-weave:reporter-artifact-schemas)))
 
   (it "exposes framework metadata through the public Lisp API"
     (let ((public-metadata (cl-weave/metadata:framework-metadata)))

@@ -2,9 +2,7 @@
 
 (describe "cli metadata doctor"
   (it "prints machine-readable doctor output"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("doctor" "--reporter" "json")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("doctor" "--reporter" "json"))))
       (let ((output (with-output-to-string (stream)
                       (cl-weave/cli::report-doctor options stream))))
         (expect output :to-contain "\"kind\":\"doctor-report\"")
@@ -16,11 +14,9 @@
         (expect output :to-contain "\"name\":\"workspace-asd-files\""))))
 
   (it "renders doctor output from the parsed CLI options"
-    (let* ((options (cl-weave/cli::parse-cli-arguments
-                     '("doctor" "definitely-missing-system"
+    (let* ((options (parse-cli '("doctor" "definitely-missing-system"
                        "--reporter" "json"
-                       "--output" "doctor.json")
-                     (cl-weave/cli::make-cli-options)))
+                       "--output" "doctor.json")))
            (output (with-output-to-string (stream)
                      (cl-weave/cli::report-doctor options stream))))
       (expect output :to-contain "\"name\":\"requested-system\"")
@@ -30,9 +26,7 @@
       (expect output :to-contain "doctor.json")))
 
   (it "allows Lisp-native doctor output"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("doctor" "--reporter" "sexp")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("doctor" "--reporter" "sexp"))))
       (let ((output (with-output-to-string (stream)
                       (cl-weave/cli::report-doctor options stream))))
         (expect output :to-contain ":KIND \"doctor-report\"")
@@ -40,9 +34,7 @@
         (expect output :to-contain ":RUNTIME"))))
 
   (it "treats doctor without a positional system as runtime-only diagnostics"
-    (let* ((options (cl-weave/cli::parse-cli-arguments
-                     '("doctor" "--reporter" "json")
-                     (cl-weave/cli::make-cli-options)))
+    (let* ((options (parse-cli '("doctor" "--reporter" "json")))
            (report (cl-weave/cli::doctor-report options))
            (checks (getf report :checks))
            (requested-system
@@ -61,9 +53,7 @@
               :to-contain "standard output")))
 
   (it "reports requested-system failures independently from runtime diagnostics"
-    (let* ((options (cl-weave/cli::parse-cli-arguments
-                     '("doctor" "definitely-missing-system" "--output" "doctor.json")
-                     (cl-weave/cli::make-cli-options)))
+    (let* ((options (parse-cli '("doctor" "definitely-missing-system" "--output" "doctor.json")))
            (report (cl-weave/cli::doctor-report options))
            (checks (getf report :checks))
            (cl-weave-system

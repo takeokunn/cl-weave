@@ -2,14 +2,11 @@
 
 (describe "cli metadata rendering"
   (it "prints AI-friendly framework metadata"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("metadata" "cl-weave-tests")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("metadata" "cl-weave-tests"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :metadata)
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))
-      (let ((output (with-output-to-string (stream)
-                      (cl-weave/cli::report-framework-metadata options stream))))
+      (let ((output (framework-metadata-output options)))
         (expect-text-contract
          output
          '("\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":22"
@@ -37,11 +34,8 @@
          '("\"--testNamePattern\"" "\"--updateSnapshots\"" "\"vitestAliases\"")))))
 
   (it "allows Lisp-native metadata output"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("metadata" "--reporter" "sexp")
-                    (cl-weave/cli::make-cli-options))))
-      (let ((output (with-output-to-string (stream)
-                      (cl-weave/cli::report-framework-metadata options stream))))
+    (let ((options (parse-cli '("metadata" "--reporter" "sexp"))))
+      (let ((output (framework-metadata-output options)))
         (expect output :to-contain ":KIND \"cl-weave-metadata\"")
         (expect output :to-contain ":OPTIONS")
         (expect output :to-contain ":PACKAGE-EXPORTS"))))

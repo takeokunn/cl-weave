@@ -3,11 +3,9 @@
 (describe "cli metadata artifacts"
   (it "writes AI metadata artifacts through the CLI output option"
     (let* ((output-file (test-temporary-pathname "cl-weave-metadata.json"))
-           (options (cl-weave/cli::parse-cli-arguments
-                     (list "metadata"
+           (options (parse-cli (list "metadata"
                            "--reporter" "json"
-                           "--output" (namestring output-file))
-                     (cl-weave/cli::make-cli-options))))
+                           "--output" (namestring output-file)))))
       (when (probe-file output-file)
         (delete-file output-file))
       (unwind-protect

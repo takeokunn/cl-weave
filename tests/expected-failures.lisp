@@ -66,7 +66,7 @@
               :to-equal (list cleanup-condition))
       (expect assertion :not :to-be nil)
       (expect (cl-weave::assertion-detail-actual assertion) :to-be :actual)
-      (expect (cl-weave::assertion-detail-expected assertion) :to-be :expected)))
+      (expect (cl-weave::assertion-detail-expected assertion) :to-equal '(:expected))))
 
   (it "retries implementation errors without converting the final error"
     (let ((attempts 0)

@@ -28,10 +28,9 @@
               "Coverage support is unavailable")))
 
   (it "explains result events through the spec reporter"
-    (let* ((event (cl-weave::make-test-event
+    (let* ((event (make-sample-event
                    :status :pass
-                   :path '("public API" "reports a pass")
-                   :elapsed-internal-time 0))
+                   :path '("public API" "reports a pass")))
            (output (with-output-to-string (stream)
                      (cl-weave:explain! (list event) stream))))
       (expect output :to-contain "public API > reports a pass")

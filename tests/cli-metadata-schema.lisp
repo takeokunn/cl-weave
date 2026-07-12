@@ -25,15 +25,15 @@
       (expect-json-field-contracts-documented
        docs
        (list cl-weave/metadata::*framework-metadata-json-fields*
-             cl-weave/cli::*json-capability-matrix-fields*
-             cl-weave/cli::*json-reference-document-fields*
-             cl-weave/cli::*json-citation-fields*
-             cl-weave/cli::*json-citation-author-fields*
-             cl-weave/cli::*json-distribution-channel-fields*
-             cl-weave/cli::*json-community-health-fields*
-             cl-weave/cli::*json-community-health-contact-link-fields*
-             cl-weave/cli::*json-governance-fields*
-             cl-weave/cli::*json-continuous-integration-fields*))))
+             cl-weave/metadata::*json-capability-matrix-fields*
+             cl-weave/metadata::*json-reference-document-fields*
+             cl-weave/metadata::*json-citation-fields*
+             cl-weave/metadata::*json-citation-author-fields*
+             cl-weave/metadata::*json-distribution-channel-fields*
+             cl-weave/metadata::*json-community-health-fields*
+             cl-weave/metadata::*json-community-health-contact-link-fields*
+             cl-weave/metadata::*json-governance-fields*
+             cl-weave/metadata::*json-continuous-integration-fields*))))
 
   (it "keeps the AI contract example version synchronized with the CLI version"
     (let* ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"

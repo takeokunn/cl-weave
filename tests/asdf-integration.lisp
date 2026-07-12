@@ -242,6 +242,10 @@
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)
                       calls)
+                ;; A real reload re-registers the suite; restore it after
+                ;; RUN-WATCHED-SYSTEM's CLEAR-TESTS so the next cycle can
+                ;; narrow reruns to registered test files.
+                (setf cl-weave::*root-suite* root)
                 (when (= (length calls) 2)
                   (throw 'watch-stop t))
                 t))
@@ -309,6 +313,10 @@
                             seed bail coverage coverage-output
                             pass-with-no-tests retry timeout-ms max-workers)
                       calls)
+                ;; A real reload re-registers the suite; restore it after
+                ;; RUN-WATCHED-SYSTEM's CLEAR-TESTS so the next cycle can
+                ;; narrow reruns to registered test files.
+                (setf cl-weave::*root-suite* root)
                 (when (= (length calls) 2)
                   (throw 'watch-stop t))
                 t))

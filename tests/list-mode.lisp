@@ -75,7 +75,7 @@
                   :name-filter "supports public custom matchers with structured failure data"))
            (location (cl-weave:test-plan-entry-location (first plan))))
       (expect (length plan) :to-be 1)
-      (expect (getf location :file) :to-contain "tests/expect-core.lisp")))
+      (expect (getf location :file) :to-contain "tests/expect-extensions.lisp")))
 
   (it "lists only tests whose source file matches the location filter"
     (let* ((root (cl-weave::make-suite :name "root"))

@@ -2,21 +2,15 @@
 
 (describe "cli entrypoint"
   (it "normalizes SBCL argument separators from nix run"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("--" "run" "cl-weave-tests" "--filter" "cli")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("--" "run" "cl-weave-tests" "--filter" "cli"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :run)
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))
       (expect (cl-weave/cli::cli-options-name-filter options) :to-equal "cli")))
 
   (it "prints Vitest-compatible version output without running tests"
-    (let ((flag-options (cl-weave/cli::parse-cli-arguments
-                         '("--version")
-                         (cl-weave/cli::make-cli-options)))
-          (command-options (cl-weave/cli::parse-cli-arguments
-                            '("version")
-                            (cl-weave/cli::make-cli-options)))
+    (let ((flag-options (parse-cli '("--version")))
+          (command-options (parse-cli '("version")))
           (exit-code nil)
           (version (cl-weave/cli::cli-version)))
       (expect (cl-weave/cli::cli-options-version flag-options) :to-be t)
@@ -32,12 +26,8 @@
           (expect exit-code :to-be 0)))))
 
   (it "prints help output without dispatching test execution"
-    (let ((flag-options (cl-weave/cli::parse-cli-arguments
-                         '("--help")
-                         (cl-weave/cli::make-cli-options)))
-          (command-options (cl-weave/cli::parse-cli-arguments
-                            '("help")
-                            (cl-weave/cli::make-cli-options)))
+    (let ((flag-options (parse-cli '("--help")))
+          (command-options (parse-cli '("help")))
           (exit-code nil)
           (run-command-called nil))
       (expect (cl-weave/cli::cli-options-help flag-options) :to-be t)
@@ -252,9 +242,7 @@
 
   (it "rejects CI-incompatible list reporters early"
     (dolist (reporter '("github" "junit"))
-      (let ((options (cl-weave/cli::parse-cli-arguments
-                      (list "list" "cl-weave-tests" "--reporter" reporter)
-                      (cl-weave/cli::make-cli-options))))
+      (let ((options (parse-cli (list "list" "cl-weave-tests" "--reporter" reporter))))
         (expect (lambda ()
                   (cl-weave/cli::ensure-valid-reporter-for-command options))
                 :to-throw))))
@@ -354,21 +342,16 @@
                       (pathname-directory cwd))))))
 
   (it "normalizes metadata reporter spec to JSON output"
-    (let* ((options (cl-weave/cli::parse-cli-arguments
-                     '("metadata" "cl-weave-tests" "--reporter" "spec")
-                     (cl-weave/cli::make-cli-options)))
-           (output (with-output-to-string (stream)
-                     (cl-weave/cli::report-framework-metadata options stream))))
+    (let* ((options (parse-cli '("metadata" "cl-weave-tests" "--reporter" "spec")))
+           (output (framework-metadata-output options)))
       (expect (cl-weave/cli::metadata-reporter options) :to-be :json)
       (expect output :to-contain "\"schemaVersion\":22")
       (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")))
 
   (it "normalizes spec metadata reporter before writing output"
     (let* ((output-file (test-temporary-pathname "cl-weave-metadata-spec.json"))
-           (options (cl-weave/cli::parse-cli-arguments
-                     (list "metadata" "--reporter" "spec"
-                           "--output" (namestring output-file))
-                     (cl-weave/cli::make-cli-options))))
+           (options (parse-cli (list "metadata" "--reporter" "spec"
+                           "--output" (namestring output-file)))))
       (when (probe-file output-file)
         (delete-file output-file))
       (unwind-protect
@@ -385,9 +368,7 @@
           (delete-file output-file)))))
 
   (it "normalizes doctor reporter spec to JSON output"
-    (let* ((options (cl-weave/cli::parse-cli-arguments
-                     '("doctor" "--reporter" "spec")
-                     (cl-weave/cli::make-cli-options)))
+    (let* ((options (parse-cli '("doctor" "--reporter" "spec")))
            (output (with-output-to-string (stream)
                      (cl-weave/cli::report-doctor options stream))))
       (expect (cl-weave/cli::doctor-reporter options) :to-be :json)
@@ -402,9 +383,7 @@
                 "cl-weave: metadata mode supports json and sexp reporters.")))
       (destructuring-bind (command reporter-function message) contract
         (dolist (reporter '("tap" "github" "junit" "jsonl"))
-          (let ((options (cl-weave/cli::parse-cli-arguments
-                          (list command "--reporter" reporter)
-                          (cl-weave/cli::make-cli-options))))
+          (let ((options (parse-cli (list command "--reporter" reporter))))
             (expect (lambda ()
                       (funcall reporter-function options))
                     :to-throw
@@ -438,4 +417,4 @@
                   :to-contain
                   (if argument
                       (format nil "~A ~A" name argument)
-))))))
+                      name))))))

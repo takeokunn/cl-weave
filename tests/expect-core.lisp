@@ -179,35 +179,33 @@
          :to-be 3)))
     ("expect-poll times out after a slow pass"
      (let ((timeout-signals 0))
-       (handler-bind
-           ((cl-weave:assertion-failure
-              (lambda (condition)
-                (when (eq (cl-weave::assertion-detail-matcher
-                           (cl-weave::failure-detail condition))
-                          :poll)
-                  (incf timeout-signals)))))
-         (handler-case
-             (progn
+       (handler-case
+           (handler-bind
+               ((cl-weave:assertion-failure
+                  (lambda (condition)
+                    (when (eq (cl-weave::assertion-detail-matcher
+                               (cl-weave::failure-detail condition))
+                              :poll)
+                      (incf timeout-signals)))))
                (expect-poll (lambda ()
                               (sleep 0.01)
                               :ready)
                  (:timeout-ms 0 :interval-ms 0)
-                 :to-be :ready)
-               (error "Expected expect-poll to fail."))
-           (cl-weave:assertion-failure (condition)
-             (with-assertion-detail (detail condition actual)
-               (expect timeout-signals :to-be 1)
-               (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
-               (expect (getf actual :attempts) :to-be 1)
-               (expect (getf actual :timeout-ms) :to-be 0)
-               (expect (getf actual :interval-ms) :to-be 0)
-               (expect (getf actual :last-value) :to-be :ready)
-               (expect (getf actual :last-condition) :to-be-null)
-               (let ((last-assertion (getf actual :last-assertion)))
-                 (expect (getf last-assertion :matcher) :to-be :to-be)
-                 (expect (getf last-assertion :actual) :to-be :ready)
-                 (expect (getf last-assertion :expected) :to-equal '(:ready))
-                 (expect (getf last-assertion :pass) :to-be-truthy)))))))
+                 :to-be :ready))
+         (cl-weave:assertion-failure (condition)
+           (with-assertion-detail (detail condition actual)
+             (expect timeout-signals :to-be 1)
+             (expect (cl-weave::assertion-detail-matcher detail) :to-be :poll)
+             (expect (getf actual :attempts) :to-be 1)
+             (expect (getf actual :timeout-ms) :to-be 0)
+             (expect (getf actual :interval-ms) :to-be 0)
+             (expect (getf actual :last-value) :to-be :ready)
+             (expect (getf actual :last-condition) :to-be-null)
+             (let ((last-assertion (getf actual :last-assertion)))
+               (expect (getf last-assertion :matcher) :to-be :to-be)
+               (expect (getf last-assertion :actual) :to-be :ready)
+               (expect (getf last-assertion :expected) :to-equal '(:ready))
+               (expect (getf last-assertion :pass) :to-be-truthy))))))
     ("expect-poll without explicit options"
      (let ((attempt 0))
        (expect-poll (lambda ()
@@ -307,7 +305,7 @@
         (with-assertion-detail (detail condition actual expected)
            (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-have-slot)
            (expect actual :to-equal '(:class sample-widget :slots (name state)))
-            (expect expected :to-equal '(:slot missing-slot))))))
+           (expect expected :to-equal '(:slot missing-slot))))))
     ("to-have-method-specialized-on failure reports normalized payload"
      (handler-case
          (progn
@@ -320,7 +318,7 @@
                    :to-have-method-specialized-on)
            (expect (getf actual :methods) :to-contain-equal '(sample-widget t))
            (expect (getf actual :methods) :to-contain-equal '((eql :preview) t))
-            (expect expected :to-equal '(:specializers (missing t))))))
+           (expect expected :to-equal '(:specializers (missing t)))))))
     ("to-throw rejects non-throwing thunk"
      (expect (lambda () (expect (lambda () :ok) :to-throw)) :to-throw))
     ("to-throw rejects non-function"
@@ -391,6 +389,6 @@
     ("not" (expect 1 :not :to-be 2))
     ("expect-not" (expect-not 1 :to-be 2))
     ("expect-extend matcher" (expect 5 :to-be-odd))
-     ("extend-expect matcher" (expect 5 :to-be-between 1 10))))
+    ("extend-expect matcher" (expect 5 :to-be-between 1 10))))
 
 )

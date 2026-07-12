@@ -93,7 +93,7 @@
                  (< actual 10))))
             :to-satisfy
             (lambda (form)
-              (and (tree-contains-p form 'expect-extend)
+              (and (tree-contains-p form 'extend-expect)
                    (tree-contains-p form :to-be-small)))))
 
   (it "expands smart expect into operand capture"

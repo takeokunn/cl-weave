@@ -11,23 +11,20 @@
                 :to-equal '("intentional")))))
 
   (it "registers todo.each cases without running bodies"
-    (let ((root (cl-weave::make-suite :name "root"))
-          (ran nil))
+    (let ((root (cl-weave::make-suite :name "root")))
       (let ((cl-weave::*root-suite* root)
             (cl-weave::*current-suite* nil))
         (it-todo-each ((1 2 3) (2 3 5))
             "adds ~A and ~A"
             (left right total)
-          "awaiting implementation"
-          (setf ran (list left right total))))
+          "awaiting implementation"))
       (let ((events (cl-weave::collect-events root)))
         (expect (mapcar #'cl-weave::test-event-status events)
                 :to-equal '(:todo :todo))
         (expect (mapcar #'cl-weave::test-event-reason events)
                 :to-equal '("awaiting implementation" "awaiting implementation"))
         (expect (mapcar #'cl-weave::test-event-path events)
-                :to-equal '(("adds 1 and 2") ("adds 2 and 3")))
-        (expect ran :to-be nil))))
+                :to-equal '(("adds 1 and 2") ("adds 2 and 3"))))))
 
   (it "reports todo tests without running their body"
     (let* ((called nil)

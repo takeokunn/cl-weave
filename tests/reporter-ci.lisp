@@ -4,27 +4,23 @@
   (it "prints CI-readable JUnit XML results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-junit
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :pass
-                            :path '("reporters" "passes")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :path '("reporters" "passes"))
+                           (make-sample-event
                             :status :skip
                             :path '("reporters" "skips")
-                            :reason "needs <thing>"
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "needs <thing>")
+                           (make-sample-event
                             :status :todo
                             :path '("reporters" "todos")
-                            :reason "pending"
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "pending")
+                           (make-sample-event
                             :status :fail
                             :path '("reporters" "fails")
                             :reason "bad <value> & reason"
                             :condition "primary"
-                            :secondary-conditions '("cleanup <one>" "cleanup & two")
-                            :elapsed-internal-time 0))
+                            :secondary-conditions '("cleanup <one>" "cleanup & two")))
                      stream))))
       (expect output :to-contain "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
       (expect output :to-contain "<testsuite name=\"cl-weave\" tests=\"4\"")
@@ -60,21 +56,18 @@
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :pass
-                            :path '("reporters" "passes")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :path '("reporters" "passes"))
+                           (make-sample-event
                             :status :skip
                             :path '("reporters" "skips")
-                            :reason "needs terminal"
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "needs terminal")
+                           (make-sample-event
                             :status :todo
                             :path '("reporters" "todos")
-                            :reason "pending"
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "pending")
+                           (make-sample-event
                             :status :fail
                             :path '("reporters" "fails")
                             :condition "bad value"
@@ -86,13 +79,11 @@
                                         :actual 1
                                         :expected 2
                                         :negated nil
-                                        :pass nil)
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                                        :pass nil))
+                           (make-sample-event
                             :status :error
                             :path '("reporters" "errors")
-                            :condition "boom"
-                            :elapsed-internal-time 0))
+                            :condition "boom"))
                      stream))))
       (expect output :to-contain "TAP version 13")
       (expect output :to-contain "1..5")
@@ -110,16 +101,14 @@
   (it "preserves unicode while normalizing TAP line breaks"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :skip
                             :path '("parser" "handles λ")
-                            :reason (format nil "line1~%line2~C絵文字😀" #\Tab)
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason (format nil "line1~%line2~C絵文字😀" #\Tab))
+                           (make-sample-event
                             :status :fail
                             :path '("parser" "keeps 雪")
-                            :condition (format nil "壊れた~%入力")
-                            :elapsed-internal-time 0))
+                            :condition (format nil "壊れた~%入力")))
                      stream))))
       (expect output :to-contain "ok 1 - parser > handles λ # SKIP line1 line2 絵文字😀")
       (expect output :to-contain "not ok 2 - parser > keeps 雪")
@@ -128,16 +117,14 @@
   (it "prints GitHub Actions annotations for failures and errors"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-github
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :pass
-                            :path '("reporters" "passes")
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :path '("reporters" "passes"))
+                           (make-sample-event
                             :status :skip
                             :path '("reporters" "skips")
-                            :reason "needs terminal"
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                            :reason "needs terminal")
+                           (make-sample-event
                             :status :fail
                             :path '("reporters" "fails")
                             :location '(:file "tests/reporters,case:lisp")
@@ -150,13 +137,11 @@
                                         :actual 1
                                         :expected 2
                                         :negated nil
-                                        :pass nil)
-                            :elapsed-internal-time 0)
-                           (cl-weave::make-test-event
+                                        :pass nil))
+                           (make-sample-event
                             :status :error
                             :path '("reporters" "errors")
-                            :condition "boom"
-                            :elapsed-internal-time 0))
+                            :condition "boom"))
                      stream))))
       (expect output :to-contain "::error file=tests/reporters%2Ccase%3Alisp::")
       (expect output :to-contain "reporters > fails [fail]%0Abad%25%0Avalue, x:y")
@@ -171,12 +156,11 @@
   (it "preserves unicode while percent-encoding GitHub annotation control characters"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-github
-                     (list (cl-weave::make-test-event
+                     (list (make-sample-event
                             :status :fail
                             :path '("parser" "handles λ")
                             :location '(:file "tests/雪,λ.lisp")
-                            :condition (format nil "bad%~%絵文字😀")
-                            :elapsed-internal-time 0))
+                            :condition (format nil "bad%~%絵文字😀")))
                      stream))))
       (expect output :to-contain "::error file=tests/雪%2Cλ.lisp::")
       (expect output :to-contain "parser > handles λ [fail]%0Abad%25%0A絵文字😀")

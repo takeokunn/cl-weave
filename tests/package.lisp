@@ -89,11 +89,17 @@
    #:logic-program
    #:logic-query
    #:logic-search-exhausted
+   #:accept-current
+   #:property-shrink-limit
+   #:property-shrink-limit-max-steps
+   #:property-shrink-limit-steps
+   #:property-shrink-limit-values
    #:property-shrinker-error
    #:property-shrinker-error-cause
    #:property-shrinker-error-generator
    #:property-shrinker-error-value
    #:retry-shrinker
+   #:same-property-failure-p
    #:skip-shrinking
    #:logic-search-exhausted-limit
    #:logic-search-exhausted-partial-results
@@ -125,6 +131,7 @@
    #:mutation-original
    #:mutation-path
    #:mutation-replacement
+   #:mutation-result-condition
    #:mutation-result-status
    #:mutation-score-failure
    #:mutation-score-failure-min-score

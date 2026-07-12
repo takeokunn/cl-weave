@@ -104,7 +104,7 @@
       (expect (getf metadata :schema-version) :to-be 22)
       (expect results-schema :not :to-be nil)
       (expect (getf results-schema :commands) :to-equal '("run" "watch"))
-      (expect (getf results-schema :reporters) :to-equal '("json" "sexp"))
+      (expect (getf results-schema :reporters) :to-equal '("json"))
       (expect (getf results-schema :schema-version) :to-be 6)
       (expect (getf results-schema :streaming) :to-be nil)
       (expect (find "events" (getf results-schema :fields)

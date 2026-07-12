@@ -105,6 +105,20 @@
 (defun workflow-command-string (command)
   (format nil "~{~A~^ ~}" command))
 
+(defun parse-cli (arguments)
+  "Parse ARGUMENTS into a fresh CLI options record."
+  (cl-weave/cli::parse-cli-arguments arguments (cl-weave/cli::make-cli-options)))
+
+(defun framework-metadata-output (options)
+  "Capture the framework metadata report for OPTIONS as a string."
+  (with-output-to-string (stream)
+    (cl-weave/cli::report-framework-metadata options stream)))
+
+(defun make-sample-event (&rest initargs)
+  "Build a test event for reporter tests, defaulting elapsed time to zero."
+  (apply #'cl-weave::make-test-event
+         (append initargs (list :elapsed-internal-time 0))))
+
 (defun normalize-command-document-text (text)
   (with-output-to-string (stream)
     (loop with spacing = t

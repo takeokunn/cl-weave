@@ -29,15 +29,11 @@
                (expect output :to-contain "\"kind\":\"test-results\"")
                (expect output :to-contain "\"events\":[]")))
         (when (probe-file output-file)
-          (delete-file output-file))))
+          (delete-file output-file)))))
 
   (it "parses list and watch commands without executing tests"
-    (let ((list-options (cl-weave/cli::parse-cli-arguments
-                         '("list" "cl-weave-tests" "--reporter" "sexp")
-                         (cl-weave/cli::make-cli-options)))
-          (watch-options (cl-weave/cli::parse-cli-arguments
-                          '("watch" "cl-weave-tests" "--watch-interval" "1.5")
-                          (cl-weave/cli::make-cli-options))))
+    (let ((list-options (parse-cli '("list" "cl-weave-tests" "--reporter" "sexp")))
+          (watch-options (parse-cli '("watch" "cl-weave-tests" "--watch-interval" "1.5"))))
       (expect (cl-weave/cli::cli-options-command list-options) :to-be :list)
       (expect (cl-weave/cli::cli-options-list list-options) :to-be t)
       (expect (cl-weave/cli::cli-options-reporter list-options) :to-be :sexp)
@@ -71,7 +67,7 @@
                 '(:reporter :json
                   :name-filter "watch"
                   :shard nil
-                  :order :random
+                  :order nil
                   :seed nil
                   :bail nil
                   :coverage t
@@ -82,6 +78,4 @@
                   :max-workers 4
                   :include-dependencies t
                   :once t
-                  :interval 1.25)))))
-
-))
+                  :interval 1.25))))))

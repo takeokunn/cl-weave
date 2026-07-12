@@ -63,7 +63,11 @@
                        'cl-weave:expected-failure-missed
                        :reason "known defect")
                       "known defect"))
-          do (expect (princ-to-string condition) :to-contain fragment)))
+          do (let ((*package* (find-package '#:cl-weave/tests)))
+               ;; The pretty printer may wrap long assertion forms.
+               (expect (normalize-command-document-text
+                        (princ-to-string condition))
+                       :to-contain fragment))))
 
   (it "wraps each test body with around-each continuations"
     (let ((root (cl-weave::make-suite :name "root"))

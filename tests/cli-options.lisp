@@ -2,8 +2,7 @@
 
 (describe "cli options"
   (it "parses Vitest-shaped run options into explicit data"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("run"
+    (let ((options (parse-cli '("run"
                       "cl-weave-tests"
                       "--reporter=json"
                       "--filter"
@@ -32,8 +31,7 @@
                       "tests/__snapshots__/"
                       "--snapshot-file"
                       "cli.snapshots"
-                      "--update-snapshots")
-                    (cl-weave/cli::make-cli-options))))
+                      "--update-snapshots"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :run)
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))
@@ -90,9 +88,7 @@
                     ("run" "--updateSnapshots")
                     ("watch" "cl-weave-tests" "--watchInterval" "2.5")))
       (expect (lambda ()
-                (cl-weave/cli::parse-cli-arguments
-                 argv
-                 (cl-weave/cli::make-cli-options)))
+                (parse-cli argv))
               :to-throw
               "Unknown option")))
 
@@ -106,16 +102,12 @@
                  (cl-weave/cli::cli-options-watch-interval
                   (cl-weave/cli::options-from-environment)))))
       (expect (cl-weave/cli::cli-options-watch-interval
-               (cl-weave/cli::parse-cli-arguments
-                '("watch" "--watch-interval" "0.25")
-                (cl-weave/cli::make-cli-options)))
+               (parse-cli '("watch" "--watch-interval" "0.25")))
               :to-be 0.25)
       (expect (watch-interval-from-env "0.25") :to-be 0.25)
       (dolist (value '("0" "-1" "1/2" "1 " ".5" "1." "#.(error \"reader\")"))
         (expect (lambda ()
-                  (cl-weave/cli::parse-cli-arguments
-                   (list "watch" "--watch-interval" value)
-                   (cl-weave/cli::make-cli-options)))
+                  (parse-cli (list "watch" "--watch-interval" value)))
                 :to-throw
                 "--watch-interval must be a positive number")
         (expect (lambda ()
@@ -124,9 +116,7 @@
                 "CL_WEAVE_WATCH_INTERVAL must be a positive number"))))
 
   (it "parses watch once policy from flags and environment"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("watch" "--once")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("watch" "--once"))))
       (expect (cl-weave/cli::cli-options-watch-once options) :to-be t))
     (with-mocked-functions
         (((symbol-function 'uiop:getenv)
@@ -138,15 +128,11 @@
         (expect (cl-weave/cli::cli-options-watch-once options) :to-be t))))
 
   (it "parses doctor as a machine-readable command with an optional positional system"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("doctor" "--reporter" "json")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("doctor" "--reporter" "json"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :doctor)
       (expect (cl-weave/cli::cli-options-reporter options) :to-be :json)
       (expect (cl-weave/cli::cli-options-systems options) :to-equal '()))
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("doctor" "cl-weave-tests")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("doctor" "cl-weave-tests"))))
       (expect (cl-weave/cli::cli-options-command options) :to-be :doctor)
       (expect (cl-weave/cli::cli-options-systems options)
               :to-equal '("cl-weave-tests"))))
@@ -168,9 +154,7 @@
         (expect (cl-weave/cli::cli-options-update-snapshots options) :to-be t))))
 
   (it "parses no-test policy from flags and environment"
-    (let ((options (cl-weave/cli::parse-cli-arguments
-                    '("run" "--fail-with-no-tests" "--pass-with-no-tests")
-                    (cl-weave/cli::make-cli-options))))
+    (let ((options (parse-cli '("run" "--fail-with-no-tests" "--pass-with-no-tests"))))
       (expect (cl-weave/cli::cli-options-pass-with-no-tests options) :to-be t))
     (with-mocked-functions
         (((symbol-function 'uiop:getenv)
@@ -190,9 +174,7 @@
                      "--fail-with-no-tests=true"
                      "--update-snapshots=false"))
       (expect (lambda ()
-                (cl-weave/cli::parse-cli-arguments
-                 (list "run" token)
-                 (cl-weave/cli::make-cli-options)))
+                (parse-cli (list "run" token)))
               :to-throw
               "does not accept an inline value")))
 
