@@ -12,6 +12,14 @@
      ,@body))
 
 (describe "runner public API"
+  (it "exports the registered root suite"
+    (with-registered-demo-suites ("root suite api")
+      (multiple-value-bind (symbol status)
+          (find-symbol "ROOT-SUITE" "CL-WEAVE")
+        (expect status :to-be :external)
+        (expect symbol :to-be 'cl-weave:root-suite))
+      (expect (cl-weave:root-suite) :to-be cl-weave::*root-suite*)))
+
   (it "runs a suite selected by its name designator"
     (with-registered-demo-suites ("selected api suite" "other api suite")
       (let ((events (cl-weave:run "selected api suite"

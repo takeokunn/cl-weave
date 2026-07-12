@@ -208,6 +208,7 @@
    #:report-mutations-json
    #:report-mutations-sexp
    #:results-status
+   #:root-suite
    #:run
    #:run-all
    #:run-isolated
