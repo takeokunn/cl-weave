@@ -31,7 +31,7 @@ entrypoints for bugs, feature proposals, and pull requests.
 - Bug intake is anchored to [docs/issue-reporting.md](issue-reporting.md).
 - Feature intake is anchored to [docs/project-scope.md](project-scope.md) and
   [docs/support-policy.md](support-policy.md).
-- Security-sensitive reports are anchored to [SECURITY.md](../SECURITY.md).
+- Security-sensitive reports are anchored to [private GitHub security advisories](https://github.com/takeokunn/cl-weave/security/advisories/new).
 - Pull request intake is anchored to
   [docs/pull-request-template.md](pull-request-template.md).
 - Review ownership and process authority are anchored to

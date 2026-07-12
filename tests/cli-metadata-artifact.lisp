@@ -16,10 +16,10 @@
              (let ((output (read-text-file output-file)))
                (define-metadata-contract-tests
                 output
-                "\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":22"
+                "\"kind\":\"cl-weave-metadata\"" "\"schemaVersion\":23"
                 "\"artifactSchemas\"" "\"qualityGates\"" "\"capabilityMatrix\""
                 "\"packageExports\"" "\"policyDocuments\"" "\"referenceDocuments\""
-                "\"citation\"" "\"distributionChannels\"" "\"supportChannels\""
+                "\"distributionChannels\"" "\"supportChannels\""
                 "\"communityHealth\"" "\"requiredSections\"" "\"contactLinks\""
                 "\"purpose\":\"Check whether the request belongs in issue tracking and what detail is required.\""
                 "\"securityContacts\"" "\"lifecycle\"" "\"governance\""

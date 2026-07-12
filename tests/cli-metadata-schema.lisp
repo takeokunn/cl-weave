@@ -27,8 +27,6 @@
        (list cl-weave/metadata::*framework-metadata-json-fields*
              cl-weave/metadata::*json-capability-matrix-fields*
              cl-weave/metadata::*json-reference-document-fields*
-             cl-weave/metadata::*json-citation-fields*
-             cl-weave/metadata::*json-citation-author-fields*
              cl-weave/metadata::*json-distribution-channel-fields*
              cl-weave/metadata::*json-community-health-fields*
              cl-weave/metadata::*json-community-health-contact-link-fields*

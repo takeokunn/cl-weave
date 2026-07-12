@@ -21,11 +21,8 @@ boundaries.
 Use [docs/issue-reporting.md](docs/issue-reporting.md) for reproducible bugs
 and behavior questions.
 
-Use [CONTRIBUTING.md](CONTRIBUTING.md) for development, review, and release
-workflow expectations.
-
-Use [SECURITY.md](SECURITY.md) for private vulnerability reporting. Do not put
-exploit details in a public issue.
+Use [private GitHub security advisories](https://github.com/takeokunn/cl-weave/security/advisories/new)
+for vulnerability reporting. Do not put exploit details in a public issue.
 
 ## Status
 
@@ -1384,7 +1381,6 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 
 ## Project Operations
 
-- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Adoption guide: [docs/adoption.md](docs/adoption.md)
 - AI contract: [docs/ai-contract.md](docs/ai-contract.md)
 - Issue reporting guide: [docs/issue-reporting.md](docs/issue-reporting.md)
@@ -1396,7 +1392,6 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 - Issue template routing: [.github/ISSUE_TEMPLATE/config.yml](.github/ISSUE_TEMPLATE/config.yml)
 - Community health contract: [docs/community-health.md](docs/community-health.md)
 - Code ownership: [.github/CODEOWNERS](.github/CODEOWNERS)
-- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 - Governance: [docs/governance.md](docs/governance.md)
 - Maintenance policy: [docs/maintenance-policy.md](docs/maintenance-policy.md)
 - Distribution policy: [docs/distribution-policy.md](docs/distribution-policy.md)
@@ -1406,13 +1401,12 @@ CI should keep `CL_WEAVE_WATCH` unset and use `CL_WEAVE_REPORTER=junit`,
 - Versioning policy: [docs/versioning-policy.md](docs/versioning-policy.md)
 - Project scope: [docs/project-scope.md](docs/project-scope.md)
 - Triage policy: [docs/triage-policy.md](docs/triage-policy.md)
-- Security reporting policy: [SECURITY.md](SECURITY.md)
-- Citation metadata: [CITATION.cff](CITATION.cff)
+- Security reporting: <https://github.com/takeokunn/cl-weave/security/advisories/new>
 - Issue tracker: <https://github.com/takeokunn/cl-weave/issues>
-- Release notes: [CHANGELOG.md](CHANGELOG.md)
+- Release notes: <https://github.com/takeokunn/cl-weave/releases>
 
 Runtime metadata mirrors these operations surfaces through `policyDocuments`,
-`referenceDocuments`, `citation`, `supportChannels`, `communityHealth`,
+`referenceDocuments`, `supportChannels`, `communityHealth`,
 `securityContacts`, `lifecycle`, `runtimeSupport`, and `releaseProcess` for
 agent-side OSS operations discovery.
 

@@ -9,7 +9,6 @@
           *metadata-capability-matrix*
           *metadata-policy-documents*
           *metadata-reference-documents*
-          *metadata-citation*
           *metadata-distribution-channels*
           *metadata-support-channels*
           *metadata-community-health*
@@ -118,7 +117,6 @@
 (define-metadata-readers
   (metadata-policy-documents *metadata-policy-documents*)
   (metadata-reference-documents *metadata-reference-documents*)
-  (metadata-citation *metadata-citation*)
   (metadata-distribution-channels *metadata-distribution-channels*)
   (metadata-support-channels *metadata-support-channels*)
   (metadata-community-health *metadata-community-health*)
@@ -132,7 +130,7 @@
 (defun framework-metadata ()
   (list
    :kind "cl-weave-metadata"
-   :schema-version 22
+   :schema-version 23
    :homepage (framework-homepage)
    :bug-tracker (framework-bug-tracker)
    :license (framework-license)
@@ -148,7 +146,6 @@
    :options (metadata-cli-options)
    :policy-documents (metadata-policy-documents)
    :reference-documents (metadata-reference-documents)
-   :citation (metadata-citation)
    :distribution-channels (metadata-distribution-channels)
    :support-channels (metadata-support-channels)
    :community-health (metadata-community-health)

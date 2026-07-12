@@ -10,10 +10,7 @@
       (expect (getf metadata :license)
               :to-equal "MIT")
       (expect (getf metadata :policy-documents)
-              :to-equal '("CONTRIBUTING.md"
-                          "CODE_OF_CONDUCT.md"
-                          "SECURITY.md"
-                          "docs/community-health.md"
+              :to-equal '("docs/community-health.md"
                           "docs/distribution-policy.md"
                           "docs/governance.md"
                           "docs/issue-reporting.md"
@@ -29,31 +26,15 @@
               :to-equal '((:name "readme"
                            :path "README.md"
                            :description "Primary user-facing guide and CLI reference.")
-                          (:name "citation"
-                           :path "CITATION.cff"
-                           :description "Canonical citation metadata for research, cataloging, and downstream attribution.")
                           (:name "ai-contract"
                            :path "docs/ai-contract.md"
                            :description "Machine-readable contract and metadata normalization guide.")
                           (:name "adoption-guide"
                            :path "docs/adoption.md"
                            :description "Migration guidance and downstream adoption plan.")
-                          (:name "release-notes"
-                           :path "CHANGELOG.md"
-                           :description "User-visible changes and release history.")
                           (:name "license"
                            :path "LICENSE"
                            :description "Canonical project license text.")))
-      (expect (getf metadata :citation)
-              :to-equal '(:cff-version "1.2.0"
-                          :message "If you use cl-weave in research, tooling, or documentation, please cite the project using this metadata."
-                          :title "cl-weave"
-                          :authors ((:name "takeokunn"))
-                          :license "MIT"
-                          :repository-code "https://github.com/takeokunn/cl-weave"
-                          :url "https://github.com/takeokunn/cl-weave"
-                          :version "0.2.0"
-                          :preferred-citation-path "CITATION.cff"))
       (expect (getf metadata :distribution-channels)
               :to-equal '((:name "source-self-test"
                            :kind "source-checkout"
@@ -122,14 +103,13 @@
                            :purpose "GitHub issue chooser configuration that redirects support and security traffic to canonical policies."
                            :references ("docs/community-health.md"
                                         "docs/support-policy.md"
-                                        "SECURITY.md"
                                         "docs/issue-reporting.md")
                            :required-sections nil
                            :contact-links ((:name "Support policy"
                                             :target "https://github.com/takeokunn/cl-weave/blob/main/docs/support-policy.md"
                                             :purpose "Check whether the request belongs in issue tracking and what detail is required.")
-                                           (:name "Security policy"
-                                            :target "https://github.com/takeokunn/cl-weave/blob/main/SECURITY.md"
+                                           (:name "Security reporting"
+                                            :target "https://github.com/takeokunn/cl-weave/security/advisories/new"
                                             :purpose "Report vulnerabilities through the private security contact path.")
                                            (:name "Issue reporting guide"
                                             :target "https://github.com/takeokunn/cl-weave/blob/main/docs/issue-reporting.md"
@@ -154,17 +134,16 @@
                            :required-sections nil
                            :contact-links nil)))
       (expect (getf metadata :security-contacts)
-              :to-equal '((:name "security-policy"
-                           :kind "document"
-                           :target "SECURITY.md"
-                           :scope "Private vulnerability reporting guidance and security handling policy.")))
+              :to-equal '((:name "security-reporting"
+                           :kind "github"
+                           :target "https://github.com/takeokunn/cl-weave/security/advisories/new"
+                           :scope "Private vulnerability reporting through GitHub security advisories.")))
       (expect (getf metadata :lifecycle)
               :to-equal '(:stage "pre-1.0"
                           :status "active"
                           :supported-line "main"
                           :support-document "docs/support-policy.md"
-                          :versioning-document "docs/versioning-policy.md"
-                          :security-document "SECURITY.md"))
+                          :versioning-document "docs/versioning-policy.md"))
       (expect (getf metadata :governance)
               :to-equal '(:policy-document "docs/governance.md"
                           :review-ownership ".github/CODEOWNERS"
@@ -173,7 +152,7 @@
                            "Protecting compatibility expectations recorded in the versioning policy."
                            "Keeping machine-readable metadata, release notes, and policy documents synchronized."
                            "Requiring regression coverage for public-surface changes when practical."
-                           "Handling security-sensitive reports through the private SECURITY.md path.")
+                           "Handling security-sensitive reports through private GitHub security advisories.")
                           :decision-documents
                           ("docs/project-scope.md"
                            "docs/support-policy.md"
@@ -205,8 +184,8 @@
                           :checklist
                           ("Run the full test suite."
                            "Run nix flake check --print-build-logs when Nix is available."
-                           "Review CHANGELOG.md and summarize user-visible changes."
-                           "Check that README.md, CONTRIBUTING.md, SECURITY.md, and docs/maintenance-policy.md still match the current workflow."
+                           "Summarize user-visible changes in the release notes."
+                           "Check that README.md and docs/maintenance-policy.md still match the current workflow."
                            "Review docs/pull-request-template.md and .github/pull_request_template.md so release-bound changes still capture public-surface notes, validation commands, and follow-up risk in a consistent format."
                            "Verify that cl-weave metadata still advertises the expected package links, reporter list, and schema versions."
                            "Verify that docs/distribution-policy.md still matches the documented source and Nix install paths."

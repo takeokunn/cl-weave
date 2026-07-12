@@ -18,9 +18,9 @@ For public-surface discipline and migration expectations, see
 
 1. Run the full test suite.
 2. Run `nix flake check --print-build-logs` when Nix is available.
-3. Review `CHANGELOG.md` and summarize user-visible changes.
-4. Check that `README.md`, `CONTRIBUTING.md`, `SECURITY.md`, and
-   `docs/maintenance-policy.md` still match the current workflow.
+3. Summarize user-visible changes in the release notes.
+4. Check that `README.md` and `docs/maintenance-policy.md` still match the
+   current workflow.
 5. Review `docs/pull-request-template.md` and
    `.github/pull_request_template.md` so release-bound changes still capture
    public-surface notes, validation commands, and follow-up risk in a

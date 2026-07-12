@@ -32,7 +32,7 @@ For the release labeling and public-surface discipline, see
   attention.
 - Use pull requests for fixes that can be validated locally and covered by
   regression tests.
-- Use [CONTRIBUTING.md](../CONTRIBUTING.md) for workflow details, validation
+- Use [docs/community-health.md](community-health.md) for workflow details, validation
   commands, and coding standards.
 - Use [release-process.md](release-process.md) when a patch changes release
   notes, metadata, or other shipped contracts.

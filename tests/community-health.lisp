@@ -58,97 +58,41 @@
 (describe "community health"
   (define-document-contract-tests
     ("keeps OSS operations documents discoverable"
-     :documents ((readme #P"README.md")
-                 (contributing #P"CONTRIBUTING.md")
-                 (security #P"SECURITY.md")
-                 (changelog #P"CHANGELOG.md"))
-     :existing ("LICENSE" "CITATION.cff" "CONTRIBUTING.md" "SECURITY.md"
-                "CHANGELOG.md" ".github/ISSUE_TEMPLATE/bug_report.md"
+     :documents ((readme #P"README.md"))
+     :existing ("LICENSE" ".github/ISSUE_TEMPLATE/bug_report.md"
                 ".github/ISSUE_TEMPLATE/feature_request.md"
                 ".github/ISSUE_TEMPLATE/config.yml"
                 ".github/pull_request_template.md" ".github/CODEOWNERS"
                 "docs/community-health.md")
-     :required ((readme ("LICENSE" "CITATION.cff" "CONTRIBUTING.md"
-                         "SECURITY.md" "CHANGELOG.md"
+     :required ((readme ("LICENSE"
                          ".github/ISSUE_TEMPLATE/bug_report.md"
                          ".github/ISSUE_TEMPLATE/feature_request.md"
                          ".github/ISSUE_TEMPLATE/config.yml"
                          ".github/pull_request_template.md" ".github/CODEOWNERS"
-                         "docs/community-health.md" "docs/governance.md"))
-                (contributing ("nix flake check" "cl-weave metadata"
-                               ".github/pull_request_template.md"
-                               "docs/community-health.md" "docs/governance.md"))
-                (security ("subprocess isolation" "snapshot writes"))
-                (changelog ("Unreleased"
-                            "machine-readable policy document metadata"))))
-    ("keeps the changelog aligned with release policy expectations"
-     :documents ((changelog #P"CHANGELOG.md" :normalize t)
-                 (maintenance-document #P"docs/maintenance-policy.md" :normalize t)
+                         "docs/community-health.md" "docs/governance.md"))))
+    ("keeps maintenance and versioning policies aligned with release expectations"
+     :documents ((maintenance-document #P"docs/maintenance-policy.md" :normalize t)
                  (versioning-document #P"docs/versioning-policy.md" :normalize t))
-     :required ((changelog ("## Unreleased" "### Release Classification"
-                            "### Public Surface Notes" "### Migration Notes"
-                            "### User-visible Changes" "breaking cleanup"
-                            "Replace legacy assertion aliases with the canonical expectation macros."
-                            "Existing CLI output, reporter shapes, and machine-readable metadata remain the expected public surface"))
-                (maintenance-document ("public-surface discipline"
+     :required ((maintenance-document ("public-surface discipline"
                                        "migration steps" "user-visible changes"))
                 (versioning-document ("additive only" "behavior-preserving"
-                                      "intentionally breaking")))
-     :forbidden ((changelog ("TBD" "TODO")))))
+                                      "intentionally breaking")))))
 
-  (it "keeps citation and license contracts synchronized with repository metadata"
+  (it "keeps license contracts synchronized with repository metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (reference-documents (getf metadata :reference-documents))
-           (citation (getf metadata :citation))
-           (citation-entry (find "CITATION.cff"
-                                 reference-documents
-                                 :key (lambda (entry) (getf entry :path))
-                                 :test #'string=))
            (license-entry (find "LICENSE"
                                 reference-documents
                                 :key (lambda (entry) (getf entry :path))
                                 :test #'string=))
-           (citation-document (read-text-file
-                               (merge-pathnames #P"CITATION.cff"
-                                                (uiop:getcwd))))
            (license-document (read-text-file
                               (merge-pathnames #P"LICENSE"
-                                               (uiop:getcwd))))
-           (author-name (getf (first (getf citation :authors)) :name)))
-      (expect citation-entry :not :to-be nil)
+                                               (uiop:getcwd)))))
       (expect license-entry :not :to-be nil)
-      (expect (probe-file (merge-pathnames "CITATION.cff" (uiop:getcwd)))
-              :not :to-be nil)
       (expect (probe-file (merge-pathnames "LICENSE" (uiop:getcwd)))
               :not :to-be nil)
-      (expect (getf citation :preferred-citation-path)
-              :to-equal "CITATION.cff")
-      (expect citation-document
-              :to-contain
-              (format nil "cff-version: ~A" (getf citation :cff-version)))
-      (expect citation-document
-              :to-contain
-              (format nil "message: \"~A\"" (getf citation :message)))
-      (expect citation-document
-              :to-contain
-              (format nil "title: \"~A\"" (getf citation :title)))
-      (expect citation-document
-              :to-contain
-              (format nil "license: \"~A\"" (getf citation :license)))
-      (expect citation-document
-              :to-contain
-              (format nil "repository-code: \"~A\"" (getf citation :repository-code)))
-      (expect citation-document
-              :to-contain
-              (format nil "url: \"~A\"" (getf citation :url)))
-      (expect citation-document
-              :to-contain
-              (format nil "version: \"~A\"" (getf citation :version)))
-      (expect citation-document
-              :to-contain
-              (format nil "name: \"~A\"" author-name))
       (expect license-document :to-contain "MIT License")
-      (expect license-document :to-contain author-name)))
+      (expect license-document :to-contain "takeokunn")))
 
   (it "keeps the community health contract synchronized with GitHub intake files"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
@@ -197,10 +141,6 @@
                               (read-text-file
                                (merge-pathnames #P"docs/support-policy.md"
                                                 (uiop:getcwd)))))
-           (security-document (normalize-markdown-text
-                               (read-text-file
-                                (merge-pathnames #P"SECURITY.md"
-                                                 (uiop:getcwd)))))
            (issue-guide (normalize-markdown-text
                          (read-text-file
                           (merge-pathnames #P"docs/issue-reporting.md"
@@ -210,8 +150,8 @@
                                            (uiop:getcwd))))
            (support-policy-url (format nil "~A/blob/main/docs/support-policy.md"
                                        homepage))
-           (security-policy-url (format nil "~A/blob/main/SECURITY.md"
-                                        homepage)))
+           (security-reporting-url (format nil "~A/security/advisories/new"
+                                           homepage)))
       (dolist (path policy-documents)
         (expect (probe-file (merge-pathnames path (uiop:getcwd)))
                 :not :to-be nil)
@@ -244,17 +184,13 @@
                    :to-contain
                    "about: Check whether the request belongs in issue tracking and what detail is required."))))
       (dolist (entry security-contacts)
-        (expect (probe-file (merge-pathnames (getf entry :target) (uiop:getcwd)))
-                :not :to-be nil)
+        (expect (getf entry :target) :to-equal security-reporting-url)
         (expect readme :to-contain (getf entry :target))
         (expect support-document :to-contain "Use private security reporting")
-        (expect security-document :to-contain "# Reporting")
-        (expect security-document :to-contain "Report vulnerabilities privately")
-        (expect security-document :to-contain "docs/support-policy.md")
         (expect issue-guide :to-contain "security process")
-        (expect issue-guide :to-contain "SECURITY.md")
-        (expect issue-config :to-contain "name: Security policy")
-        (expect issue-config :to-contain security-policy-url)
+        (expect issue-guide :to-contain security-reporting-url)
+        (expect issue-config :to-contain "name: Security reporting")
+        (expect issue-config :to-contain security-reporting-url)
         (expect issue-config
                 :to-contain
                 "about: Report vulnerabilities through the private security contact path."))))
@@ -287,7 +223,7 @@
       (expect issue-guide :to-contain "# Issue Reporting Guide")
       (expect issue-guide :to-contain "support-policy.md")
       (expect issue-guide :to-contain "security process")
-      (expect issue-guide :to-contain "SECURITY.md")
+      (expect issue-guide :to-contain "security/advisories/new")
       (dolist (detail '("The exact command you ran."
                         "The `cl-weave` version or commit if you are testing a local checkout."
                         "The Common Lisp implementation and version."
@@ -412,10 +348,6 @@
                       (read-text-file
                        (merge-pathnames #P"docs/governance.md"
                                         (uiop:getcwd)))))
-           (contributing (normalize-markdown-text
-                          (read-text-file
-                           (merge-pathnames #P"CONTRIBUTING.md"
-                                            (uiop:getcwd)))))
            (codeowners (read-text-file
                         (merge-pathnames (getf governance :review-ownership)
                                          (uiop:getcwd)))))
@@ -432,8 +364,7 @@
                                       (subseq path (1+ (or (position #\/ path :from-end t)
                                                            -1))))
                                     (getf governance :decision-documents))
-                            '("../SECURITY.md"
-                              "../.github/CODEOWNERS")))
+                            '("../.github/CODEOWNERS")))
         (expect document :to-contain path))
       (expect-document-fragments
        document
@@ -449,9 +380,6 @@
          "public CLI behavior"
          "reporter shapes"
          "exported symbols"))
-      (expect-document-fragments
-       contributing
-       '("review ownership" "release responsibility" "docs/governance.md"))
       (expect-document-fragments codeowners '("*" "@"))))
 
   (it "keeps the release-process document synchronized with release metadata"
@@ -482,10 +410,6 @@
                                   (read-text-file
                                    (merge-pathnames #P"docs/maintenance-policy.md"
                                                     (uiop:getcwd)))))
-           (contributing-document (normalize-markdown-text
-                                   (read-text-file
-                                    (merge-pathnames #P"CONTRIBUTING.md"
-                                                     (uiop:getcwd)))))
            (ai-contract (read-text-file
                          (merge-pathnames #P"docs/ai-contract.md"
                                           (uiop:getcwd)))))
@@ -497,7 +421,7 @@
               :to-contain "docs/maintenance-policy.md")
       (expect support-document :to-contain "release-process.md")
       (expect support-document :to-contain "versioning-policy.md")
-      (expect support-document :to-contain "CONTRIBUTING.md")
+      (expect support-document :to-contain "pull-request-template.md")
       (expect support-document :to-contain "runtime-support.md")
       (expect versioning-document :to-contain (getf lifecycle :stage))
       (expect versioning-document :to-contain "breaking changes")
@@ -509,14 +433,8 @@
               "current development line is the primary support target")
       (expect maintenance-document :to-contain "support boundaries")
       (expect maintenance-document :to-contain "versioning policy")
-      (expect maintenance-document :to-contain "CONTRIBUTING.md")
+      (expect maintenance-document :to-contain "community-health.md")
       (expect maintenance-document :to-contain "release-process.md")
-      (expect contributing-document
-              :to-contain
-              (normalize-markdown-text (getf lifecycle :support-document)))
-      (expect contributing-document
-              :to-contain
-              (normalize-markdown-text (getf lifecycle :versioning-document)))
       (expect ai-contract :to-contain "\"lifecycle\": {")
       (expect ai-contract
               :to-contain
@@ -532,8 +450,4 @@
       (expect ai-contract
               :to-contain
               (format nil "\"versioningDocument\": \"~A\""
-                      (getf lifecycle :versioning-document)))
-      (expect ai-contract
-              :to-contain
-              (format nil "\"securityDocument\": \"~A\""
-                      (getf lifecycle :security-document))))))
+                      (getf lifecycle :versioning-document))))))
