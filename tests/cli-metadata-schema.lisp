@@ -20,7 +20,7 @@
 
 (describe "cli metadata schema contracts"
   (it "keeps the AI contract synchronized with metadata root fields"
-    (let ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
+    (let ((docs (read-text-file (merge-pathnames #P"docs/src/ai-contract.md"
                                                  (uiop:getcwd)))))
       (expect-json-field-contracts-documented
        docs
@@ -34,14 +34,14 @@
              cl-weave/metadata::*json-continuous-integration-fields*))))
 
   (it "keeps the AI contract example version synchronized with the CLI version"
-    (let* ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
+    (let* ((docs (read-text-file (merge-pathnames #P"docs/src/ai-contract.md"
                                                   (uiop:getcwd))))
            (version (cl-weave/cli::cli-version)))
       (expect version :not :to-equal "unknown")
       (expect docs :to-contain (format nil "\"version\": \"~A\"" version))))
 
   (it "keeps the AI contract release-process example synchronized with metadata"
-    (let* ((docs (read-text-file (merge-pathnames #P"docs/ai-contract.md"
+    (let* ((docs (read-text-file (merge-pathnames #P"docs/src/ai-contract.md"
                                                   (uiop:getcwd))))
            (normalized-docs (normalize-markdown-text docs))
            (metadata (getf (cl-weave/metadata:framework-metadata) :release-process)))

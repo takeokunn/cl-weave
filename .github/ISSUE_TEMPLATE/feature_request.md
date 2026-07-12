@@ -19,11 +19,11 @@ Describe how the change should be tested or demonstrated.
 
 ## Scope Check
 
-Explain why this request fits [docs/project-scope.md](../../docs/project-scope.md).
+Explain why this request fits [the project scope](../../docs/src/project-scope.md).
 
 ## Compatibility Notes
 
 Call out any public API, reporter, metadata, or platform compatibility impact.
 
-Before submitting, review [docs/support-policy.md](../../docs/support-policy.md)
+Before submitting, review [the support policy](../../docs/src/support-policy.md)
 so the request matches the project's supported contribution and escalation paths.

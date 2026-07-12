@@ -38,13 +38,13 @@ mode, say so explicitly.
 
 ## Practical Guidance
 
-- Check [docs/pull-request-template.md](pull-request-template.md) before opening a pull request so
+- Check [docs/src/pull-request-template.md](pull-request-template.md) before opening a pull request so
   the local validation workflow matches maintainer expectations.
-- Check [docs/project-scope.md](project-scope.md) before filing a feature
+- Check [docs/src/project-scope.md](project-scope.md) before filing a feature
   request.
-- Check [docs/triage-policy.md](triage-policy.md) before opening a bug report
+- Check [docs/src/triage-policy.md](triage-policy.md) before opening a bug report
   or pull request.
-- Check [docs/maintenance-policy.md](maintenance-policy.md) for support
+- Check [docs/src/maintenance-policy.md](maintenance-policy.md) for support
   boundaries and release expectations.
-- Check [docs/runtime-support.md](runtime-support.md) for implementation and
+- Check [docs/src/runtime-support.md](runtime-support.md) for implementation and
   platform coverage.

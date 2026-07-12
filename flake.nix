@@ -22,6 +22,32 @@
       ];
       forAllSystems =
         function: nixpkgs.lib.genAttrs systems (system: function (import nixpkgs { inherit system; }));
+
+      mkDocs =
+        pkgs:
+        pkgs.stdenvNoCC.mkDerivation {
+          pname = "cl-weave-docs";
+          version = "0.4.0";
+          src = pkgs.lib.fileset.toSource {
+            root = ./docs;
+            fileset = pkgs.lib.fileset.unions [
+              ./docs/book.toml
+              ./docs/src
+            ];
+          };
+          nativeBuildInputs = [ pkgs.mdbook ];
+          buildPhase = ''
+            runHook preBuild
+            mdbook build --dest-dir "$out" .
+            runHook postBuild
+          '';
+          dontInstall = true;
+          meta = {
+            description = "Rendered mdBook documentation for cl-weave";
+            homepage = "https://github.com/takeokunn/cl-weave";
+            license = pkgs.lib.licenses.mit;
+          };
+        };
     in
     {
       devShells = forAllSystems (pkgs: {
@@ -232,6 +258,8 @@
       );
 
       packages = forAllSystems (pkgs: {
+        docs = mkDocs pkgs;
+
         default = pkgs.stdenv.mkDerivation {
           pname = "cl-weave";
           version = "0.4.0";
