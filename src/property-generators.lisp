@@ -75,25 +75,27 @@
                                                      (1+ (- max-length min-length))))
                     collect (funcall (property-generator-produce element-generator) rng)))
    :shrink (lambda (value)
-             (let ((structural-candidates
-                     (list nil (subseq value 0 (truncate (length value) 2))))
-                   (element-candidates
-                     (loop for index from 0
-                           for element in value
-                           append
-                           (loop for shrunk in
-                                 (funcall (property-generator-shrink element-generator)
-                                          element)
-                                 collect (let ((next (copy-list value)))
-                                           (setf (nth index next) shrunk)
-                                           next)))))
-               (remove-duplicates
-                (remove-if-not
-                 (lambda (candidate)
-                   (and (listp candidate)
-                        (<= min-length (length candidate) max-length)))
-                 (append structural-candidates element-candidates))
-                :test #'equal)))))
+             ;; Alternative generators (GEN-ONE-OF) may offer foreign values.
+             (when (finite-proper-list-p value)
+               (let ((structural-candidates
+                       (list nil (subseq value 0 (truncate (length value) 2))))
+                     (element-candidates
+                       (loop for index from 0
+                             for element in value
+                             append
+                             (loop for shrunk in
+                                   (funcall (property-generator-shrink element-generator)
+                                            element)
+                                   collect (let ((next (copy-list value)))
+                                             (setf (nth index next) shrunk)
+                                             next)))))
+                 (remove-duplicates
+                  (remove-if-not
+                   (lambda (candidate)
+                     (and (listp candidate)
+                          (<= min-length (length candidate) max-length)))
+                   (append structural-candidates element-candidates))
+                  :test #'equal))))))
 
 (defun gen-string (&key (min-length 0)
                         (max-length 16)
@@ -117,25 +119,27 @@
                                           rng)))
                   value))
      :shrink (lambda (value)
-               (let ((structural-candidates
-                       (list "" (subseq value 0 (truncate (length value) 2))))
-                     (character-candidates
-                       (loop for index from 0 below (length value)
-                             append
-                             (loop for shrunk in
-                                   (funcall (property-generator-shrink
-                                             character-generator)
-                                            (char value index))
-                                   collect (let ((next (copy-seq value)))
-                                             (setf (char next index) shrunk)
-                                             next)))))
-                 (remove-duplicates
-                  (remove-if-not
-                   (lambda (candidate)
-                     (and (stringp candidate)
-                          (<= min-length (length candidate) max-length)))
-                   (append structural-candidates character-candidates))
-                  :test #'string=))))))
+               ;; Alternative generators (GEN-ONE-OF) may offer foreign values.
+               (when (stringp value)
+                 (let ((structural-candidates
+                         (list "" (subseq value 0 (truncate (length value) 2))))
+                       (character-candidates
+                         (loop for index from 0 below (length value)
+                               append
+                               (loop for shrunk in
+                                     (funcall (property-generator-shrink
+                                               character-generator)
+                                              (char value index))
+                                     collect (let ((next (copy-seq value)))
+                                               (setf (char next index) shrunk)
+                                               next)))))
+                   (remove-duplicates
+                    (remove-if-not
+                     (lambda (candidate)
+                       (and (stringp candidate)
+                            (<= min-length (length candidate) max-length)))
+                     (append structural-candidates character-candidates))
+                    :test #'string=)))))))
 
 (defun gen-vector (element-generator &key (min-length 0) (max-length 8))
   (ensure-property-generator element-generator "gen-vector")
@@ -153,24 +157,26 @@
                                       rng))
                'vector))
    :shrink (lambda (value)
-             (let ((structural-candidates
-                     (list #() (subseq value 0 (truncate (length value) 2))))
-                   (element-candidates
-                     (loop for index from 0 below (length value)
-                           append
-                           (loop for shrunk in
-                                 (funcall (property-generator-shrink element-generator)
-                                          (aref value index))
-                                 collect (let ((next (copy-seq value)))
-                                           (setf (aref next index) shrunk)
-                                           next)))))
-               (remove-duplicates
-                (remove-if-not
-                 (lambda (candidate)
-                   (and (vectorp candidate)
-                        (<= min-length (length candidate) max-length)))
-                 (append structural-candidates element-candidates))
-                :test #'equalp)))))
+             ;; Alternative generators (GEN-ONE-OF) may offer foreign values.
+             (when (vectorp value)
+               (let ((structural-candidates
+                       (list #() (subseq value 0 (truncate (length value) 2))))
+                     (element-candidates
+                       (loop for index from 0 below (length value)
+                             append
+                             (loop for shrunk in
+                                   (funcall (property-generator-shrink element-generator)
+                                            (aref value index))
+                                   collect (let ((next (copy-seq value)))
+                                             (setf (aref next index) shrunk)
+                                             next)))))
+                 (remove-duplicates
+                  (remove-if-not
+                   (lambda (candidate)
+                     (and (vectorp candidate)
+                          (<= min-length (length candidate) max-length)))
+                   (append structural-candidates element-candidates))
+                  :test #'equalp))))))
 
 (defun state-machine-trace (initial-state transition events)
   (let ((state initial-state)
