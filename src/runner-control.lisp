@@ -42,10 +42,10 @@
 (defmacro with-escape-continuation ((continue) &body body)
   (let ((tag (gensym "ESCAPE-TAG"))
         (value (gensym "VALUE")))
-    `(let ((,tag (gensym "ESCAPE-CONTINUATION")))
+    `(let ((,tag (cons 'escape-continuation nil)))
        (catch ,tag
-         (flet ((,continue (,value)
-                  (throw ,tag ,value)))
+         (let ((,continue (lambda (,value)
+                            (throw ,tag ,value))))
            ,@body)))))
 
 (defun normalize-bail (bail)

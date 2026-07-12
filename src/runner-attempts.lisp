@@ -101,6 +101,10 @@
     ((stringp reason) reason)
     (t (princ-to-string reason))))
 
+(defun retry-budget-exhausted-error ()
+  (make-condition 'simple-error
+                  :format-control "The configured retry budget is exhausted."))
+
 (defun call-test-attempt/restarts (suite test start retry)
   (restart-case
       (call-test-case-with-timeout/k
@@ -123,7 +127,10 @@
       :report "Retry the current test attempt using the configured retry budget."
       (if (plusp *retry-budget-remaining*)
           (funcall retry)
-          (error "The configured retry budget is exhausted.")))))
+          ;; Build the event directly: signaling here would offer the error
+          ;; to outer handlers and abort any enclosing runner.
+          (make-event :error suite test start
+                      :condition (retry-budget-exhausted-error))))))
 
 (defun offer-condition-to-outer-handlers (condition)
   (let ((*runner-default-condition-handler-disabled* t))
@@ -139,44 +146,47 @@
   `(let ((*runner-propagate-conditions* ,enabled))
      ,@body))
 
+(defun attempt-condition-handler (finish-attempt event-builder)
+  "Build a handler that finishes the attempt with EVENT-BUILDER's event.
+The handler declines while the condition is being offered to outer
+handlers, so one runner's propagation cannot abort an enclosing runner."
+  (lambda (condition)
+    (unless *runner-default-condition-handler-disabled*
+      (funcall finish-attempt
+               (call-with-propagated-condition/k
+                condition
+                (lambda () (funcall event-builder condition)))))))
+
 (defun run-test-attempt/k (suite test start retry continue)
   (let ((*attempt-secondary-conditions* nil))
     (let ((event
             (with-escape-continuation (finish-attempt)
               (handler-bind
                   ((platform-timeout
-                     (lambda (condition)
-                       (funcall
-                        finish-attempt
-                        (call-with-propagated-condition/k
-                         condition
-                         (lambda ()
-                           (make-event
-                            :fail suite test start
-                            :condition
-                            (make-condition
-                             'test-timeout
-                             :timeout-ms (effective-timeout-ms test))))))))
+                     (attempt-condition-handler
+                      finish-attempt
+                      (lambda (condition)
+                        (declare (ignore condition))
+                        (make-event
+                         :fail suite test start
+                         :condition
+                         (make-condition
+                          'test-timeout
+                          :timeout-ms (effective-timeout-ms test))))))
                    (assertion-failure
-                     (lambda (condition)
-                       (funcall
-                        finish-attempt
-                        (call-with-propagated-condition/k
-                         condition
-                         (lambda ()
-                           (make-event
-                            :fail suite test start
-                            :condition condition
-                            :assertion (failure-detail condition)))))))
+                     (attempt-condition-handler
+                      finish-attempt
+                      (lambda (condition)
+                        (make-event
+                         :fail suite test start
+                         :condition condition
+                         :assertion (failure-detail condition)))))
                    (error
-                     (lambda (condition)
-                       (funcall
-                        finish-attempt
-                        (call-with-propagated-condition/k
-                         condition
-                         (lambda ()
-                           (make-event :error suite test start
-                                       :condition condition)))))))
+                     (attempt-condition-handler
+                      finish-attempt
+                      (lambda (condition)
+                        (make-event :error suite test start
+                                    :condition condition)))))
                 (call-test-attempt/restarts suite test start retry)))))
       (setf event (expected-failure-event suite test start event))
       (funcall continue event))))

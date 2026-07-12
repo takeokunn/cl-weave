@@ -60,6 +60,8 @@
         (*has-assertions-form* nil))
     (let ((primary-condition nil)
           (result nil))
+      ;; SERIOUS-CONDITION (not ERROR) so platform timeouts, which SBCL
+      ;; signals as a bare serious condition, still reach the cleanup hooks.
       (handler-case
           (setf result
                 (let ((before-errors
@@ -75,7 +77,7 @@
                      (funcall (test-case-function test))
                      (verify-assertion-counts)
                      (funcall continue)))))
-        (error (condition)
+        (serious-condition (condition)
           (setf primary-condition condition)))
       (let ((cleanup-errors
               (call-hooks/collect-errors (effective-after-hooks suite))))
