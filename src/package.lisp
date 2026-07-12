@@ -1,7 +1,21 @@
+(defpackage #:cl-weave/metadata
+  (:use #:cl)
+  (:export
+   #:framework-metadata
+   #:*metadata-commands*
+   #:*metadata-cli-options*
+   #:metadata-cli-options
+   #:cli-option-usage-lines
+   #:cli-version
+   #:write-doctor-report-json))
+
 (defpackage #:cl-weave
   (:use #:cl)
   (:shadow #:describe)
+  (:import-from #:cl-weave/metadata
+   #:framework-metadata)
   (:export
+   #:framework-metadata
    #:*test-context*
    #:around-each
    #:after-all
@@ -142,6 +156,7 @@
    #:property-shrink-limit-max-steps
    #:property-shrink-limit-steps
    #:property-shrink-limit-values
+   #:accept-current
    #:property-shrinker-error
    #:property-shrinker-error-cause
    #:property-shrinker-error-generator
@@ -218,12 +233,14 @@
    #:with-restored-bindings
    #:with-restored-hash-table))
 
-(defpackage #:cl-weave/metadata
-  (:use #:cl)
-  (:export
-   #:framework-metadata))
-
 (defpackage #:cl-weave/cli
   (:use #:cl)
+  (:import-from #:cl-weave/metadata
+   #:*metadata-commands*
+   #:*metadata-cli-options*
+   #:metadata-cli-options
+   #:cli-option-usage-lines
+   #:cli-version
+   #:write-doctor-report-json)
   (:export
    #:main))

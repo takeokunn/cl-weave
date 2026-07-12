@@ -1,7 +1,5 @@
 (in-package #:cl-weave/cli)
 
-(declaim (special *metadata-commands*))
-
 (defun command-token-p (token)
   (member token *metadata-commands* :test #'string=))
 

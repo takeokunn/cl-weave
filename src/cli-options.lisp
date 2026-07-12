@@ -1,7 +1,5 @@
 (in-package #:cl-weave/cli)
 
-(declaim (special *metadata-cli-options*))
-
 (define-condition cli-error (error)
   ((message :initarg :message :reader cli-error-message))
   (:report (lambda (condition stream)
