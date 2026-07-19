@@ -1,14 +1,12 @@
 # Pull Request Template
 
-Use this template when opening a pull request for `cl-weave`.
+Use this guide for the full pull request checklist. The rendered GitHub
+template at `.github/pull_request_template.md` presents the core prompts and
+links reviewers here for the supporting context.
 
 ## Summary
 
 What changed and why:
-
-## Related Issue Or Policy
-
-Link the issue, policy, or contract that motivated the change:
 
 ## Validation
 
@@ -27,6 +25,11 @@ breaking for the public surface:
 
 Call out any remaining risk, unsupported edge case, or intentional follow-up:
 
+## Related Issue Or Policy
+
+Link the relevant issue, policy, or contract document:
+
 ## Notes For Reviewers
 
-Use this space for implementation details, migration notes, or follow-up work:
+Identify review focus, rollout considerations, or questions that need an
+explicit maintainer decision:

@@ -1,5 +1,23 @@
 (in-package #:cl-weave/tests)
 
+(defun isolated-test-process-alive-p (pid)
+  (and (integerp pid)
+       (plusp pid)
+       (handler-case
+           (progn
+             (sb-posix:kill pid 0)
+             t)
+         (sb-posix:syscall-error () nil))))
+
+(defun expect-isolated-test-process-dead (pid-path)
+  (let ((pid (parse-integer (uiop:read-file-string pid-path)
+                            :junk-allowed t)))
+    (expect pid :not :to-be nil)
+    (loop repeat 200
+          while (isolated-test-process-alive-p pid)
+          do (sleep 0.01))
+    (expect (isolated-test-process-alive-p pid) :to-be nil)))
+
 (it "captures uncapped stdout and stderr bursts without loss"
       (let* ((burst-size (* 256 1024))
              (result

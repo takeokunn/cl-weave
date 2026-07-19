@@ -36,7 +36,7 @@
                (34 (write-string "&quot;" stream))
                (39 (write-string "&apos;" stream))
                (t
-                (if (or (member code (quote (9 10 13)))
+                (if (or (member code '(9 10 13))
                         (<= #x20 code #xd7ff)
                         (<= #xe000 code #xfffd)
                         (<= #x10000 code #x10ffff))

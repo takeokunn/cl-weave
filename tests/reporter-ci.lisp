@@ -33,7 +33,6 @@
       (expect output :to-contain
               (format nil "secondary condition: cleanup &lt;one&gt;~%secondary condition: cleanup &amp; two"))))
 
-  (progn
   (it "sanitizes JUnit XML strings with portable control-character rules"
     (let ((escaped (cl-weave::xml-escaped-string
                     (coerce (list #\< #\> #\& #\"
@@ -56,12 +55,31 @@
                            "?"))))
 
   (it "replaces XML 1.0 noncharacters when representable"
-    (dolist (code (quote (#xfffe #xffff)))
+    (dolist (code '(#xfffe #xffff))
       (let ((character (code-char code)))
         (when character
           (expect (cl-weave::xml-escaped-string (string character))
-                  :to-equal "?"))))))
+                  :to-equal "?")))))
 
+  (it "replaces characters outside the valid XML 1.0 range with ?"
+    (let ((escaped (cl-weave::xml-escaped-string
+                    (coerce (list #\A
+                                  (code-char #xd800)
+                                  (code-char #xdfff)
+                                  (code-char #xfffe)
+                                  (code-char #xffff)
+                                  (code-char #x2603)
+                                  (code-char #x1f600))
+                            'string))))
+      (expect escaped :to-equal
+              (concatenate 'string
+                           "A"
+                           "?"
+                           "?"
+                           "?"
+                           "?"
+                           (string (code-char #x2603))
+                           (string (code-char #x1f600))))))
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap
