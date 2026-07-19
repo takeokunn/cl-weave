@@ -53,6 +53,26 @@
                            (string (code-char 13))
                            "?"))))
 
+  (it "replaces characters outside the valid XML 1.0 range with ?"
+    (let ((escaped (cl-weave::xml-escaped-string
+                    (coerce (list #\A
+                                  (code-char #xd800)
+                                  (code-char #xdfff)
+                                  (code-char #xfffe)
+                                  (code-char #xffff)
+                                  (code-char #x2603)
+                                  (code-char #x1f600))
+                            'string))))
+      (expect escaped :to-equal
+              (concatenate 'string
+                           "A"
+                           "?"
+                           "?"
+                           "?"
+                           "?"
+                           (string (code-char #x2603))
+                           (string (code-char #x1f600))))))
+
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap
