@@ -197,21 +197,20 @@ via
 `isolated-result-script-path`, `isolated-result-stdout-path`,
 `isolated-result-stderr-path`, and `isolated-result-home-path`. With the
 default `:keep-files nil`, those public path accessors always return `nil`.
-Normally, synchronous cleanup deletes the temporary artifacts before control
-returns to the parent process. If cleanup cannot finish within its bounded
-time window, a private registry retains a strong internal owner without
-exposing its paths through the result. Cleanup owners receive bounded, fair
-retries toward eventual deletion; `drain-isolated-cleanups` provides explicit,
-bounded cleanup cycles. `isolated-cleanup-snapshots` reports primitive metadata
-only, never owner objects or artifact paths.
+Cleanup is synchronous: control returns to the parent only after an
+`unwind-protect` cleanup clause has made a best-effort attempt to delete the
+script, stdout, stderr, and home-directory files (`delete-file` and
+`uiop:delete-directory-tree`, each wrapped in `ignore-errors`). There is no
+cleanup registry, retry queue, or background worker; a delete that fails is
+silently skipped rather than retried.
 
-`run-isolated` creates a separate session and process group. Process cleanup
-covers the isolated process and cooperative descendants that remain in that
-process group. Descendants that deliberately call `setsid`, `setpgid`, or
-otherwise leave the group are outside the containment guarantee. This boundary
-provides process cleanup, not an OS security sandbox. Once process-group
-authority is `:scope-lost`, cleanup is observe-only: it may observe exit and
-reap the process, but it never signals the PGID through that authority.
+`run-isolated` spawns a single SBCL subprocess via `sb-ext:run-program` and
+tracks only that direct child; it does not create a separate session or
+process group, and it does not track or signal any grandchild processes the
+child spawns. On timeout, the tracked child receives `SIGTERM` (15), then
+`SIGKILL` (9) after a short grace period if it is still alive. This is process
+cleanup for the direct child only, not an OS security sandbox or a containment
+guarantee over descendant processes.
 
 ## ASDF System Runner And Watch Mode
 

@@ -56,11 +56,12 @@ line-oriented logs, `github` emits GitHub Actions annotations, and `junit`
 produces XML for CI ingestion. List mode supports `spec`, `sexp`, `json`, and
 `jsonl`.
 
-The CLI uses kebab-case flags consistently, including `--test-name-pattern`,
-`--watch-interval`, `--coverage-output`, `--output-file`,
-`--test-timeout-ms`, `--pass-with-no-tests`, `--fail-with-no-tests`,
-`--snapshot-dir`, `--snapshot-file`, `--max-workers`, and
-`--update-snapshots`.
+The CLI uses kebab-case flags consistently, including `--watch-interval`,
+`--coverage-output`, `--coverage-report-directory`, `--test-timeout-ms`,
+`--pass-with-no-tests`, `--fail-with-no-tests`, `--snapshot-dir`,
+`--snapshot-file`, `--max-workers`, and `--update-snapshots`. Test-name
+filtering and output redirection use the single-word flags `--filter` and
+`--output`, respectively.
 
 ## CI
 

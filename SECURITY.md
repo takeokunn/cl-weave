@@ -2,9 +2,11 @@
 
 ## Supported Versions
 
-Security fixes are applied to the current `0.6.x` release line. Earlier
-releases are not supported; upgrade to the latest release before reporting a
-behavior that may already be fixed.
+Security fixes are applied to the current mainline release. Earlier releases
+are not supported; upgrade to the latest release before reporting a behavior
+that may already be fixed. See
+[docs/src/maintenance-policy.md](docs/src/maintenance-policy.md) for the
+supported-surface policy.
 
 ## Reporting a Vulnerability
 

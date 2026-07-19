@@ -333,7 +333,7 @@ verification and scope policy for those channels lives in
     {
       "kind": "test-results",
       "commands": ["run", "watch"],
-      "reporters": ["json", "sexp"],
+      "reporters": ["json"],
       "schemaVersion": 6,
       "streaming": false,
       "fields": [
@@ -348,6 +348,27 @@ verification and scope policy for those channels lives in
           "kind": "object",
           "required": true,
           "description": "Aggregated run counts and failure paths."
+        }
+      ]
+    },
+    {
+      "kind": "cl-weave/results",
+      "commands": ["run", "watch"],
+      "reporters": ["sexp"],
+      "schemaVersion": 4,
+      "streaming": false,
+      "fields": [
+        {
+          "name": "events",
+          "kind": "list",
+          "required": true,
+          "description": "Ordered test events."
+        },
+        {
+          "name": "failed-paths",
+          "kind": "list",
+          "required": true,
+          "description": "Vitest-style paths with failed assertions."
         }
       ]
     },
@@ -411,58 +432,7 @@ verification and scope policy for those channels lives in
       "publicApis": ["describe", "it", "describe-each", "it-concurrent", "it-isolated"],
       "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
       "documentation": ["README.md", "docs/src/ai-contract.md"]
-    },
-  ],
-  "environment": ["CL_WEAVE_REPORTER"],
-  "options": [
-    {
-      "name": "--filter",
-      "commands": ["run", "list", "watch"],
-      "argument": "TEXT",
-      "valueKind": "test-name-pattern",
-      "choices": [],
-      "commandChoices": [],
-      "environment": ["CL_WEAVE_TEST_FILTER"],
-      "description": "Run or list tests whose Vitest-style path contains TEXT"
     }
-  ],
-  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
-      "documentation": ["README.md", "docs/src/ai-contract.md"]
-    },
-  ],
-  "environment": ["CL_WEAVE_REPORTER"],
-  "options": [
-    {
-      "name": "--filter",
-      "commands": ["run", "list", "watch"],
-      "argument": "TEXT",
-      "valueKind": "test-name-pattern",
-      "choices": [],
-      "commandChoices": [],
-      "environment": ["CL_WEAVE_TEST_FILTER"],
-      "description": "Run or list tests whose Vitest-style path contains TEXT"
-    }
-  ],
-  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
-      "documentation": ["README.md", "docs/src/ai-contract.md"]
-    },
-  ],
-  "environment": ["CL_WEAVE_REPORTER"],
-  "options": [
-    {
-      "name": "--filter",
-      "commands": ["run", "list", "watch"],
-      "argument": "TEXT",
-      "valueKind": "test-name-pattern",
-      "choices": [],
-      "commandChoices": [],
-      "environment": ["CL_WEAVE_TEST_FILTER"],
-      "description": "Run or list tests whose Vitest-style path contains TEXT"
-    }
-  ],
-  "qualityGates": ["flake-check", "filtered-smoke", "plan-artifact"],
-      "documentation": ["README.md", "docs/src/ai-contract.md"]
-    },
   ],
   "environment": ["CL_WEAVE_REPORTER"],
   "options": [
@@ -1401,7 +1371,8 @@ The JSON test plan reporter prints one object:
       "focused": false,
       "retry": 0,
       "timeoutMs": null,
-      "concurrent": false
+      "concurrent": false,
+      "tags": []
     }
   ]
 }
@@ -1425,6 +1396,7 @@ The S-expression test plan reporter uses the same data:
    :focused nil
    :retry 0
    :timeout-ms nil
+   :tags nil
    :concurrent nil)))
 ```
 
@@ -1438,7 +1410,7 @@ The JSONL test plan reporter uses the same entry shape as JSON test plan
 
 ```jsonl
 {"schemaVersion":1,"kind":"test-plan-start","total":1}
-{"schemaVersion":2,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false}}
+{"schemaVersion":2,"kind":"test-plan-entry","test":{"status":"run","path":["suite","case"],"pathString":"suite > case","location":{"file":"tests/example.lisp"},"reason":null,"focused":false,"retry":0,"timeoutMs":null,"concurrent":false,"tags":[]}}
 {"schemaVersion":1,"kind":"test-plan-summary","total":1,"runnable":1,"skipped":0,"todos":0}
 ```
 
@@ -1711,13 +1683,12 @@ The path accessors are populated only when files are retained. `:keep-files`
 accepts `nil`, `t`, or `:on-failure`; `:on-failure` keeps artifacts for
 `:fail` and `:timeout` results while still deleting successful child-process
 artifacts. With the default `:keep-files nil`, the public result path slots are
-always `nil`. Normally, synchronous cleanup removes subprocess artifacts before
-the parent regains control. If cleanup exceeds its bounded time window, a
-private registry retains a strong internal owner without publishing artifact
-paths. Owners receive bounded, fair retries toward eventual deletion, and
-`drain-isolated-cleanups` performs an explicitly requested bounded number of
-cleanup cycles. `isolated-cleanup-snapshots` exposes primitive metadata only;
-it never exposes owner objects, process objects, or artifact paths.
+always `nil`. Cleanup is synchronous: the parent regains control only after an
+`unwind-protect` cleanup clause has made a best-effort attempt to delete the
+script, stdout, stderr, and home-directory files (`delete-file` and
+`uiop:delete-directory-tree`, each wrapped in `ignore-errors`). There is no
+cleanup registry, retry queue, or background worker; a delete that fails is
+silently skipped rather than retried.
 
 When `it-isolated` fails, the assertion matcher is `:isolated` and the payload
 keeps the child process diagnostics:
@@ -1739,13 +1710,13 @@ keeps the child process diagnostics:
 This is intended for FFI and crash-boundary tests where agents must preserve
 the parent runner while still receiving parseable failure data.
 
-`run-isolated` creates a separate session and process group. Its process-cleanup
-guarantee covers cooperative descendants that remain in that process group.
-Descendants that deliberately call `setsid`, `setpgid`, or otherwise leave the
-group are outside the containment guarantee. This is process cleanup, not an OS
-security sandbox. A `:scope-lost` process-group authority is observe-only:
-cleanup may observe exit and reap the process, but it never signals the PGID
-through that authority.
+`run-isolated` spawns a single SBCL subprocess via `sb-ext:run-program` and
+tracks only that direct child; it does not create a separate session or
+process group, and it does not track or signal any grandchild processes the
+child spawns. On timeout, the tracked child receives `SIGTERM` (15), then
+`SIGKILL` (9) after a short grace period if it is still alive. This is process
+cleanup for the direct child only, not an OS security sandbox or a containment
+guarantee over descendant processes.
 
 ## Stability
 
