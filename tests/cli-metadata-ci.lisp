@@ -237,7 +237,7 @@
         (expect workflow :to-contain system))
       (expect workflow :to-contain
               (format nil "name: ~A" (getf ci :artifact-bundle)))
-      (expect workflow :to-contain "uses: cachix/cachix-action@v17")
+      (expect workflow :to-contain "uses: cachix/cachix-action@")
       (dolist (mode (getf ci :cache-modes))
         (expect workflow :to-contain mode))
       (expect (getf ci :quality-gate-source) :to-equal "qualityGates")

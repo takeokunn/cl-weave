@@ -36,10 +36,12 @@
                (34 (write-string "&quot;" stream))
                (39 (write-string "&apos;" stream))
                (t
-                (if (and (< code 32)
-                         (not (member code '(9 10 13))))
-                    (write-char #\? stream)
-                    (write-char char stream)))))))
+                (if (or (member code '(9 10 13))
+                        (<= #x20 code #xd7ff)
+                        (<= #xe000 code #xfffd)
+                        (<= #x10000 code #x10ffff))
+                    (write-char char stream)
+                    (write-char #\? stream)))))))
 
 (defparameter *result-summary-field-specs*
   '((:status :pass :plist-key :passed :json-key "passed")
