@@ -12,7 +12,7 @@
    #:before-all
    #:before-each
    #:clear-all-mocks
-   #:clear-mock
+   #:clear-mock #:dispose-mock #:mock-disposed-error #:mock-disposed-error-mock #:active-spy-disposal-error #:active-spy-disposal-error-mock #:active-spy-disposal-error-symbol
    #:clear-tests
    #:collect-mutations
    #:continue-test

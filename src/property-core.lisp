@@ -11,9 +11,10 @@
    (steps :initarg :steps :reader property-shrink-limit-steps)
    (max-steps :initarg :max-steps :reader property-shrink-limit-max-steps))
   (:report (lambda (condition stream)
-             (format stream "Property shrinking exceeded the ~D step limit at ~S."
-                     (property-shrink-limit-max-steps condition)
-                     (property-shrink-limit-values condition)))))
+             (let ((*print-circle* t))
+               (format stream "Property shrinking exceeded the ~D step limit at ~S."
+                       (property-shrink-limit-max-steps condition)
+                       (property-shrink-limit-values condition))))))
 
 (defstruct property-rng
   state)
@@ -25,11 +26,17 @@
 
 (defstruct (property-shrink-state
             (:constructor make-property-shrink-state
-                (&key original function current visited steps max-steps)))
+                (&key original function current
+                      (visited (make-hash-table :test #'equal))
+                      (cyclic-visited nil)
+                      (current-cyclic-p nil)
+                      steps max-steps)))
   (original nil :read-only t)
   (function nil :read-only t)
   (current nil :read-only t)
-  (visited nil :read-only t)
+  (visited (make-hash-table :test #'equal) :type hash-table :read-only t)
+  (cyclic-visited nil :type list :read-only t)
+  (current-cyclic-p nil :type boolean :read-only t)
   (steps 0 :type (integer 0 *) :read-only t)
   (max-steps 0 :type (integer 0 *) :read-only t))
 
@@ -38,26 +45,12 @@
    (value :initarg :value :reader property-shrinker-error-value)
    (cause :initarg :cause :reader property-shrinker-error-cause))
   (:report (lambda (condition stream)
-             (format stream "Property shrinker ~S failed for ~S: ~A"
-                     (property-generator-name
-                      (property-shrinker-error-generator condition))
-                     (property-shrinker-error-value condition)
-                     (property-shrinker-error-cause condition)))))
-
-(defun finite-proper-list-p (value)
-  (loop with slow = value
-        with fast = value
-        do (cond
-             ((null fast) (return t))
-             ((atom fast) (return nil)))
-           (setf fast (cdr fast))
-           (cond
-             ((null fast) (return t))
-             ((atom fast) (return nil)))
-           (setf slow (cdr slow)
-                 fast (cdr fast))
-           (when (eq slow fast)
-             (return nil))))
+             (let ((*print-circle* t))
+               (format stream "Property shrinker ~S failed for ~S: ~A"
+                       (property-generator-name
+                        (property-shrinker-error-generator condition))
+                       (property-shrinker-error-value condition)
+                       (property-shrinker-error-cause condition))))))
 
 (defun ensure-property-shrink-candidates (candidates)
   (unless (finite-proper-list-p candidates)
@@ -86,7 +79,7 @@
                (prog1 supplied-candidates
                  (setf supplied-p nil))
                (funcall (property-generator-shrink generator) value))))
-      (error (cause)
+      ((and error (not property-shrinker-error)) (cause)
         (restart-case
             (error 'property-shrinker-error
                    :generator generator
@@ -120,7 +113,13 @@
                  :max-steps max-steps)
         (accept-current () nil))))
 
+(defconstant +maximum-numeric-token-length+ 128)
+
 (defun parse-environment-integer (name value)
+  (when (> (length value) +maximum-numeric-token-length+)
+    (error "cl-weave: ~A must not exceed ~D characters."
+           name
+           +maximum-numeric-token-length+))
   (handler-case
       (parse-integer value :junk-allowed nil)
     (error ()

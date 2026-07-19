@@ -24,7 +24,10 @@
        (walk value value)))))
 
 (defun suite-registration-form (name forms options)
-  `(register-suite ,name (lambda () ,@forms) ,@options))
+  `(register-suite ,name
+                   (lambda () ,@forms)
+                   ,@options
+                   ,@(source-location-option)))
 
 (defun registration-syntax-error (format-control &rest arguments)
   ;; Format eagerly: the arguments may be circular, and a condition holding

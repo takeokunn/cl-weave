@@ -40,31 +40,57 @@
    :function (property-shrink-state-function state)
    :current (property-shrink-state-current state)
    :visited (property-shrink-state-visited state)
+   :cyclic-visited (property-shrink-state-cyclic-visited state)
+   :current-cyclic-p (property-shrink-state-current-cyclic-p state)
    :steps steps
    :max-steps (property-shrink-state-max-steps state)))
 
-(defun property-shrink-state-with-current (state current)
-  (make-property-shrink-state
-   :original (property-shrink-state-original state)
-   :function (property-shrink-state-function state)
-   :current current
-   :visited (cons current (property-shrink-state-visited state))
-   :steps (property-shrink-state-steps state)
-   :max-steps (property-shrink-state-max-steps state)))
+(defun property-shrink-state-with-current (state current current-cyclic-p)
+  (let ((visited (property-shrink-state-visited state))
+        (cyclic-visited (property-shrink-state-cyclic-visited state)))
+    (if current-cyclic-p
+        (push current cyclic-visited)
+        (setf (gethash current visited) t))
+    (make-property-shrink-state
+     :original (property-shrink-state-original state)
+     :function (property-shrink-state-function state)
+     :current current
+     :visited visited
+     :cyclic-visited cyclic-visited
+     :current-cyclic-p current-cyclic-p
+     :steps (property-shrink-state-steps state)
+     :max-steps (property-shrink-state-max-steps state))))
 
 (defun call-property-shrink-candidate/k (state index candidate accept reject)
-  (let ((next (copy-list (property-shrink-state-current state))))
+  (let* ((current (property-shrink-state-current state))
+         (next (copy-list current)))
     (setf (nth index next) candidate)
-    (let ((candidate-condition
+    (let ((next-cyclic-p
+            (candidate-requires-safe-equality-p next #'equal))
+          (candidate-condition
             (property-failure-condition
              (property-shrink-state-function state) next)))
-      (if (and (not (equal next (property-shrink-state-current state)))
-               (not (member next (property-shrink-state-visited state)
-                            :test #'equal))
-               candidate-condition
-               (same-property-failure-p
-                (property-shrink-state-original state) candidate-condition))
-          (funcall accept (property-shrink-state-with-current state next))
+      (if (and
+           (not
+            (if (or next-cyclic-p
+                    (property-shrink-state-current-cyclic-p state))
+                (cycle-safe-candidate-equal-p next current #'equal)
+                (equal next current)))
+           (not
+            (if next-cyclic-p
+                (find-if
+                 (lambda (visited)
+                   (cycle-safe-candidate-equal-p next visited #'equal))
+                 (property-shrink-state-cyclic-visited state))
+                (nth-value
+                 1
+                 (gethash next (property-shrink-state-visited state)))))
+           candidate-condition
+           (same-property-failure-p
+            (property-shrink-state-original state) candidate-condition))
+          (funcall accept
+                   (property-shrink-state-with-current
+                    state next next-cyclic-p))
           (funcall reject state)))))
 
 (defun try-property-shrink-candidates/k
@@ -116,21 +142,29 @@
    complete))
 
 (defun shrink-property-values (generators values function &optional original-condition)
-  (let ((state
-          (make-property-shrink-state
-           :original (or original-condition
-                         (property-failure-condition function values))
-           :function function
-           :current values
-           :visited (list values)
-           :steps 0
-           :max-steps
-           (ensure-property-shrink-max-steps *property-shrink-max-steps*))))
-    (trampoline-property-shrink
-     (shrink-property-state/k
-      state generators
-      (lambda (final-state)
-        (property-shrink-state-current final-state))))))
+  (let* ((visited (make-hash-table :test #'equal))
+         (values-cyclic-p
+           (candidate-requires-safe-equality-p values #'equal))
+         (cyclic-visited (when values-cyclic-p (list values))))
+    (unless values-cyclic-p
+      (setf (gethash values visited) t))
+    (let ((state
+            (make-property-shrink-state
+             :original (or original-condition
+                           (property-failure-condition function values))
+             :function function
+             :current values
+             :visited visited
+             :cyclic-visited cyclic-visited
+             :current-cyclic-p values-cyclic-p
+             :steps 0
+             :max-steps
+             (ensure-property-shrink-max-steps *property-shrink-max-steps*))))
+      (trampoline-property-shrink
+       (shrink-property-state/k
+        state generators
+        (lambda (final-state)
+          (property-shrink-state-current final-state)))))))
 
 (defun signal-property-failure (names form values minimal seed case-index condition)
   (signal-assertion-failure
@@ -141,7 +175,8 @@
                   :case-index case-index
                   :values values
                   :minimal minimal
-                  :condition (princ-to-string condition))
+                  :condition (let ((*print-circle* t))
+                               (princ-to-string condition)))
     :expected names
     :negated nil
     :pass nil)))

@@ -1151,7 +1151,8 @@ A failing `:to-be-one-of` assertion uses:
 
 `:to-be-one-of` accepts one list, vector, or hash table of candidates and uses
 `eql`, matching the strict identity semantics of `:to-be`. Hash tables are
-searched by value, not by key.
+searched by value, not by key. Every candidate collection is limited to 100,000
+entries.
 
 Deep containment matchers report the searched container and equality predicate.
 A failing `:to-contain-equal` assertion uses:
@@ -1709,8 +1710,14 @@ declared ASDF systems before evaluating the body.
 The path accessors are populated only when files are retained. `:keep-files`
 accepts `nil`, `t`, or `:on-failure`; `:on-failure` keeps artifacts for
 `:fail` and `:timeout` results while still deleting successful child-process
-artifacts. With the default `:keep-files nil`, the subprocess artifacts are
-removed before the parent process regains control and the path slots are `nil`.
+artifacts. With the default `:keep-files nil`, the public result path slots are
+always `nil`. Normally, synchronous cleanup removes subprocess artifacts before
+the parent regains control. If cleanup exceeds its bounded time window, a
+private registry retains a strong internal owner without publishing artifact
+paths. Owners receive bounded, fair retries toward eventual deletion, and
+`drain-isolated-cleanups` performs an explicitly requested bounded number of
+cleanup cycles. `isolated-cleanup-snapshots` exposes primitive metadata only;
+it never exposes owner objects, process objects, or artifact paths.
 
 When `it-isolated` fails, the assertion matcher is `:isolated` and the payload
 keeps the child process diagnostics:
@@ -1731,6 +1738,14 @@ keeps the child process diagnostics:
 
 This is intended for FFI and crash-boundary tests where agents must preserve
 the parent runner while still receiving parseable failure data.
+
+`run-isolated` creates a separate session and process group. Its process-cleanup
+guarantee covers cooperative descendants that remain in that process group.
+Descendants that deliberately call `setsid`, `setpgid`, or otherwise leave the
+group are outside the containment guarantee. This is process cleanup, not an OS
+security sandbox. A `:scope-lost` process-group authority is observe-only:
+cleanup may observe exit and reap the process, but it never signals the PGID
+through that authority.
 
 ## Stability
 

@@ -42,8 +42,9 @@
 
 (defun make-plan-entry
     (suite test status reason filter ancestor-focused execution-mode)
+  (declare (ignore suite))
   (make-test-plan-entry
-   :path (test-path suite test)
+   :path (gethash test (selection-filter-test-paths filter))
    :status status
    :reason reason
    :focused (and (selection-filter-focus-enabled filter)

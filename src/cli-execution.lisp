@@ -76,36 +76,57 @@
         #'string<
         :key #'namestring))
 
-(defun bootstrap-local-asd-definitions (options)
-  (dolist (directory (system-bootstrap-directories options))
-    (dolist (pathname (directory-asd-files directory))
-      (asdf:load-asd pathname))))
+(defun system-bootstrap-asd-files (system options)
+  (let ((asd-name (format nil "~A.asd" (asdf:primary-system-name system))))
+    (remove-duplicates
+      (loop for directory in (system-bootstrap-directories options)
+            for pathname = (merge-pathnames asd-name directory)
+            when (uiop:file-exists-p pathname)
+              collect pathname)
+      :test
+      #'equal)))
 
 (defun ensure-requested-system-visible (system options)
   (unless (asdf:find-system system nil)
-    (bootstrap-local-asd-definitions options))
+    (loop for pathname in (system-bootstrap-asd-files system options)
+          until (asdf:find-system system nil)
+          do (asdf:load-asd pathname)))
   (unless (asdf:find-system system nil)
-    (error 'cli-error
-           :message
-           (format nil
-                   "Unable to locate ASDF system ~S. Run cl-weave from the project root, pass --load path/to/system.asd, or configure CL_SOURCE_REGISTRY."
-                   system))))
+    (error
+      'cli-error
+      :message
+      (format
+        nil
+        "Unable to locate ASDF system ~S. Run cl-weave from the project root, pass --load path/to/system.asd, or configure CL_SOURCE_REGISTRY."
+        system))))
 
 (defun load-requested-inputs (options)
-  (when (cli-options-coverage options)
-    (dolist (system (cli-options-coverage-systems options))
-      (ensure-requested-system-visible system options)
-      (asdf:load-system system :force t)))
-  (dolist (system (cli-options-systems options))
-    (unless (and (cli-options-coverage options)
-                 (member system (cli-options-coverage-systems options)
-                         :test #'string=))
-      (ensure-requested-system-visible system options)
-      (if (cli-options-coverage options)
-          (asdf:load-system system :force t)
-          (asdf:load-system system))))
-  (dolist (file (cli-options-load-files options))
-    (load file)))
+  (let ((asd-files (quote ()))
+        (source-files (quote ())))
+    (dolist (file (cli-options-load-files options))
+      (if (pathname-asd-file-p (uiop:ensure-pathname file))
+          (push file asd-files)
+          (push file source-files)))
+    (dolist (file (nreverse asd-files))
+      (asdf:load-asd file))
+    (when (cli-options-coverage options)
+      (dolist (system (cli-options-coverage-systems options))
+        (ensure-requested-system-visible system options)
+        (asdf:load-system system :force t)))
+    (dolist (system (cli-options-systems options))
+      (unless (and
+               (cli-options-coverage options)
+               (member
+                system
+                (cli-options-coverage-systems options)
+                :test
+                (function string=)))
+        (ensure-requested-system-visible system options)
+        (if (cli-options-coverage options)
+            (asdf:load-system system :force t)
+            (asdf:load-system system))))
+    (dolist (file (nreverse source-files))
+      (load file))))
 
 (defun prepare-coverage-compilation (options)
   (when (cli-options-coverage options)

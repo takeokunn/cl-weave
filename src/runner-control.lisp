@@ -5,7 +5,40 @@
 (defvar *test-sequence-seed* 0)
 (defvar *default-retry* 0)
 (defvar *default-timeout-ms* nil)
-(defvar *max-workers* nil)
+(defconstant +default-max-workers-cap+ 32)
+  (defconstant +maximum-retry-count+ 1000)
+  (defconstant +maximum-timeout-ms+ 86400000)
+  (defconstant +maximum-worker-count+ 4096)
+  (defconstant +maximum-bail-limit+ 1000000)
+  (defconstant +maximum-shard-count+ 1000000)
+
+  (progn
+  #+(and sbcl unix)
+  (defun online-processor-count ()
+    (let ((count
+            (sb-alien:alien-funcall
+             (sb-alien:extern-alien "sysconf"
+               (function sb-alien:long sb-alien:int))
+             sb-unix:sc-nprocessors-onln)))
+      (and (integerp count)
+           (plusp count)
+           count)))
+
+  #-(and sbcl unix)
+  (defun online-processor-count ()
+    nil)
+
+  (defun detect-default-max-workers ()
+    (let ((detected (ignore-errors (online-processor-count))))
+      (min +default-max-workers-cap+
+           (max 2
+                (if (and (integerp detected)
+                         (plusp detected))
+                    detected
+                    2))))))
+
+  (defparameter *default-max-workers* (detect-default-max-workers))
+  (defvar *max-workers* nil)
 (defvar *retry-budget-remaining* 0)
 (defvar *runner-default-condition-handler-disabled* nil)
 (defvar *runner-propagate-conditions* t)
@@ -22,6 +55,7 @@
     *retry-budget-remaining*
     *default-timeout-ms*
     *max-workers*
+    *default-max-workers*
     *isolated-timeout-seconds*
     *snapshot-directory*
     *snapshot-file-name*
@@ -50,10 +84,15 @@
 
 (defun normalize-bail (bail)
   (cond
-    ((or (null bail) (eql bail 0)) nil)
-    ((eq bail t) 1)
-    ((and (integerp bail) (plusp bail)) bail)
-    (t (error "Bail must be NIL, T, 0, or a positive integer: ~S" bail))))
+    ((null bail) nil)
+    ((eq bail t) t)
+    ((eql bail 0) nil)
+    ((and (integerp bail)
+          (<= 1 bail +maximum-bail-limit+))
+     bail)
+    (t
+     (error "Bail must be NIL, T, 0, or an integer between 1 and ~D: ~S"
+            +maximum-bail-limit+ bail))))
 
 (defun failing-event-p (event)
   (member (test-event-status event) '(:fail :error)))

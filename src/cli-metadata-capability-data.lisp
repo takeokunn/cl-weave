@@ -81,15 +81,13 @@
     (:name "mocks-and-spies"
      :status "implemented"
      :summary "Mock functions and spies with call/result metadata and restoration helpers."
-     :public-apis ("make-mock-function" "spy-on" "clear-all-mocks"
-                   "mock-calls" "mock-results")
+     :public-apis ("make-mock-function" "spy-on" "dispose-mock" "clear-all-mocks" "mock-calls" "mock-results")
      :quality-gates ("flake-check" "cli-json-results")
      :documentation ("README.md" "docs/src/ai-contract.md"))
     (:name "mock-functions"
      :status "implemented"
      :summary "Raw mock primitives expose direct control over stub behavior, restoration, and recorded calls or results."
-     :public-apis ("make-mock-function" "clear-mock" "reset-mock"
-                   "mock-restore" "mock-calls" "mock-results")
+     :public-apis ("make-mock-function" "clear-mock" "reset-mock" "dispose-mock" "mock-restore" "mock-calls" "mock-results")
      :quality-gates ("flake-check" "cli-json-results")
      :documentation ("README.md" "docs/src/ai-contract.md"))
     (:name "snapshots"

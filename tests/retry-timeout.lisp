@@ -1,4 +1,185 @@
+
+
 (in-package #:cl-weave/tests)
+(describe "tag filter normalization"
+  (it "accepts maximum include and exclude tags in canonical first order"
+    (let* ((limit cl-weave::+maximum-tag-count+)
+           (include-tags (make-list limit :initial-element :fast))
+           (exclude-tags (make-list limit :initial-element :database))
+           (root (cl-weave::make-suite :name "root"))
+           (root-calls 0)
+           (captured-options nil))
+      (setf (first include-tags) :fast
+            (second include-tags) "slow"
+            (third include-tags) 'fast
+            (fourth include-tags) :other
+            (first exclude-tags) "database"
+            (second exclude-tags) :cache
+            (third exclude-tags) "DATABASE")
+      (with-mocked-functions
+          (((symbol-function 'cl-weave:root-suite)
+            (lambda ()
+              (incf root-calls)
+              root))
+           ((symbol-function 'cl-weave::collect-events-with-options)
+            (lambda (suite options)
+              (declare (ignore suite))
+              (setf captured-options options)
+              nil)))
+        #+sbcl
+        (sb-ext:with-timeout 10
+          (expect
+           (cl-weave:run-all
+            :reporter :sexp
+            :stream (make-broadcast-stream)
+            :include-tags include-tags
+            :exclude-tags exclude-tags)
+           :to-be-truthy))
+        #-sbcl
+        (expect
+         (cl-weave:run-all
+          :reporter :sexp
+          :stream (make-broadcast-stream)
+          :include-tags include-tags
+          :exclude-tags exclude-tags)
+         :to-be-truthy))
+      (expect root-calls :to-be 1)
+      (expect captured-options :to-be-truthy)
+      (expect (cl-weave::collection-options-include-tags captured-options)
+              :to-equal '("FAST" "SLOW" "OTHER"))
+      (expect (cl-weave::collection-options-exclude-tags captured-options)
+              :to-equal '("DATABASE" "CACHE")))))
+
+
+(describe "run-all input preflight"
+  (it "validates every run-all collection option before coverage and suite access"
+    (labels ((exercise ()
+               (let* ((root (cl-weave::make-suite :name "root"))
+                      (limit cl-weave::+maximum-selection-filter-count+)
+                      (location-cycle (list #P"/tmp/cl-weave/cycle.lisp"))
+
+(path-cycle (list (list "suite" "test")))
+(tag-limit cl-weave::+maximum-tag-count+)
+(include-tag-cycle (list :fast))
+(exclude-tag-cycle (list :slow))
+(shard-cycle (list 1 2))
+
+                      (coverage-require 0)
+                      (coverage-reset 0)
+                      (coverage-cleanup 0)
+                      (suite-root 0)
+                      (suite-snapshot 0)
+                      (executed 0)
+                      (artifact 0))
+                 (setf (cdr location-cycle) location-cycle)
+
+(setf (cdr path-cycle) path-cycle)
+(setf (cdr include-tag-cycle) include-tag-cycle)
+(setf (cdr exclude-tag-cycle) exclude-tag-cycle)
+(setf (cddr shard-cycle) shard-cycle)
+
+                 (cl-weave::add-child
+                  root
+                  (cl-weave::make-test-case
+                   :name "must not run"
+                   :function (lambda () (incf executed))))
+                 (with-mocked-functions
+                     (((symbol-function 'cl-weave::require-coverage-support)
+                       (lambda () (incf coverage-require)))
+                      ((symbol-function 'cl-weave:reset-coverage)
+                       (lambda () (incf coverage-reset)))
+                      ((symbol-function 'cl-weave:coverage-statistics)
+                       (lambda (&key include-pathnames exclude-pathnames)
+                         (declare (ignore include-pathnames exclude-pathnames))
+                         (incf coverage-cleanup)
+                         '(:expression-covered 0 :expression-total 0
+                           :branch-covered 0 :branch-total 0)))
+                      ((symbol-function 'cl-weave::save-coverage-report)
+                       (lambda (path &key include-pathnames exclude-pathnames)
+                         (declare (ignore path
+                                          include-pathnames
+                                          exclude-pathnames))
+                         (incf artifact)))
+                      ((symbol-function 'cl-weave:save-coverage)
+                       (lambda (path)
+                         (declare (ignore path))
+                         (incf artifact)))
+                      ((symbol-function 'cl-weave:root-suite)
+                       (lambda ()
+                         (incf suite-root)
+                         root))
+                      ((symbol-function 'cl-weave::snapshot-suite)
+                       (lambda (suite)
+                         (incf suite-snapshot)
+                         suite)))
+                   (dolist (arguments
+                            (list
+                             (list :name-filter 42)
+                             (list :location-filter location-cycle)
+                             (list :location-filter
+                                   (cons #P"/tmp/cl-weave/dotted.lisp" :tail))
+                             (list :location-filter
+                                   (make-list (1+ limit)
+                                              :initial-element
+                                              #P"/tmp/cl-weave/oversized.lisp"))
+                             (list :test-path-filter path-cycle)
+                             (list :test-path-filter
+                                   (cons (list "suite" "test") :tail))
+                             (list :test-path-filter
+                                   (make-list (1+ limit)
+                                              :initial-element nil))
+
+(list :include-tags (cons :fast :tail))
+(list :include-tags include-tag-cycle)
+(list :include-tags
+      (make-list (1+ tag-limit) :initial-element :fast))
+(list :exclude-tags exclude-tag-cycle)
+(list :exclude-tags
+      (make-list (1+ tag-limit) :initial-element :slow))
+
+                             (list :exclude-tags (cons :slow :tail))
+
+(list :shard shard-cycle)
+(list :shard
+      (make-list (1+ tag-limit) :initial-element 1))
+(list :shard
+      (list 1
+            (1+ cl-weave::+maximum-shard-count+)))
+
+                             (list :order :defined)
+                             (list :seed 1.5)
+                             (list :bail
+                                   (1+ cl-weave::+maximum-bail-limit+))
+                             (list :retry
+                                   (1+ cl-weave::+maximum-retry-count+))
+                             (list :timeout-ms
+                                   (1+ cl-weave::+maximum-timeout-ms+))
+                             (list :max-workers
+                                   (1+ cl-weave::+maximum-worker-count+))))
+                     (expect
+                      (lambda ()
+                        (apply #'cl-weave:run-all
+                               :reporter :sexp
+                               :stream (make-broadcast-stream)
+                               :coverage t
+                               :coverage-output "unused.coverage"
+                               :coverage-report-directory "unused-report/"
+                               :coverage-minimum-expression 0
+                               arguments))
+                      :to-throw)))
+                 (expect coverage-require :to-be 0)
+                 (expect coverage-reset :to-be 0)
+                 (expect coverage-cleanup :to-be 0)
+                 (expect suite-root :to-be 0)
+                 (expect suite-snapshot :to-be 0)
+                 (expect executed :to-be 0)
+                 (expect artifact :to-be 0))))
+      #+sbcl
+      (sb-ext:with-timeout 10
+        (exercise))
+      #-sbcl
+      (exercise))))
+
 
 (describe "retry and timeout"
   (it "keeps the test continuation inside the platform timeout boundary"
@@ -106,7 +287,7 @@
                  (cl-weave::test-event-condition event))
                 :to-be 10))))
 
-  (it "lists effective retry and timeout defaults in test plans"
+  (it "lists and bounds effective retry and timeout defaults"
     (let* ((suite (cl-weave::make-suite :name "plan defaults"))
            (defaulted (cl-weave::make-test-case
                        :name "defaulted"
@@ -125,7 +306,86 @@
         (expect (mapcar #'cl-weave:test-plan-entry-retry plan)
                 :to-equal '(2 0))
         (expect (mapcar #'cl-weave:test-plan-entry-timeout-ms plan)
-                :to-equal '(100 25)))))
+                :to-equal '(100 25))))
+    (expect (cl-weave::collect-events
+             (cl-weave::make-suite :name "empty")
+             :retry cl-weave::+maximum-retry-count+
+             :timeout-ms cl-weave::+maximum-timeout-ms+)
+            :to-be-null)
+    (dolist (option
+             (list
+              (list :retry
+                    (1+ cl-weave::+maximum-retry-count+)
+                    "Retry must be")
+              (list :timeout-ms
+                    (1+ cl-weave::+maximum-timeout-ms+)
+                    "Timeout must be")))
+      (let ((executed nil)
+            (root (cl-weave::make-suite :name "root")))
+        (cl-weave::add-child
+         root
+         (cl-weave::make-test-case
+          :name "must not run"
+          :function (lambda () (setf executed t))))
+        (expect (lambda ()
+                  (apply #'cl-weave::collect-events
+                         root
+                         (list (first option) (second option))))
+                :to-throw
+                (third option))
+        (expect executed :to-be nil))))
+
+  (it "validates public run limits before coverage side effects"
+    (dolist (option
+             (list
+              (list :retry
+                    (1+ cl-weave::+maximum-retry-count+)
+                    "Retry must be")
+              (list :timeout-ms
+                    (1+ cl-weave::+maximum-timeout-ms+)
+                    "Timeout must be")
+              (list :max-workers
+                    (1+ cl-weave::+maximum-worker-count+)
+                    "Max workers must be")
+              (list :bail
+                    (1+ cl-weave::+maximum-bail-limit+)
+                    "Bail must be")
+              (list :shard
+                    (list 1 (1+ cl-weave::+maximum-shard-count+))
+                    "Shard must be NIL")))
+      (destructuring-bind (key value error-message) option
+        (let ((coverage-calls 0)
+              (executed 0)
+              (root (cl-weave::make-suite :name "root")))
+          (cl-weave::add-child
+           root
+           (cl-weave::make-test-case
+            :name "must not run"
+            :function (lambda () (incf executed))))
+          (with-mocked-functions
+              (((symbol-function 'cl-weave::require-coverage-support)
+                (lambda ()
+                  (incf coverage-calls)))
+               ((symbol-function 'cl-weave:reset-coverage)
+                (lambda ()
+                  (incf coverage-calls)))
+               ((symbol-function 'cl-weave:save-coverage)
+                (lambda (path)
+                  (declare (ignore path))
+                  (incf coverage-calls))))
+            (let ((cl-weave::*root-suite* root))
+              (expect
+               (lambda ()
+                 (apply #'cl-weave:run-all
+                        :reporter :sexp
+                        :stream (make-broadcast-stream)
+                        :coverage t
+                        :coverage-output "unused.coverage"
+                        (list key value)))
+               :to-throw
+               error-message)))
+          (expect coverage-calls :to-be 0)
+          (expect executed :to-be 0)))))
 
   (it "fails a test when expect-assertions count is not met"
     (let* ((test (cl-weave::make-test-case

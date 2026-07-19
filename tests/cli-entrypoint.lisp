@@ -211,242 +211,382 @@
         (when (probe-file output-file)
           (delete-file output-file)))))
 
-  (it "returns CLI error status for watch mode without a target system"
-    (let ((exit-code nil)
-          (stderr ""))
+(it
+  "returns CLI error status for watch mode without a target system"
+  (let ((exit-code nil)
+        (stderr ""))
+    (with-mocked-functions
+      (((symbol-function 'cl-weave/cli::exit-process)
+          (lambda (code)
+            (setf exit-code code))))
+      (setf stderr (with-output-to-string (*error-output*)
+          (cl-weave/cli:main '("watch")))))
+    (expect exit-code :to-be 2)
+    (expect
+      stderr
+      :to-contain
+      "Watch mode requires SYSTEM as a positional argument or --system SYSTEM.")
+    (expect stderr :to-contain "cl-weave watch [SYSTEM] [options]")))
+
+(it
+  "returns CLI error status for watch mode with multiple target systems"
+  (let ((exit-code nil)
+        (stderr "")
+        (watch-called-p nil))
+    (with-mocked-functions
+      (((symbol-function 'cl-weave/cli::exit-process)
+          (lambda (code)
+            (setf exit-code code)))
+        ((symbol-function 'cl-weave/cli::load-requested-inputs)
+          (lambda (options)
+            (declare (ignore options))
+            nil))
+        ((symbol-function 'cl-weave:watch-system)
+          (lambda (&rest arguments)
+            (declare (ignore arguments))
+            (setf watch-called-p t)
+            t)))
+      (setf stderr (with-output-to-string (*error-output*)
+          (cl-weave/cli:main
+            '("watch" "--system" "cl-weave/tests" "--system" "sample-system")))))
+    (expect exit-code :to-be 2)
+    (expect watch-called-p :to-be nil)
+    (expect stderr :to-contain "Watch mode accepts exactly one SYSTEM target.")
+    (expect stderr :to-contain "cl-weave watch [SYSTEM] [options]")))
+
+(it
+  "rejects CI-incompatible list reporters early"
+  (dolist (reporter '("github" "junit"))
+    (let ((options (parse-cli (list "list" "cl-weave/tests" "--reporter" reporter))))
+      (expect
+        (lambda ()
+          (cl-weave/cli::ensure-valid-reporter-for-command options))
+        :to-throw))))
+
+(it
+  "rejects unsupported run and watch reporters at the CLI boundary"
+  (dolist (command '(:run :watch))
+    (let ((options
+          (cl-weave/cli::make-cli-options
+            :command
+            command
+            :reporter
+            :unknown
+            :systems
+            '("cl-weave/tests")
+            :watch
+            (eq command :watch))))
+      (expect
+        (lambda ()
+          (cl-weave/cli::ensure-valid-reporter-for-command options))
+        :to-throw
+        "cl-weave: run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))))
+
+(it
+  "loads explicit ASD files, requested systems, then explicit Lisp files"
+  (let* ((cwd #P"/tmp/cl-weave-bootstrap/")
+         (target-asd #P"/tmp/cl-weave-bootstrap/example.asd")
+         (explicit-asd #P"/tmp/cl-weave-explicit/custom.asd")
+         (source-file #P"/tmp/cl-weave-explicit/setup.lisp")
+         (explicit-target-asd #P"/tmp/cl-weave-explicit/example.asd")
+         (options
+           (cl-weave/cli::make-cli-options
+             :systems
+             (quote ("example/tests"))
+             :load-files
+             (list source-file explicit-asd source-file explicit-asd)))
+         (bootstrapped nil)
+         (probed-pathnames (quote ()))
+         (events (quote ())))
+    (sb-ext:without-package-locks
       (with-mocked-functions
-          (((symbol-function 'cl-weave/cli::exit-process)
-            (lambda (code)
-              (setf exit-code code))))
-        (setf stderr
-              (with-output-to-string (*error-output*)
-                (cl-weave/cli:main '("watch")))))
-      (expect exit-code :to-be 2)
-      (expect stderr :to-contain
-              "Watch mode requires SYSTEM as a positional argument or --system SYSTEM.")
-      (expect stderr :to-contain "cl-weave watch [SYSTEM] [options]")))
-
-  (it "returns CLI error status for watch mode with multiple target systems"
-    (let ((exit-code nil)
-          (stderr "")
-          (watch-called-p nil))
-      (with-mocked-functions
-          (((symbol-function 'cl-weave/cli::exit-process)
-            (lambda (code)
-              (setf exit-code code)))
-           ((symbol-function 'cl-weave/cli::load-requested-inputs)
-            (lambda (options)
-              (declare (ignore options))
-              nil))
-           ((symbol-function 'cl-weave:watch-system)
-            (lambda (&rest arguments)
-              (declare (ignore arguments))
-              (setf watch-called-p t)
-              t)))
-        (setf stderr
-              (with-output-to-string (*error-output*)
-                (cl-weave/cli:main
-                 '("watch" "--system" "cl-weave/tests" "--system" "sample-system")))))
-      (expect exit-code :to-be 2)
-      (expect watch-called-p :to-be nil)
-      (expect stderr :to-contain
-              "Watch mode accepts exactly one SYSTEM target.")
-      (expect stderr :to-contain "cl-weave watch [SYSTEM] [options]")))
-
-  (it "rejects CI-incompatible list reporters early"
-    (dolist (reporter '("github" "junit"))
-      (let ((options (parse-cli (list "list" "cl-weave/tests" "--reporter" reporter))))
-        (expect (lambda ()
-                  (cl-weave/cli::ensure-valid-reporter-for-command options))
-                :to-throw))))
-
-  (it "rejects unsupported run and watch reporters at the CLI boundary"
-    (dolist (command '(:run :watch))
-      (let ((options (cl-weave/cli::make-cli-options
-                      :command command
-                      :reporter :unknown
-                      :systems '("cl-weave/tests")
-                      :watch (eq command :watch))))
-        (expect (lambda ()
-                  (cl-weave/cli::ensure-valid-reporter-for-command options))
-                :to-throw
-                "cl-weave: run mode supports spec, sexp, json, jsonl, tap, github, and junit reporters."))))
-
-  (it "bootstraps local ASDF definitions before loading requested systems"
-    (let* ((cwd #P"/tmp/cl-weave-bootstrap/")
-           (asd-file #P"/tmp/cl-weave-bootstrap/example.asd")
-           (options (cl-weave/cli::make-cli-options :systems '("example")))
-           (bootstrapped nil)
-           (loaded-asds '())
-           (loaded-systems '()))
-      (with-mocked-functions
-          (((symbol-function 'uiop:getcwd)
-            (lambda () cwd))
-           ((symbol-function 'cl-weave/cli::directory-asd-files)
+        (((symbol-function (quote uiop:getcwd))
+            (lambda ()
+              cwd))
+          ((symbol-function (quote uiop:file-exists-p))
+            (lambda (pathname)
+              (push pathname probed-pathnames)
+              (and (equal pathname target-asd) pathname)))
+          ((symbol-function (quote cl-weave/cli::directory-asd-files))
             (lambda (directory)
               (declare (ignore directory))
-              (list asd-file)))
-           ((symbol-function 'asdf:load-asd)
+              (error "ASD directory enumeration is forbidden")))
+          ((symbol-function (quote asdf:load-asd))
             (lambda (pathname)
-              (push pathname loaded-asds)
-              (setf bootstrapped t)))
-           ((symbol-function 'asdf:find-system)
+              (push (list :asd pathname) events)
+              (when (equal pathname target-asd)
+                (setf bootstrapped t))))
+          ((symbol-function (quote cl:load))
+            (lambda (pathname &rest arguments)
+              (declare (ignore arguments))
+              (push (list :source pathname) events)))
+          ((symbol-function (quote asdf:find-system))
             (lambda (system &optional errorp)
               (declare (ignore errorp))
-              (and bootstrapped (string= system "example") :example)))
-           ((symbol-function 'asdf:load-system)
+              (and bootstrapped (string= system "example/tests") :example/tests)))
+          ((symbol-function (quote asdf:load-system))
             (lambda (system)
-              (push system loaded-systems)
+              (push (list :system system) events)
               :loaded)))
         (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-asds :to-equal (list asd-file))
-        (expect loaded-systems :to-equal '("example")))))
+        (expect probed-pathnames :to-equal (list explicit-target-asd target-asd))
+        (expect
+          (reverse events)
+          :to-equal
+          (list
+            (list :asd explicit-asd)
+            (list :asd explicit-asd)
+            (list :asd target-asd)
+            (list :system "example/tests")
+            (list :source source-file)
+            (list :source source-file)))))))
 
-  (it "loads project systems through ASDF"
-    (let* ((options (cl-weave/cli::make-cli-options
-                     :systems '("cl-weave/tests")))
-           (loaded-asdf-systems '()))
-      (with-mocked-functions
-          (((symbol-function 'asdf:find-system)
-            (lambda (&rest args)
-              (declare (ignore args))
-              :cl-weave/tests))
-           ((symbol-function 'asdf:load-system)
-            (lambda (system)
-              (push system loaded-asdf-systems)
-              :loaded-asdf)))
-        (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-asdf-systems :to-equal '("cl-weave/tests")))))
+(it
+  "loads requested systems before explicit Lisp readers need their packages"
+  (let* ((directory (make-test-temporary-directory "cli-load-order"))
+         (system-name
+           (string-downcase (symbol-name (gensym "CL-WEAVE-LOAD-ORDER-"))))
+         (package-name (string-upcase (format nil "~A/PACKAGE" system-name)))
+         (asd-file
+           (merge-pathnames
+             (make-pathname :name system-name :type "asd")
+             directory))
+         (package-file (merge-pathnames #P"package.lisp" directory))
+         (source-file (merge-pathnames #P"explicit-source.lisp" directory))
+         (options
+           (cl-weave/cli::make-cli-options
+             :systems
+             (list system-name)
+             :load-files
+             (list asd-file source-file))))
+    (unwind-protect
+        (progn
+          (with-open-file
+            (stream
+              asd-file
+              :direction
+              :output
+              :if-exists
+              :supersede
+              :if-does-not-exist
+              :create)
+            (format
+              stream
+              "(asdf:defsystem ~S :serial t :components ((:file ~S)))~%"
+              system-name
+              "package"))
+          (with-open-file
+            (stream
+              package-file
+              :direction
+              :output
+              :if-exists
+              :supersede
+              :if-does-not-exist
+              :create)
+            (format stream "(defpackage ~S (:use #:cl))~%" package-name))
+          (with-open-file
+            (stream
+              source-file
+              :direction
+              :output
+              :if-exists
+              :supersede
+              :if-does-not-exist
+              :create)
+            (format
+              stream
+              "(in-package ~S)~%(defparameter *loaded-after-system* t)~%"
+              package-name))
+          (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
+          (let ((loaded-symbol
+                  (find-symbol "*LOADED-AFTER-SYSTEM*" package-name)))
+            (expect
+              (and
+               loaded-symbol
+               (boundp loaded-symbol)
+               (symbol-value loaded-symbol))
+              :to-be
+              t)))
+      (when (asdf:find-system system-name nil)
+        (asdf:clear-system system-name))
+      (let ((package (find-package package-name)))
+        (when package
+          (delete-package package)))
+      (uiop:delete-directory-tree
+        directory
+        :validate
+        t
+        :if-does-not-exist
+        :ignore))))
 
-  (it "recompiles requested systems when coverage is enabled"
-    (let* ((options (cl-weave/cli::make-cli-options
-                     :systems '("cl-weave/tests")
-                     :coverage-systems '("cl-weave")
-                     :coverage t))
-           (loaded-asdf-systems '()))
-      (with-mocked-functions
-          (((symbol-function 'asdf:find-system)
-            (lambda (&rest args)
-              (declare (ignore args))
-              :cl-weave/tests))
-           ((symbol-function 'asdf:load-system)
-            (lambda (system &key force)
-              (push (list system force) loaded-asdf-systems)
-              :loaded-asdf)))
-        (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
-        (expect loaded-asdf-systems
-                :to-equal '(("cl-weave/tests" t) ("cl-weave" t))))))
+(it
+  "loads project systems through ASDF"
+  (let* ((options (cl-weave/cli::make-cli-options :systems '("cl-weave/tests")))
+         (loaded-asdf-systems '()))
+    (with-mocked-functions
+      (((symbol-function 'asdf:find-system)
+          (lambda (&rest args)
+            (declare (ignore args))
+            :cl-weave/tests))
+        ((symbol-function 'asdf:load-system)
+          (lambda (system)
+            (push system loaded-asdf-systems)
+            :loaded-asdf)))
+      (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
+      (expect loaded-asdf-systems :to-equal '("cl-weave/tests")))))
 
-  (it "reports actionable CLI errors when requested systems remain unavailable"
-    (let* ((cwd #P"/tmp/cl-weave-missing/")
-           (helper-file #P"/tmp/cl-weave-missing/support/helper.lisp")
-           (helper-directory
-             (uiop:pathname-directory-pathname helper-file))
-           (options (cl-weave/cli::make-cli-options
-                     :systems '("missing-system")
-                     :load-files (list helper-file)))
-           (searched-directories '())
-           (message nil))
+(it
+  "recompiles requested systems when coverage is enabled"
+  (let* ((options
+        (cl-weave/cli::make-cli-options
+          :systems
+          '("cl-weave/tests")
+          :coverage-systems
+          '("cl-weave")
+          :coverage
+          t))
+         (loaded-asdf-systems '()))
+    (with-mocked-functions
+      (((symbol-function 'asdf:find-system)
+          (lambda (&rest args)
+            (declare (ignore args))
+            :cl-weave/tests))
+        ((symbol-function 'asdf:load-system)
+          (lambda (system &key force)
+            (push (list system force) loaded-asdf-systems)
+            :loaded-asdf)))
+      (expect (cl-weave/cli::load-requested-inputs options) :to-be nil)
+      (expect loaded-asdf-systems :to-equal '(("cl-weave/tests" t) ("cl-weave" t))))))
+
+(it
+  "reports actionable CLI errors when requested systems remain unavailable"
+  (let* ((cwd #P"/tmp/cl-weave-missing/")
+         (helper-file #P"/tmp/cl-weave-missing/support/helper.lisp")
+         (helper-directory (uiop:pathname-directory-pathname helper-file))
+         (cwd-asd #P"/tmp/cl-weave-missing/missing-system.asd")
+         (helper-asd #P"/tmp/cl-weave-missing/support/missing-system.asd")
+         (options
+           (cl-weave/cli::make-cli-options
+             :systems
+             (quote ("missing-system"))
+             :load-files
+             (list helper-file)))
+         (loaded-files (quote ()))
+         (searched-pathnames (quote ()))
+         (message nil))
+    (sb-ext:without-package-locks
       (with-mocked-functions
-          (((symbol-function 'uiop:getcwd)
-            (lambda () cwd))
-           ((symbol-function 'cl-weave/cli::system-bootstrap-directories)
+        (((symbol-function (quote cl-weave/cli::system-bootstrap-directories))
             (lambda (ignored-options)
               (declare (ignore ignored-options))
               (list cwd helper-directory)))
-           ((symbol-function 'cl-weave/cli::directory-asd-files)
-            (lambda (directory)
-              (push (pathname-directory directory) searched-directories)
-              '()))
-           ((symbol-function 'asdf:find-system)
+          ((symbol-function (quote uiop:file-exists-p))
+            (lambda (pathname)
+              (push pathname searched-pathnames)
+              nil))
+          ((symbol-function (quote cl:load))
+            (lambda (pathname &rest arguments)
+              (declare (ignore arguments))
+              (push pathname loaded-files)))
+          ((symbol-function (quote asdf:find-system))
             (lambda (system &optional errorp)
               (declare (ignore system errorp))
               nil)))
-        (handler-case
-            (cl-weave/cli::load-requested-inputs options)
+        (handler-case (cl-weave/cli::load-requested-inputs options)
           (cl-weave/cli::cli-error (condition)
             (setf message (princ-to-string condition))))
+        (expect loaded-files :to-be nil)
         (expect message :to-contain "Unable to locate ASDF system \"missing-system\"")
         (expect message :to-contain "CL_SOURCE_REGISTRY")
-        (expect searched-directories
-                :to-equal
-                (list (pathname-directory helper-directory)
-                      (pathname-directory cwd))))))
+        (expect searched-pathnames :to-equal (list helper-asd cwd-asd))))))
 
-  (it "normalizes metadata reporter spec to JSON output"
-    (let* ((options (parse-cli '("metadata" "cl-weave/tests" "--reporter" "spec")))
-           (output (framework-metadata-output options)))
-      (expect (cl-weave/cli::metadata-reporter options) :to-be :json)
-      (expect output :to-contain "\"schemaVersion\":23")
-      (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")))
+(it
+  "normalizes metadata reporter spec to JSON output"
+  (let* ((options (parse-cli '("metadata" "cl-weave/tests" "--reporter" "spec")))
+         (output (framework-metadata-output options)))
+    (expect (cl-weave/cli::metadata-reporter options) :to-be :json)
+    (expect output :to-contain "\"schemaVersion\":23")
+    (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")))
 
-  (it "normalizes spec metadata reporter before writing output"
-    (let* ((output-file (test-temporary-pathname "cl-weave-metadata-spec.json"))
-           (options (parse-cli (list "metadata" "--reporter" "spec"
-                           "--output" (namestring output-file)))))
+(it
+  "normalizes spec metadata reporter before writing output"
+  (let* ((output-file (test-temporary-pathname "cl-weave-metadata-spec.json"))
+         (options
+        (parse-cli
+          (list "metadata" "--reporter" "spec" "--output" (namestring output-file)))))
+    (when (probe-file output-file)
+      (delete-file output-file))
+    (unwind-protect (progn
+        (expect
+          (with-output-to-string (*standard-output*)
+            (cl-weave/cli::run-command options))
+          :to-equal
+          "")
+        (let ((output (read-text-file output-file)))
+          (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")
+          (expect output :to-contain "\"schemaVersion\":23")
+          (expect output :to-contain "\"qualityGates\"")
+          (expect output :not :to-contain ":KIND")))
       (when (probe-file output-file)
-        (delete-file output-file))
-      (unwind-protect
-           (progn
-             (expect (with-output-to-string (*standard-output*)
-                       (cl-weave/cli::run-command options))
-                     :to-equal "")
-              (let ((output (read-text-file output-file)))
-              (expect output :to-contain "\"kind\":\"cl-weave-metadata\"")
-              (expect output :to-contain "\"schemaVersion\":23")
-              (expect output :to-contain "\"qualityGates\"")
-              (expect output :not :to-contain ":KIND")))
-        (when (probe-file output-file)
-          (delete-file output-file)))))
+        (delete-file output-file)))))
 
-  (it "normalizes doctor reporter spec to JSON output"
-    (let* ((options (parse-cli '("doctor" "--reporter" "spec")))
-           (output (with-output-to-string (stream)
-                     (cl-weave/cli::report-doctor options stream))))
-      (expect (cl-weave/cli::doctor-reporter options) :to-be :json)
-      (expect output :to-contain "\"schemaVersion\":1")
-      (expect output :to-contain "\"kind\":\"doctor-report\"")))
+(it
+  "normalizes doctor reporter spec to JSON output"
+  (let* ((options (parse-cli '("doctor" "--reporter" "spec")))
+         (output
+        (with-output-to-string (stream)
+          (cl-weave/cli::report-doctor options stream))))
+    (expect (cl-weave/cli::doctor-reporter options) :to-be :json)
+    (expect output :to-contain "\"schemaVersion\":1")
+    (expect output :to-contain "\"kind\":\"doctor-report\"")))
 
-  (it "rejects unsupported structured reporters early"
-    (dolist (contract
-             '(("doctor" cl-weave/cli::doctor-reporter
-                "cl-weave: doctor mode supports json and sexp reporters.")
-               ("metadata" cl-weave/cli::metadata-reporter
-                "cl-weave: metadata mode supports json and sexp reporters.")))
-      (destructuring-bind (command reporter-function message) contract
-        (dolist (reporter '("tap" "github" "junit" "jsonl"))
-          (let ((options (parse-cli (list command "--reporter" reporter))))
-            (expect (lambda ()
-                      (funcall reporter-function options))
-                    :to-throw
-                    message))))))
+(it
+  "rejects unsupported structured reporters early"
+  (dolist (contract
+      '(("doctor"
+          cl-weave/cli::doctor-reporter
+          "cl-weave: doctor mode supports json and sexp reporters.")
+        ("metadata"
+          cl-weave/cli::metadata-reporter
+          "cl-weave: metadata mode supports json and sexp reporters.")))
+    (destructuring-bind (command reporter-function message) contract
+      (dolist (reporter '("tap" "github" "junit" "jsonl"))
+        (let ((options (parse-cli (list command "--reporter" reporter))))
+          (expect
+            (lambda ()
+              (funcall reporter-function options))
+            :to-throw
+            message))))))
 
-  (it "prints AI-friendly command usage"
-    (let ((usage (cl-weave/cli::cli-usage)))
-      (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
-      (expect usage :to-contain "cl-weave doctor [SYSTEM] [options]")
-      (expect usage :to-contain "cl-weave metadata [SYSTEM] [options]")
-      (expect usage :to-contain "cl-weave version")
-      (expect usage :to-contain "cl-weave help")
-      (expect usage :to-contain "--reporter REPORTER")
-      (expect usage :to-contain "--shard INDEX/COUNT")
-      (expect usage :to-contain "--retry INTEGER")
-      (expect usage :to-contain "--test-timeout-ms MS")
-      (expect usage :to-contain "--filter TEXT")
-      (expect usage :to-contain "--output FILE")
-      (expect usage :to-contain "--fail-with-no-tests")
-      (expect usage :to-contain "--snapshot-dir DIR")
-      (expect usage :to-contain "--snapshot-file FILE")
-      (expect usage :to-contain "--update-snapshots")
-      (expect usage :to-contain "--version")))
+(it
+  "prints AI-friendly command usage"
+  (let ((usage (cl-weave/cli::cli-usage)))
+    (expect usage :to-contain "cl-weave run [SYSTEM] [options]")
+    (expect usage :to-contain "cl-weave doctor [SYSTEM] [options]")
+    (expect usage :to-contain "cl-weave metadata [SYSTEM] [options]")
+    (expect usage :to-contain "cl-weave version")
+    (expect usage :to-contain "cl-weave help")
+    (expect usage :to-contain "--reporter REPORTER")
+    (expect usage :to-contain "--shard INDEX/COUNT")
+    (expect usage :to-contain "--retry INTEGER")
+    (expect usage :to-contain "--test-timeout-ms MS")
+    (expect usage :to-contain "--filter TEXT")
+    (expect usage :to-contain "--output FILE")
+    (expect usage :to-contain "--fail-with-no-tests")
+    (expect usage :to-contain "--snapshot-dir DIR")
+    (expect usage :to-contain "--snapshot-file FILE")
+    (expect usage :to-contain "--update-snapshots")
+    (expect usage :to-contain "--version")))
 
-  (it "keeps command usage synchronized with CLI option metadata"
-    (let ((usage (cl-weave/cli::cli-usage)))
-      (dolist (entry (getf (cl-weave/metadata:framework-metadata) :options))
-        (let ((name (getf entry :name))
-              (argument (getf entry :argument)))
-          (expect usage
-                  :to-contain
-                  (if argument
-                      (format nil "~A ~A" name argument)
-                      name))))))
+(it
+  "keeps command usage synchronized with CLI option metadata"
+  (let ((usage (cl-weave/cli::cli-usage)))
+    (dolist (entry (getf (cl-weave/metadata:framework-metadata) :options))
+      (let ((name (getf entry :name))
+            (argument (getf entry :argument)))
+        (expect
+          usage
+          :to-contain
+          (if argument (format nil "~A ~A" name argument)
+            name))))))

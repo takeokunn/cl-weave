@@ -64,11 +64,57 @@
         (expect (mapcar #'cl-weave:test-plan-entry-path plan)
                 :to-equal '(("plan-shard" "one") ("plan-shard" "three"))))))
 
-  (it "rejects invalid shard specs with stable errors"
-    (let ((root (cl-weave::make-suite :name "root")))
-      (dolist (shard '((0 2) (3 2) (1) (1 2 3) "1/2"))
+  (it "shards duplicate paths by test identity"
+    (let* ((root (cl-weave::make-suite :name "root"))
+           (suite
+             (cl-weave::add-child
+              root
+              (cl-weave::make-suite :name "duplicates" :parent root)))
+           (executed nil))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "same"
+        :function (lambda () (push :first executed))))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "same"
+        :function (lambda () (push :second executed))))
+      (let ((events (cl-weave::collect-events root :shard '(1 2))))
+        (expect executed :to-equal '(:first))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("duplicates" "same"))))
+      (setf executed nil)
+      (let ((events (cl-weave::collect-events root :shard '(2 2))))
+        (expect executed :to-equal '(:second))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("duplicates" "same"))))))
+
+  (it "bounds shard specs before executing tests"
+    (expect (cl-weave::collect-events
+             (cl-weave::make-suite :name "empty")
+             :shard (list cl-weave::+maximum-shard-count+
+                          cl-weave::+maximum-shard-count+))
+            :to-be-null)
+    (dolist (shard
+             (list
+              (list 1 (1+ cl-weave::+maximum-shard-count+))
+              '(0 2)
+              '(3 2)
+              '(1)
+              '(1 2 3)
+              "1/2"))
+      (let ((executed nil)
+            (root (cl-weave::make-suite :name "root")))
+        (cl-weave::add-child
+         root
+         (cl-weave::make-test-case
+          :name "must not run"
+          :function (lambda () (setf executed t))))
         (expect (lambda ()
                   (cl-weave::collect-events root :shard shard))
                 :to-throw
-                "Shard must be NIL")))))
+                "Shard must be NIL")
+        (expect executed :to-be nil)))))
 

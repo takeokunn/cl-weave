@@ -9,20 +9,43 @@
   (unless (null expected)
     (error "Matcher ~S expects no expected values, got ~D." matcher (length expected))))
 
-(defun one-of-candidates (expected matcher)
-  (let ((candidates (expected-one expected matcher)))
-    (typecase candidates
-      (list
-       (values candidates candidates (length candidates)))
-      ((and vector (not string))
-       (values candidates (coerce candidates 'list) (length candidates)))
-      (hash-table
-       (let ((values (loop for value being the hash-values of candidates
-                           collect value)))
-         (values candidates values (hash-table-count candidates))))
-      (t
-       (error "Matcher ~S expects a list, vector, or hash-table of candidates, got ~S."
-              matcher candidates)))))
+(progn
+  (defconstant +maximum-one-of-candidate-count+ 100000)
+
+  (defun ensure-one-of-candidate-count (count matcher)
+    (unless (<= count +maximum-one-of-candidate-count+)
+      (error "Matcher ~S accepts at most ~D candidates, got ~D."
+             matcher
+             +maximum-one-of-candidate-count+
+             count))
+    count)
+
+  (defun one-of-candidates (expected matcher)
+    (let ((candidates (expected-one expected matcher)))
+      (cond
+        ((and (listp candidates)
+              (finite-proper-list-p candidates))
+         (let ((count (ensure-one-of-candidate-count
+                       (length candidates)
+                       matcher)))
+           (values candidates candidates count)))
+        ((and (vectorp candidates)
+              (not (stringp candidates)))
+         (let ((count (ensure-one-of-candidate-count
+                       (length candidates)
+                       matcher)))
+           (values candidates (coerce candidates 'list) count)))
+        ((hash-table-p candidates)
+         (let ((count (ensure-one-of-candidate-count
+                       (hash-table-count candidates)
+                       matcher)))
+           (values candidates
+                   (loop for value being the hash-values of candidates
+                         collect value)
+                   count)))
+        (t
+         (error "Matcher ~S expects a finite proper list, non-string vector, or hash table of candidates."
+                matcher))))))
 
 (defun one-of-report (actual raw-candidates candidate-count matched-index)
   (list :value actual
@@ -91,25 +114,27 @@
      (expected-none expected ',name)
      ,@body))
 
-(defun normalize-close-to-expected (expected matcher)
-  (unless (<= 1 (length expected) 2)
-    (error "Matcher ~S expects an expected number and optional digit count, got ~D values."
-           matcher
-           (length expected)))
-  (let ((target (first expected))
-        (digits (if (= (length expected) 2)
-                    (second expected)
-                    2)))
+(defconstant +maximum-close-to-precision+ 1000)
+
+  (defun ensure-close-to-precision (digits matcher)
+    (unless (and (integerp digits)
+                 (<= 0 digits +maximum-close-to-precision+))
+      (error "Matcher ~S expects an integer digit count between 0 and ~D."
+             matcher +maximum-close-to-precision+))
+    digits)
+
+  (defun normalize-close-to-expected (expected matcher)
+  (unless (member (length expected) (quote (1 2)))
+    (error "Matcher ~S expects one or two expected values, got ~D."
+           matcher (length expected)))
+  (destructuring-bind (target &optional (digits 2)) expected
     (unless (realp target)
-      (error "Matcher ~S expects a real target value, got ~S." matcher target))
-    (unless (and (integerp digits) (not (minusp digits)))
-      (error "Matcher ~S expects a non-negative integer digit count, got ~S."
-             matcher
-             digits))
-    (values target digits)))
+      (error "Matcher ~S expects a real target, got ~S." matcher target))
+    (values target (ensure-close-to-precision digits matcher))))
 
 (defun close-to-threshold (digits)
-  (/ (expt 10 (- digits)) 2))
+  (let ((precision (ensure-close-to-precision digits :to-be-close-to)))
+    (/ (expt 10 (- precision)) 2)))
 
 (defun close-to-report (actual target digits difference threshold)
   (list :value actual

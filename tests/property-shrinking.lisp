@@ -23,7 +23,21 @@
               :to-contain "ab")
       (expect (funcall (cl-weave::property-generator-shrink vector-generator)
                        #(:b :b))
-              :to-contain-equal #(:a :b))))
+              :to-contain-equal #(:a :b))
+      (expect (cl-weave::remove-duplicate-shrink-candidates
+               '((0 1) (1 0) (0 1)) #'equal)
+              :to-equal '((1 0) (0 1)))))
+(it "does not share list spines with shrink candidates"
+    (let* ((generator (gen-list (gen-member '(:a :b))
+                                :min-length 1
+                                :max-length 3))
+           (value (list :b :b :b))
+           (candidates
+             (funcall (cl-weave::property-generator-shrink generator) value))
+           (candidate (find '(:b :a :b) candidates :test #'equal)))
+      (expect candidate :to-satisfy #'identity)
+      (setf (third candidate) :changed)
+      (expect value :to-equal '(:b :b :b))))
 
   (it "shrinks state-machine traces by event stream"
     (let* ((transition (lambda (state event)
@@ -120,10 +134,15 @@
                               :original original
                               :function property
                               :current current
-                              :visited (cons current visited)
+                              :visited (let ((seen (make-hash-table :test #'equal)))
+                                         (dolist (value (cons current visited) seen)
+                                           (setf (gethash value seen) t)))
                               :steps 1
                               :max-steps 10))
                       (calls nil))
+                 (expect (hash-table-p
+                          (cl-weave::property-shrink-state-visited state))
+                         :to-be t)
                  (cl-weave::call-property-shrink-candidate/k
                   state 0 candidate
                   (lambda (next-state)
@@ -271,5 +290,112 @@
                  (error "failure at ~S" value)))
               :to-equal '(0))
       (expect evaluations :to-be 1001)))
+
+  (it "stops circular cons shrink candidates"
+    (let* ((first (cons :cycle nil))
+           (duplicate (cons :cycle nil))
+           (generator
+             (cl-weave::make-property-generator
+              :name :circular-cons
+              :produce #'identity
+              :shrink (lambda (value)
+                        (cond
+                          ((eq value :start) (list first))
+                          ((eq value first) (list duplicate))
+                          ((eq value duplicate) (list first))
+                          (t nil))))))
+      (setf (cdr first) first
+            (cdr duplicate) duplicate)
+      (labels ((exercise ()
+                 (let ((minimal
+                         (cl-weave::shrink-property-values
+                          (list generator) '(:start)
+                          (lambda (value)
+                            (declare (ignore value))
+                            (error "failure")))))
+                   (expect (first minimal) :to-be first))))
+        #+sbcl (sb-ext:with-timeout 2 (exercise))
+        #-sbcl (exercise))))
+
+  (it "stops circular vector shrink candidates"
+    (let* ((first (vector nil))
+           (second (vector nil))
+           (generator
+             (cl-weave::make-property-generator
+              :name :circular-vector
+              :produce #'identity
+              :shrink (lambda (value)
+                        (cond
+                          ((eq value :start) (list first))
+                          ((eq value first) (list second))
+                          ((eq value second) (list first))
+                          (t nil))))))
+      (setf (aref first 0) first
+            (aref second 0) second)
+      (labels ((exercise ()
+                 (let ((minimal
+                         (cl-weave::shrink-property-values
+                          (list generator) '(:start)
+                          (lambda (value)
+                            (declare (ignore value))
+                            (error "failure")))))
+                   (expect (first minimal) :to-be second))))
+        #+sbcl (sb-ext:with-timeout 2 (exercise))
+        #-sbcl (exercise))))
+
+  (it "prints circular property failures safely"
+    (labels ((exercise ()
+               (let* ((cycle (cons :cycle nil))
+                      (generator
+                        (cl-weave::make-property-generator
+                         :name :circular-report
+                         :produce #'identity
+                         :shrink (constantly nil))))
+                 (setf (cdr cycle) cycle)
+                 (let* ((cause
+                          (make-condition
+                           'simple-error
+                           :format-control "failure at ~S"
+                           :format-arguments (list cycle)))
+                        (limit-text
+                          (princ-to-string
+                           (make-condition
+                            'property-shrink-limit
+                            :values (list cycle)
+                            :steps 1
+                            :max-steps 1)))
+                        (shrinker-text
+                          (princ-to-string
+                           (make-condition
+                            'property-shrinker-error
+                            :generator generator
+                            :value cycle
+                            :cause cause)))
+                        (failure nil))
+                   (handler-case
+                       (cl-weave::signal-property-failure
+                        '(value) '(property value) (list cycle) (list cycle)
+                        7 0 cause)
+                     (assertion-failure (condition)
+                       (setf failure condition)))
+                   (expect limit-text :to-satisfy
+                           (lambda (text) (search "#1=" text)))
+                   (expect shrinker-text :to-satisfy
+                           (lambda (text) (search "#1=" text)))
+                   (expect failure :to-satisfy #'identity)
+                   (let* ((detail (cl-weave::failure-detail failure))
+                          (actual (cl-weave::assertion-detail-actual detail))
+                          (condition-text (getf actual :condition)))
+                     (expect condition-text :to-satisfy
+                             (lambda (text) (search "#1=" text))))))))
+      #+sbcl (sb-ext:with-timeout 2 (exercise))
+      #-sbcl (exercise))
+    (expect
+     (princ-to-string
+      (make-condition 'property-shrink-limit
+                      :values '(2)
+                      :steps 1
+                      :max-steps 1))
+     :to-equal "Property shrinking exceeded the 1 step limit at (2)."))
 
 )

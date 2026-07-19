@@ -112,13 +112,137 @@
               "Unknown option")))
 
   (it "validates coverage thresholds as percentages"
-    (expect (cl-weave/cli::cli-options-coverage-minimum-expression
-             (parse-cli '("run" "--coverage-min-expression" "0")))
-            :to-be 0.0)
-    (dolist (value '("100.1" "-1" ".5" "1."))
+    (dolist (value '("0" "00" "0.0" "00.00"))
+      (expect (cl-weave/cli::cli-options-coverage-minimum-expression
+               (parse-cli (list "run" "--coverage-min-expression" value)))
+              :to-satisfy
+              #'zerop))
+    (dolist (value '("100" "100.0"))
+      (expect (cl-weave/cli::cli-options-coverage-minimum-expression
+               (parse-cli (list "run" "--coverage-min-expression" value)))
+              :to-satisfy
+              (lambda (number)
+                (= number 100))))
+    (dolist (value '("100.1" "-1" ".5" "1." "." ".0" "0." "1e2"))
       (expect (lambda ()
                 (parse-cli (list "run" "--coverage-min-branch" value)))
               :to-throw)))
+
+  (it "bounds numeric CLI tokens before parsing or splitting"
+    (let* ((integer-boundary (make-string 128 :initial-element #\1))
+           (signed-boundary
+             (concatenate 'string
+                          "-"
+                          (make-string 127 :initial-element #\1)))
+           (decimal-boundary
+             (concatenate 'string
+                          "1."
+                          (make-string 126 :initial-element #\0)))
+           (percentage-boundary
+             (concatenate 'string
+                          (make-string 125 :initial-element #\0)
+                          "100"))
+           (shard-boundary
+             (concatenate 'string
+                          (make-string 62 :initial-element #\0)
+                          "1/"
+                          (make-string 63 :initial-element #\0)
+                          "1"))
+           (digits-over-limit (make-string 129 :initial-element #\1))
+           (signed-over-limit
+             (concatenate 'string
+                          "-"
+                          (make-string 128 :initial-element #\1)))
+           (decimal-over-limit
+             (concatenate 'string
+                          "1."
+                          (make-string 127 :initial-element #\0)))
+           (exponent-over-limit
+             (concatenate 'string
+                          "1e"
+                          (make-string 127 :initial-element #\0)))
+           (shard-over-limit
+             (concatenate 'string
+                          "1/"
+                          (make-string 127 :initial-element #\1))))
+      (expect (cl-weave/cli::parse-complete-integer
+               integer-boundary
+               "--integer")
+              :to-satisfy
+              #'integerp)
+      (expect (cl-weave/cli::parse-complete-integer
+               signed-boundary
+               "--integer")
+              :to-satisfy
+              #'minusp)
+      (expect (cl-weave/cli::parse-positive-number
+               decimal-boundary
+               "--number")
+              :to-be 1.0)
+      (expect (cl-weave/cli::parse-percentage
+               percentage-boundary
+               "--percentage")
+              :to-be 100)
+      (expect (lambda ()
+          (cl-weave/cli::parse-bail integer-boundary))
+        :to-throw)
+      (expect (cl-weave/cli::parse-shard shard-boundary) :to-equal (quote (1 1)))
+      (dolist (value '("-1" "1.5" "1e3"))
+        (expect (lambda ()
+                  (cl-weave/cli::parse-bail value))
+                :to-throw))
+      (dolist (value '("0/1" "2/1" "1/0" "-1/2" "1.0/2" "1e1/2"))
+        (expect (lambda ()
+                  (cl-weave/cli::parse-shard value))
+                :to-throw))
+      (labels ((failure-message (thunk)
+                 (handler-case
+                     (funcall thunk)
+                   (cl-weave/cli::cli-error (condition)
+                     (princ-to-string condition))))
+               (expect-length-error (thunk)
+                 (let ((message (failure-message thunk)))
+                   (expect message
+                           :to-contain
+                           "must not exceed 128 characters")
+                   (expect (< (length message) 128) :to-be t))))
+        (dolist (thunk
+                 (list
+                  (lambda ()
+                    (cl-weave/cli::parse-complete-integer
+                     digits-over-limit
+                     "--integer"))
+                  (lambda ()
+                    (cl-weave/cli::parse-complete-integer
+                     signed-over-limit
+                     "--integer"))
+                  (lambda ()
+                    (cl-weave/cli::parse-positive-number
+                     decimal-over-limit
+                     "--number"))
+                  (lambda ()
+                    (cl-weave/cli::parse-positive-number
+                     exponent-over-limit
+                     "--number"))
+                  (lambda ()
+                    (cl-weave/cli::parse-percentage
+                     decimal-over-limit
+                     "--percentage"))
+                  (lambda ()
+                    (cl-weave/cli::parse-percentage
+                     exponent-over-limit
+                     "--percentage"))
+                  (lambda ()
+                    (cl-weave/cli::parse-bail digits-over-limit))
+                  (lambda ()
+                    (cl-weave/cli::parse-bail signed-over-limit))
+                  (lambda ()
+                    (cl-weave/cli::parse-bail decimal-over-limit))
+                  (lambda ()
+                    (cl-weave/cli::parse-bail exponent-over-limit))
+                  (lambda ()
+                    (cl-weave/cli::parse-shard shard-over-limit))))
+          (expect-length-error thunk)))))
 
   (it "parses watch intervals as explicit CLI text"
     (labels ((watch-interval-from-env (value)
@@ -194,6 +318,7 @@
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
+  (progn
   (it "rejects inline values for flag-only options"
     (dolist (token '("--help=1"
                      "--version=1"
@@ -205,6 +330,56 @@
                 (parse-cli (list "run" token)))
               :to-throw
               "does not accept an inline value")))
+
+  (it "enforces semantic runner bounds for CLI options"
+    (let ((options
+            (parse-cli
+             (list "run"
+                   "--retry"
+                   (princ-to-string cl-weave::+maximum-retry-count+)
+                   "--test-timeout-ms"
+                   (princ-to-string cl-weave::+maximum-timeout-ms+)
+                   "--max-workers"
+                   (princ-to-string cl-weave::+maximum-worker-count+)
+                   "--bail"
+                   (princ-to-string cl-weave::+maximum-bail-limit+)
+                   "--shard"
+                   (format nil "~D/~D"
+                           cl-weave::+maximum-shard-count+
+                           cl-weave::+maximum-shard-count+)))))
+      (expect (cl-weave/cli::cli-options-retry options)
+              :to-be cl-weave::+maximum-retry-count+)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+              :to-be cl-weave::+maximum-timeout-ms+)
+      (expect (cl-weave/cli::cli-options-max-workers options)
+              :to-be cl-weave::+maximum-worker-count+)
+      (expect (cl-weave/cli::cli-options-bail options)
+              :to-be cl-weave::+maximum-bail-limit+)
+      (expect (cl-weave/cli::cli-options-shard options)
+              :to-equal
+              (list cl-weave::+maximum-shard-count+
+                    cl-weave::+maximum-shard-count+)))
+    (dolist (option-value
+             (list
+              (list "--retry"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-retry-count+)))
+              (list "--test-timeout-ms"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-timeout-ms+)))
+              (list "--max-workers"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-worker-count+)))
+              (list "--bail"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-bail-limit+)))
+              (list "--shard"
+                    (format nil "1/~D"
+                            (1+ cl-weave::+maximum-shard-count+)))))
+      (expect (lambda ()
+                (parse-cli
+                 (list "run" (first option-value) (second option-value))))
+              :to-throw))))
 
   (it "treats Lisp nil environment tokens as false"
     (with-mocked-functions
@@ -225,59 +400,107 @@
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
-  (it "parses bail control from CI environment data"
-    (labels ((bail-from (value)
-               (with-mocked-functions
-                   (((symbol-function 'uiop:getenv)
-                     (lambda (name)
-                       (when (string= name "CL_WEAVE_BAIL")
-                         value))))
-                 (cl-weave/cli::cli-options-bail
-                  (cl-weave/cli::options-from-environment)))))
-      (dolist (value '("0" "false" "no" "off" "nil"))
-        (expect (bail-from value) :to-be nil))
-      (dolist (value '("true" "yes" "on" "t"))
-        (expect (bail-from value) :to-be t))
-      (expect (bail-from "3") :to-be 3)
-      (dolist (value '("maybe" "-1" "1.5"))
-        (expect (lambda ()
-                  (bail-from value))
-                :to-throw
-                "--bail must be true, false, or a positive integer"))))
+  (it "parses and bounds bail control from CI environment data"
+  (labels ((bail-from (value)
+             (with-mocked-functions
+                 (((symbol-function 'uiop:getenv)
+                   (lambda (name)
+                     (when (string= name "CL_WEAVE_BAIL")
+                       value))))
+               (cl-weave/cli::cli-options-bail
+                (cl-weave/cli::options-from-environment)))))
+    (dolist (value '("0" "false" "no" "off" "nil"))
+      (expect (bail-from value) :to-be nil))
+    (dolist (value '("true" "yes" "on" "t"))
+      (expect (bail-from value) :to-be t))
+    (expect (bail-from "3") :to-be 3)
+    (expect (bail-from
+             (princ-to-string cl-weave::+maximum-bail-limit+))
+            :to-be cl-weave::+maximum-bail-limit+)
+    (expect (lambda ()
+              (bail-from
+               (princ-to-string
+                (1+ cl-weave::+maximum-bail-limit+))))
+            :to-throw)
+    (dolist (value '("maybe" "-1" "1.5"))
+      (expect (lambda ()
+                (bail-from value))
+              :to-throw
+              "--bail must be true, false, or a positive integer"))))
 
-  (it "parses retry and timeout defaults from CI environment data"
-    (labels ((options-from (entries)
-               (with-mocked-functions
-                   (((symbol-function 'uiop:getenv)
-                     (lambda (name)
-                       (cdr (assoc name entries :test #'string=)))))
-                 (cl-weave/cli::options-from-environment))))
-      (let ((options (options-from '(("CL_WEAVE_RETRY" . "0")
-                                     ("CL_WEAVE_TEST_TIMEOUT" . "2500")))))
-        (expect (cl-weave/cli::cli-options-retry options) :to-be 0)
-        (expect (cl-weave/cli::cli-options-test-timeout-ms options)
-                :to-be 2500))
-      (let ((options (options-from '(("CL_WEAVE_RETRY" . "3")
-                                     ("CL_WEAVE_TEST_TIMEOUT" . "2500")
-                                     ("CL_WEAVE_TEST_TIMEOUT_MS" . "125")
-                                     ("CL_WEAVE_MAX_WORKERS" . "4")))))
-        (expect (cl-weave/cli::cli-options-retry options) :to-be 3)
-        (expect (cl-weave/cli::cli-options-test-timeout-ms options)
-                :to-be 2500)
-        (expect (cl-weave/cli::cli-options-max-workers options)
-                :to-be 4))
+  (it "parses and bounds retry, timeout, workers, and shard environment data"
+  (labels ((options-from (entries)
+             (with-mocked-functions
+                 (((symbol-function 'uiop:getenv)
+                   (lambda (name)
+                     (cdr (assoc name entries :test #'string=)))))
+               (cl-weave/cli::options-from-environment))))
+    (let ((options (options-from '(("CL_WEAVE_RETRY" . "0")
+                                   ("CL_WEAVE_TEST_TIMEOUT" . "2500")))))
+      (expect (cl-weave/cli::cli-options-retry options) :to-be 0)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+              :to-be 2500))
+    (let ((options (options-from '(("CL_WEAVE_RETRY" . "3")
+                                   ("CL_WEAVE_TEST_TIMEOUT" . "2500")
+                                   ("CL_WEAVE_TEST_TIMEOUT_MS" . "125")
+                                   ("CL_WEAVE_MAX_WORKERS" . "4")))))
+      (expect (cl-weave/cli::cli-options-retry options) :to-be 3)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+              :to-be 2500)
+      (expect (cl-weave/cli::cli-options-max-workers options)
+              :to-be 4))
+    (let ((options
+            (options-from
+             (list
+              (cons "CL_WEAVE_RETRY"
+                    (princ-to-string cl-weave::+maximum-retry-count+))
+              (cons "CL_WEAVE_TEST_TIMEOUT_MS"
+                    (princ-to-string cl-weave::+maximum-timeout-ms+))
+              (cons "CL_WEAVE_MAX_WORKERS"
+                    (princ-to-string cl-weave::+maximum-worker-count+))
+              (cons "CL_WEAVE_SHARD"
+                    (format nil "~D/~D"
+                            cl-weave::+maximum-shard-count+
+                            cl-weave::+maximum-shard-count+))))))
+      (expect (cl-weave/cli::cli-options-retry options)
+              :to-be cl-weave::+maximum-retry-count+)
+      (expect (cl-weave/cli::cli-options-test-timeout-ms options)
+              :to-be cl-weave::+maximum-timeout-ms+)
+      (expect (cl-weave/cli::cli-options-max-workers options)
+              :to-be cl-weave::+maximum-worker-count+)
+      (expect (cl-weave/cli::cli-options-shard options)
+              :to-equal
+              (list cl-weave::+maximum-shard-count+
+                    cl-weave::+maximum-shard-count+)))
+    (dolist (entry
+             (list
+              (cons "CL_WEAVE_RETRY"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-retry-count+)))
+              (cons "CL_WEAVE_TEST_TIMEOUT_MS"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-timeout-ms+)))
+              (cons "CL_WEAVE_MAX_WORKERS"
+                    (princ-to-string
+                     (1+ cl-weave::+maximum-worker-count+)))
+              (cons "CL_WEAVE_SHARD"
+                    (format nil "1/~D"
+                            (1+ cl-weave::+maximum-shard-count+)))))
       (expect (lambda ()
-                (options-from '(("CL_WEAVE_RETRY" . "-1"))))
-              :to-throw
-              "CL_WEAVE_RETRY must be a non-negative integer")
-      (expect (lambda ()
-                (options-from '(("CL_WEAVE_TEST_TIMEOUT_MS" . "0"))))
-              :to-throw
-              "CL_WEAVE_TEST_TIMEOUT_MS must be positive")
-      (expect (lambda ()
-                (options-from '(("CL_WEAVE_MAX_WORKERS" . "0"))))
-              :to-throw
-              "CL_WEAVE_MAX_WORKERS must be positive")))
+                (options-from (list entry)))
+              :to-throw))
+    (expect (lambda ()
+              (options-from '(("CL_WEAVE_RETRY" . "-1"))))
+            :to-throw
+            "CL_WEAVE_RETRY must be a non-negative integer")
+    (expect (lambda ()
+              (options-from '(("CL_WEAVE_TEST_TIMEOUT_MS" . "0"))))
+            :to-throw
+            "CL_WEAVE_TEST_TIMEOUT_MS must be positive")
+    (expect (lambda ()
+              (options-from '(("CL_WEAVE_MAX_WORKERS" . "0"))))
+            :to-throw
+            "CL_WEAVE_MAX_WORKERS must be positive")))
 
   (it "requires explicit CI sequence seeds to be positive integers"
     (labels ((seed-from (value)
