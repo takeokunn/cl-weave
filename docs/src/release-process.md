@@ -5,8 +5,8 @@ project remains pre-1.0.
 
 ## Release Goals
 
-- Keep the public CLI and reporter contracts stable unless the changelog calls
-  out a deliberate break.
+- Keep the public CLI and reporter contracts stable unless the GitHub Release
+  notes and `CHANGELOG.md` call out a deliberate break.
 - Keep machine-readable metadata and human-facing documentation in sync.
 - Keep downstream ASDF consumers able to adopt new versions with a small
   upgrade step.
@@ -31,6 +31,10 @@ For public-surface discipline and migration expectations, see
    source and Nix install paths.
 8. Confirm the release notes mention any intentional public-surface breaks or
    migration steps.
+
+GitHub Releases are the canonical public release notes. Keep `CHANGELOG.md` as
+a concise, versioned index of those user-visible changes and links to the
+corresponding release.
 
 ## Maintenance Boundaries
 

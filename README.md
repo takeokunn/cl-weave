@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/takeokunn/cl-weave/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/takeokunn/cl-weave/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-mdBook-0a7a5a)](https://takeokunn.github.io/cl-weave/)
 
 `cl-weave` is a modern Common Lisp testing framework inspired by Vitest and
 designed around Lisp's strengths: macros, conditions, dynamic bindings, and
@@ -32,7 +33,7 @@ contract, and every governance and policy document, is published at
 ```
 
 ```sh
-timeout 360s nix run . -- run cl-weave/tests
+nix run . -- run cl-weave/tests
 ```
 
 See [Quick Start](https://takeokunn.github.io/cl-weave/quick-start.html) for
@@ -57,12 +58,22 @@ nix build .#docs
 
 Pull requests run `nix flake check`.
 
+## Contributing
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for the supported Nix workflow,
+validation expectations, and public-surface rules. Project governance,
+maintenance, and release policies are available in the
+[documentation](https://takeokunn.github.io/cl-weave/).
+
 ## Support
 
 Use the [Support Policy](https://takeokunn.github.io/cl-weave/support-policy.html)
 for the canonical support boundaries, and
 [private GitHub security advisories](https://github.com/takeokunn/cl-weave/security/advisories/new)
 for vulnerability reporting. Do not put exploit details in a public issue.
+
+Community conduct is defined in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md), and
+release history is published through [GitHub Releases](https://github.com/takeokunn/cl-weave/releases).
 
 ## License
 

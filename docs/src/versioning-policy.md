@@ -7,7 +7,8 @@ promising semantic-version compatibility.
 
 - `0.x` releases may include breaking changes whenever that is the smallest
   correct fix for the public surface.
-- A breaking change should still be explicit in the changelog, docs, and tests.
+- A breaking change should still be explicit in GitHub Release notes,
+  `CHANGELOG.md`, docs, and tests.
 - Non-breaking changes should preserve the documented CLI output, reporter
   shape, and machine-readable metadata.
 
@@ -37,5 +38,5 @@ support it.
 
 Before cutting a release or documenting a public break, review
 [release-process.md](release-process.md) and
-[maintenance-policy.md](maintenance-policy.md) so the changelog, validation
-story, and support expectations stay aligned.
+[maintenance-policy.md](maintenance-policy.md) so GitHub Release notes,
+`CHANGELOG.md`, validation, and support expectations stay aligned.

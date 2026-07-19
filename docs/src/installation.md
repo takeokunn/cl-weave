@@ -10,6 +10,10 @@ timeout 600s nix flake check
 timeout 360s nix run . -- run cl-weave/tests --reporter spec
 ```
 
+`timeout` is an optional outer guard for CI and automation; it is not required
+by `cl-weave`. On systems that do not provide it, run the `nix` command without
+the prefix, or provide GNU coreutils through your environment.
+
 ## Without Cloning The Repository
 
 ```sh

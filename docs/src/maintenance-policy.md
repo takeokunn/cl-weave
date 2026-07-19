@@ -18,8 +18,8 @@ For the release labeling and public-surface discipline, see
 
 - Release notes should summarize user-visible changes and any migration steps
   that matter for downstream ASDF systems.
-- Breaking changes should be called out explicitly in the changelog and, when
-  practical, accompanied by regression tests.
+- Breaking changes should be called out explicitly in GitHub Release notes and
+  `CHANGELOG.md`, and, when practical, accompanied by regression tests.
 - Public reporter formats, CLI flags, and adoption guidance should stay in sync
   with the behavior exercised by the test suite.
 - Pre-1.0 breaking changes are expected when they simplify the surface or
