@@ -65,7 +65,17 @@ Each `checks` entry contains:
 - `status`
 - `summary`
 
-Current check names:
+Current check names, in emission order:
+
+### `runtime`
+
+Reports the resolved Lisp implementation, version, and host software type for the current process.
+
+Interpretation:
+
+- `pass`: always `pass`; this check is a fixed informational summary, not a pass/fail diagnostic
+
+This check is a quick human-readable complement to the structured `runtime` object described above; use the top-level `runtime` object for machine parsing.
 
 ### `cl-weave-system`
 

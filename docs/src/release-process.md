@@ -16,20 +16,24 @@ For public-surface discipline and migration expectations, see
 
 ## Suggested Release Checklist
 
-1. Run the full test suite.
-2. Run `nix flake check --print-build-logs` when Nix is available.
-3. Summarize user-visible changes in the release notes.
-4. Check that `README.md` and `docs/src/maintenance-policy.md` still match the
+1. Bump the version string in lockstep across `cl-weave.asd` (`:version`),
+   both `version = "..."` lines in `flake.nix`, and the `"version"` field in
+   the embedded JSON contract in `docs/src/ai-contract.md`. Releases use a
+   minor-version-only bump while pre-1.0.
+2. Run the full test suite.
+3. Run `nix flake check --print-build-logs` when Nix is available.
+4. Summarize user-visible changes in the release notes.
+5. Check that `README.md` and `docs/src/maintenance-policy.md` still match the
    current workflow.
-5. Review `docs/src/pull-request-template.md` and
+6. Review `docs/src/pull-request-template.md` and
    `.github/pull_request_template.md` so release-bound changes still capture
    public-surface notes, validation commands, and follow-up risk in a
    consistent format.
-6. Verify that `cl-weave metadata` still advertises the expected package links,
+7. Verify that `cl-weave metadata` still advertises the expected package links,
    reporter list, and schema versions.
-7. Verify that `docs/src/distribution-policy.md` still matches the documented
+8. Verify that `docs/src/distribution-policy.md` still matches the documented
    source and Nix install paths.
-8. Confirm the release notes mention any intentional public-surface breaks or
+9. Confirm the release notes mention any intentional public-surface breaks or
    migration steps.
 
 GitHub Releases are the canonical public release notes. Keep `CHANGELOG.md` as
