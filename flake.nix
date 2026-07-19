@@ -78,12 +78,16 @@
               timeoutSeconds,
               command,
               artifacts ? [ ],
+              validationCommands ? [ ],
             }:
             pkgs.stdenv.mkDerivation {
               inherit name;
               src = source;
               nativeBuildInputs = [
                 pkgs.coreutils
+                pkgs.jq
+                pkgs.libxml2
+                pkgs.perl
                 pkgs.sbcl
               ];
               buildPhase = ''
@@ -93,6 +97,7 @@
                 timeout ${toString timeoutSeconds}s \
                   ${lib.escapeShellArgs command}
                 ${lib.concatMapStringsSep "\n" (artifact: "test -e ${lib.escapeShellArg artifact}") artifacts}
+                ${lib.concatStringsSep "\n" validationCommands}
               '';
               installPhase = ''
                 mkdir -p "$out"
@@ -122,10 +127,16 @@
               "cl-weave/tests"
               "--reporter"
               "json"
+              "--filter"
+              "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-results.json"
             ];
             artifacts = [ "cl-weave-results.json" ];
+            validationCommands = [
+              ''jq -e '.schemaVersion == 6 and .kind == "test-results" and (.events | type == "array") and (.events | length > 0)' cl-weave-results.json >/dev/null''
+            ];
           };
 
           jsonl-events-artifact = mkCheck {
@@ -137,10 +148,16 @@
               "cl-weave/tests"
               "--reporter"
               "jsonl"
+              "--filter"
+              "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-events.jsonl"
             ];
             artifacts = [ "cl-weave-events.jsonl" ];
+            validationCommands = [
+              ''jq -s -e 'length >= 3 and .[0].schemaVersion == 1 and .[0].kind == "test-results-start" and .[-1].schemaVersion == 1 and .[-1].kind == "test-results-summary" and all(.[1:-1][]; .schemaVersion == 3 and .kind == "test-event")' cl-weave-events.jsonl >/dev/null''
+            ];
           };
 
           cli-json-results = mkCheck {
@@ -159,6 +176,9 @@
               "cl-weave-cli-results.json"
             ];
             artifacts = [ "cl-weave-cli-results.json" ];
+            validationCommands = [
+              ''jq -e '.schemaVersion == 6 and .kind == "test-results" and (.events | type == "array") and (.events | length > 0)' cl-weave-cli-results.json >/dev/null''
+            ];
           };
 
           ai-metadata-artifact = mkCheck {
@@ -174,6 +194,9 @@
               "cl-weave-metadata.json"
             ];
             artifacts = [ "cl-weave-metadata.json" ];
+            validationCommands = [
+              ''jq -e '.schemaVersion == 23 and .kind == "cl-weave-metadata"' cl-weave-metadata.json >/dev/null''
+            ];
           };
 
           plan-artifact = mkCheck {
@@ -192,6 +215,9 @@
               "cl-weave-plan.json"
             ];
             artifacts = [ "cl-weave-plan.json" ];
+            validationCommands = [
+              ''jq -e '.schemaVersion == 3 and .kind == "test-plan" and (.tests | type == "array") and (.tests | length > 0)' cl-weave-plan.json >/dev/null''
+            ];
           };
 
           watch-once-artifact = mkCheck {
@@ -211,6 +237,9 @@
               "cl-weave-watch-once.json"
             ];
             artifacts = [ "cl-weave-watch-once.json" ];
+            validationCommands = [
+              ''jq -e '.schemaVersion == 6 and .kind == "test-results" and (.events | type == "array") and (.events | length > 0)' cl-weave-watch-once.json >/dev/null''
+            ];
           };
 
           tap-artifact = mkCheck {
@@ -229,6 +258,9 @@
               "cl-weave-tap.txt"
             ];
             artifacts = [ "cl-weave-tap.txt" ];
+            validationCommands = [
+              ''perl -ne 'chomp; $seen = 1 if $_ eq "TAP version 13"; END { exit !$seen }' cl-weave-tap.txt''
+            ];
           };
 
           filtered-smoke = mkCheck {
@@ -253,10 +285,17 @@
               "cl-weave/tests"
               "--reporter"
               "junit"
+              "--filter"
+              "filtering > runs only tests matching a path substring"
+              "--fail-with-no-tests"
               "--output"
               "cl-weave-junit.xml"
             ];
             artifacts = [ "cl-weave-junit.xml" ];
+            validationCommands = [
+              "xmllint --noout cl-weave-junit.xml"
+              ''test "$(xmllint --xpath 'name(/*)' cl-weave-junit.xml)" = testsuite''
+            ];
           };
 
           coverage-artifact = mkCheck {
@@ -281,6 +320,10 @@
             artifacts = [
               "cl-weave.coverage"
               "cl-weave-coverage-report/"
+            ];
+            validationCommands = [
+              "test -s cl-weave.coverage"
+              "test -s cl-weave-coverage-report/cover-index.html"
             ];
           };
 

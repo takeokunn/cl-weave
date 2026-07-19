@@ -180,7 +180,7 @@
 
 (defmatcher :to-have-been-called-with (actual expected)
   (let ((report (mock-report actual)))
-    (values (mock-called-with-p actual expected)
+    (values (mock-called-with-p actual expected report)
             report
             (list :arguments expected))))
 
@@ -217,7 +217,7 @@
 
 (defmatcher :to-have-returned-with (actual expected)
   (let ((report (mock-report actual)))
-    (values (mock-returned-with-p actual expected)
+    (values (mock-returned-with-p actual expected report)
             report
             (list :values expected))))
 

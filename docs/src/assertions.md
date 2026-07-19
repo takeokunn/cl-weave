@@ -132,7 +132,8 @@ to inspect snapshot artifacts without depending on private file readers.
 
 `:to-be-one-of` accepts one candidate collection and passes when the actual
 value is `eql` to one of its members. Lists and vectors are treated as candidate
-sequences; hash tables use their values:
+sequences; hash tables use their values. Every candidate collection is limited
+to 100,000 entries:
 
 ```lisp
 (expect :ready :to-be-one-of '(:pending :ready :done))

@@ -1,5 +1,22 @@
 (in-package #:cl-weave)
 
+(defun finite-proper-list-p (object)
+  "Return T when OBJECT is a proper list, safely rejecting dotted and circular
+lists via Floyd tortoise-and-hare traversal. Shared by the matcher and property
+subsystems, which load after this file."
+  (loop with slow = object
+        with fast = object
+        do (cond
+             ((null fast) (return t))
+             ((atom fast) (return nil))
+             ((null (cdr fast)) (return t))
+             ((atom (cdr fast)) (return nil))
+             (t
+              (setf slow (cdr slow)
+                    fast (cddr fast))
+              (when (eq slow fast)
+                (return nil))))))
+
 (defvar *isolated-timeout-seconds* 5)
 
 (defstruct isolated-result

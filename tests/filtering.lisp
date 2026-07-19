@@ -66,6 +66,7 @@
         (expect (mapcar #'cl-weave::test-event-path events)
                 :to-equal '(("files" "target"))))))
 
+  (progn
   (it "normalizes, includes, and excludes test tags"
     (let* ((root (cl-weave::make-suite :name "root"))
            (suite (cl-weave::add-child
@@ -83,6 +84,40 @@
                      root :include-tags '(fast) :exclude-tags '("db"))))
         (expect (mapcar #'cl-weave::test-event-path events)
                 :to-equal '(("tagged" "fast unit"))))))
+
+  (it "preserves tag filter semantics for order, duplicates, and empty filters"
+    (let ((test (cl-weave::make-test-case
+                 :name "tag semantics"
+                 :function (lambda () t))))
+      (dolist (test-tags '(nil
+                           ("FAST")
+                           ("UNIT" "FAST" "FAST")
+                           ("DB" "FAST")))
+        (setf (cl-weave::test-case-tags test) test-tags)
+        (dolist (filters '((nil nil)
+                           (("FAST" "FAST") nil)
+                           (("MISSING" "FAST" "FAST") ("ABSENT"))
+                           (("FAST" "MISSING") ("DB" "DB"))
+                           (nil ("UNIT" "UNIT"))
+                           (("MISSING") nil)
+                           (("FAST") ("FAST"))))
+          (destructuring-bind (include-tags exclude-tags) filters
+            (let* ((expected
+                     (and
+                      (or (null include-tags)
+                          (intersection
+                           test-tags include-tags :test #'string=))
+                      (or (null exclude-tags)
+                          (not
+                           (intersection
+                            test-tags exclude-tags :test #'string=)))))
+                   (actual
+                     (cl-weave::test-tags-match-filter-p
+                      test
+                      (cl-weave::tag-membership-index include-tags)
+                      (cl-weave::tag-membership-index exclude-tags))))
+              (expect (not (null actual))
+                      :to-equal (not (null expected))))))))))
 
   (it "combines tag, name, and location filters with AND semantics"
     (let* ((root (cl-weave::make-suite :name "root"))
@@ -109,21 +144,66 @@
                  (cl-weave::make-suite :name "root") :include-tags filter))
               :to-throw)))
 
-  (it "applies tag filters before assigning shard ordinals"
-    (let* ((root (cl-weave::make-suite :name "root"))
-           (suite (cl-weave::add-child
-                   root (cl-weave::make-suite :name "sharded" :parent root))))
-      (dolist (spec '(("first" ("FAST"))
-                      ("ignored" ("SLOW"))
-                      ("second" ("FAST"))))
-        (cl-weave::add-child
-         suite
-         (cl-weave::make-test-case
-          :name (first spec) :tags (second spec) :function (lambda () t))))
-      (let ((events (cl-weave::collect-events
-                     root :include-tags '(:fast) :shard '(2 2))))
-        (expect (mapcar #'cl-weave::test-event-path events)
-                :to-equal '(("sharded" "second"))))))
+  (progn
+    (it "applies tag filters before assigning shard ordinals"
+      (let* ((root (cl-weave::make-suite :name "root"))
+             (suite (cl-weave::add-child
+                     root
+                     (cl-weave::make-suite :name "sharded" :parent root))))
+        (dolist (spec (quote (("first" ("FAST"))
+                              ("ignored" ("SLOW"))
+                              ("second" ("FAST")))))
+          (cl-weave::add-child
+           suite
+           (cl-weave::make-test-case
+            :name (first spec)
+            :tags (second spec)
+            :function (lambda () t))))
+        (let ((events (cl-weave::collect-events
+                       root :include-tags (quote (:fast)) :shard (quote (2 2)))))
+          (expect (mapcar (function cl-weave::test-event-path) events)
+                  :to-equal (quote (("sharded" "second")))))))
+
+    (it "indexes tag filters once and scans test tags linearly"
+      (let* ((tag-count 5000)
+             (filter-tags
+               (loop for index below tag-count
+                     collect (format nil "FILTER-~D" index)))
+             (test-tags
+               (loop for index below tag-count
+                     collect (format nil "TEST-~D" index)))
+             (root (cl-weave::make-suite :name "root"))
+             (filter
+               (cl-weave::make-selection-filter :include-tags filter-tags))
+             (original-index-builder
+               (symbol-function (quote cl-weave::tag-membership-index)))
+             (original-index-member
+               (symbol-function (quote cl-weave::tag-index-member-p)))
+             (index-build-count 0)
+             (membership-probe-count 0))
+        (dotimes (index 3)
+          (cl-weave::add-child
+           root
+           (cl-weave::make-test-case
+            :name (format nil "test-~D" index)
+            :tags test-tags
+            :function (lambda () t))))
+        (with-mocked-functions
+            (((symbol-function (quote cl-weave::tag-membership-index))
+              (lambda (tags)
+                (when tags
+                  (incf index-build-count))
+                (funcall original-index-builder tags)))
+             ((symbol-function (quote cl-weave::tag-index-member-p))
+              (lambda (tag index)
+                (incf membership-probe-count)
+                (funcall original-index-member tag index))))
+          (multiple-value-bind (selected-tests selected-suites test-paths)
+              (cl-weave::collect-selection-indexes root filter nil)
+            (declare (ignore selected-suites test-paths))
+            (expect (hash-table-count selected-tests) :to-be 0)))
+        (expect index-build-count :to-be 1)
+        (expect membership-probe-count :to-be (* 3 tag-count)))))
 
   (it "can fail a run when no tests are selected"
     (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))

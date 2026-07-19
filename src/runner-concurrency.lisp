@@ -1,34 +1,22 @@
 (in-package #:cl-weave)
 
-(defun worker-batch-size (tests)
-  (let ((limit (normalize-max-workers *max-workers*)))
-    (if limit
-        (min limit (length tests))
-        (length tests))))
+(progn
+  (defconstant +maximum-physical-worker-count+ 64)
 
-(defun split-worker-batch/k (tests limit continue)
-  (labels ((take/k (remaining remaining-limit collected)
-             (if (or (null remaining) (zerop remaining-limit))
-                 (funcall continue (nreverse collected) remaining)
-                 (take/k (rest remaining)
-                         (1- remaining-limit)
-                         (cons (first remaining) collected)))))
-    (take/k tests limit '())))
+  (defun worker-batch-size (tests)
+    (let* ((requested-limit (normalize-max-workers *max-workers*))
+           (limit (or requested-limit *default-max-workers*)))
+      (min limit
+           +maximum-physical-worker-count+
+           (length tests)))))
 
-(defun run-worker-batches/k (tests batch-size run-batch continue)
-  (if (null tests)
-      (funcall continue '())
-      (split-worker-batch/k
-       tests
-       batch-size
-       (lambda (batch remaining)
-         (let ((events (funcall run-batch batch)))
-           (run-worker-batches/k
-            remaining
-            batch-size
-            run-batch
-            (lambda (tail)
-              (funcall continue (append events tail)))))))))
+#+sb-thread
+(progn
+  (defun make-runner-worker-thread (function name)
+    (sb-thread:make-thread function :name name))
+
+  (defun join-runner-worker-thread (thread)
+    (sb-thread:join-thread thread)))
 
 (defun capture-runner-dynamic-environment ()
   (mapcar #'symbol-value *runner-dynamic-environment-variables*))
@@ -40,22 +28,91 @@
 
 (defun run-concurrent-test-cases (suite tests)
   #+sb-thread
-  (let ((captured-environment
-          (capture-runner-dynamic-environment)))
-    (labels ((run-captured-test (test)
+  (let* ((captured-environment
+           (capture-runner-dynamic-environment))
+         (test-vector (coerce tests 'vector))
+         (test-count (length test-vector))
+         (worker-count (worker-batch-size tests))
+         (results (make-array test-count))
+         (next-index 0)
+         (job-lock (sb-thread:make-mutex
+                    :name "cl-weave concurrent job queue"))
+         (start-gate (sb-thread:make-semaphore :count 0))
+         (threads (make-array worker-count :fill-pointer 0))
+         (join-attempts (make-hash-table :test #'eq))
+         (created-worker-count 0)
+         (released-worker-count 0)
+         (cancelledp nil)
+         (first-condition nil))
+    (labels ((claim-job ()
+               (sb-thread:with-mutex (job-lock)
+                 (if (and (not cancelledp)
+                          (< next-index test-count))
+                     (let ((index next-index))
+                       (incf next-index)
+                       (values index (aref test-vector index) t))
+                     (values nil nil nil))))
+             (run-worker ()
+               (sb-thread:wait-on-semaphore start-gate)
                (with-runner-dynamic-environment captured-environment
-                  (run-test-case/internal suite test))))
-      (flet ((run-batch (batch)
-               (let ((threads
-                       (loop for test in batch
-                             collect (let ((worker-test test))
-                                       (sb-thread:make-thread
-                                        (lambda ()
-                                          (run-captured-test worker-test))
-                                        :name (format nil "cl-weave: ~A"
-                                                      (test-case-name worker-test)))))))
-                 (mapcar #'sb-thread:join-thread threads))))
-        (run-worker-batches/k tests (worker-batch-size tests) #'run-batch #'identity))))
+                 (loop
+                   (multiple-value-bind (index test presentp) (claim-job)
+                     (unless presentp
+                       (return))
+                     (setf (aref results index)
+                           (run-test-case/internal suite test))))))
+             (record-first-condition (condition)
+               (unless first-condition
+                 (setf first-condition condition)))
+             (release-workers ()
+               (loop while (< released-worker-count created-worker-count)
+                     do (sb-thread:signal-semaphore start-gate)
+                        (incf released-worker-count)))
+             (cancel-workers ()
+               (sb-thread:with-mutex (job-lock)
+                 (setf cancelledp t))
+               (release-workers))
+             (join-thread-once (thread)
+               (unless (gethash thread join-attempts)
+                 (setf (gethash thread join-attempts) t)
+                 (handler-case
+                     (join-runner-worker-thread thread)
+                   (serious-condition (condition)
+                     (record-first-condition condition)
+                     (handler-case
+                         (cancel-workers)
+                       (serious-condition (cleanup-condition)
+                         (record-first-condition cleanup-condition)))
+                     (handler-case
+                         (sb-thread:join-thread thread)
+                       (serious-condition (cleanup-condition)
+                         (record-first-condition cleanup-condition)))))))
+             (join-created-threads ()
+               (loop for thread across threads
+                     do (join-thread-once thread))))
+      (unwind-protect
+           (handler-case
+               (progn
+                 (loop for worker-number from 1 to worker-count
+                       do (vector-push
+                           (make-runner-worker-thread
+                            #'run-worker
+                            (format nil "cl-weave worker ~D" worker-number))
+                           threads)
+                          (incf created-worker-count))
+                 (release-workers)
+                 (join-created-threads))
+             (serious-condition (condition)
+               (record-first-condition condition)))
+        (unless (= released-worker-count created-worker-count)
+          (handler-case
+              (cancel-workers)
+            (serious-condition (condition)
+              (record-first-condition condition))))
+        (join-created-threads))
+      (when first-condition
+        (error first-condition))
+      (coerce results 'list)))
   #-sb-thread
   (declare (ignore suite tests))
   #-sb-thread

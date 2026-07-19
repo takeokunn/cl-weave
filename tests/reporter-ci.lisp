@@ -35,14 +35,15 @@
 
   (it "sanitizes JUnit XML strings with portable control-character rules"
     (let ((escaped (cl-weave::xml-escaped-string
-                    (coerce (list #\< #\> #\& #\" #\'
+                    (coerce (list #\< #\> #\& #\"
+                                  (code-char 39)
                                   (code-char 9)
                                   (code-char 10)
                                   (code-char 13)
                                   (code-char 1))
-                            'string))))
+                            (quote string)))))
       (expect escaped :to-equal
-              (concatenate 'string
+              (concatenate (quote string)
                            "&lt;"
                            "&gt;"
                            "&amp;"
@@ -52,6 +53,13 @@
                            (string (code-char 10))
                            (string (code-char 13))
                            "?"))))
+
+  (it "replaces XML 1.0 noncharacters when representable"
+    (dolist (code '(#xfffe #xffff))
+      (let ((character (code-char code)))
+        (when character
+          (expect (cl-weave::xml-escaped-string (string character))
+                  :to-equal "?")))))
 
   (it "replaces characters outside the valid XML 1.0 range with ?"
     (let ((escaped (cl-weave::xml-escaped-string
@@ -72,7 +80,6 @@
                            "?"
                            (string (code-char #x2603))
                            (string (code-char #x1f600))))))
-
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap

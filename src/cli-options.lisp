@@ -150,7 +150,18 @@
       (t (error 'cli-error
                 :message (format nil "~A must be a boolean: ~A" name value))))))
 
+(defconstant +maximum-numeric-token-length+ 128)
+
+(defun ensure-numeric-token-length (value name)
+  (when (> (length value) +maximum-numeric-token-length+)
+    (error 'cli-error
+           :message (format nil "~A must not exceed ~D characters"
+                            name
+                            +maximum-numeric-token-length+)))
+  value)
+
 (defun parse-complete-integer (value name)
+  (ensure-numeric-token-length value name)
   (handler-case
       (parse-integer value :junk-allowed nil)
     (error ()
@@ -164,19 +175,47 @@
     integer))
 
 (defun parse-non-negative-integer (value name)
-  (let ((integer (parse-complete-integer value name)))
-    (when (minusp integer)
-      (error 'cli-error
-             :message (format nil "~A must be a non-negative integer: ~A" name value)))
-    integer))
+    (let ((integer (parse-complete-integer value name)))
+      (when (minusp integer)
+        (error 'cli-error
+               :message (format nil "~A must be a non-negative integer: ~A" name value)))
+      integer))
+
+  (defun normalize-runner-option (value name normalizer)
+    (handler-case
+        (funcall normalizer value)
+      (error (condition)
+        (error 'cli-error
+               :message (format nil "~A: ~A" name condition)))))
+
+  (defun parse-retry-option (value name)
+    (normalize-runner-option
+     (parse-non-negative-integer value name)
+     name
+     #'cl-weave::normalize-retry-count))
+
+  (defun parse-timeout-ms-option (value name)
+    (normalize-runner-option
+     (parse-positive-integer value name)
+     name
+     #'cl-weave::normalize-timeout-ms))
+
+  (defun parse-max-workers-option (value name)
+    (normalize-runner-option
+     (parse-positive-integer value name)
+     name
+     #'cl-weave::normalize-max-workers))
 
 (defun parse-positive-number (value name)
+  (ensure-numeric-token-length value name)
   (labels ((invalid ()
              (error 'cli-error
                     :message (format nil "~A must be a positive number: ~A" name value)))
+           (ascii-digit-p (character)
+             (char<= #\0 character #\9))
            (digits-p (string)
              (and (plusp (length string))
-                  (every #'digit-char-p string)))
+                  (every #'ascii-digit-p string)))
            (component (string)
              (unless (digits-p string)
                (invalid))
@@ -187,34 +226,43 @@
       (when (or (string= value "") second-dot)
         (invalid))
       (let ((number
-              (if first-dot
-                  (let* ((whole (component (subseq value 0 first-dot)))
-                         (fraction-text (subseq value (1+ first-dot)))
-                         (fraction (component fraction-text))
-                         (denominator (expt 10 (length fraction-text))))
-                    (float (+ whole (/ fraction denominator)) 1.0))
-                  (component value))))
+              (handler-case
+                  (if first-dot
+                      (let* ((whole (component (subseq value 0 first-dot)))
+                             (fraction-text (subseq value (1+ first-dot)))
+                             (fraction (component fraction-text))
+                             (denominator (expt 10 (length fraction-text))))
+                        (float (+ whole (/ fraction denominator)) 1.0))
+                      (component value))
+                (arithmetic-error ()
+                  (invalid)))))
         (unless (plusp number)
           (invalid))
         number))))
 
 (defun parse-percentage (value name)
-  (let ((number (if (or (string= value "0")
-                        (and (plusp (length value))
-                             (position #\. value)
+  (ensure-numeric-token-length value name)
+  (labels ((zero-number-p ()
+             (let ((dot (position #\. value)))
+               (and (plusp (length value))
+                    (if dot
+                        (and (plusp dot)
+                             (< dot (1- (length value)))
+                             (null (position #\. value :start (1+ dot)))
                              (every (lambda (character)
-                                      (or (digit-char-p character)
+                                      (or (char= character #\0)
                                           (char= character #\.)))
-                                    value)
-                             (= (count #\. value) 1)
-                             (every (lambda (character)
-                                      (char= character #\0))
-                                    (remove #\. value))))
-                    0.0
-                    (parse-positive-number value name))))
-    (when (> number 100)
-      (error 'cli-error :message (format nil "~A must not exceed 100: ~A" name value)))
-    number))
+                                    value))
+                        (every (lambda (character)
+                                 (char= character #\0))
+                               value))))))
+    (let ((number (if (zero-number-p)
+                      0.0
+                      (parse-positive-number value name))))
+      (when (> number 100)
+        (error 'cli-error
+               :message (format nil "~A must not exceed 100: ~A" name value)))
+      number)))
 
 (defun parse-reporter (value)
   (let ((normalized (string-downcase value)))
@@ -231,29 +279,36 @@
              :message (format nil "Unknown sequence order: ~A" value))))
 
 (defun parse-bail (value)
+  (ensure-numeric-token-length value "--bail")
   (let ((normalized (string-downcase value)))
-    (cond
-      ((member normalized '("true" "yes" "on" "t") :test #'string=) t)
-      ((member normalized '("false" "no" "off" "0" "nil") :test #'string=) nil)
-      (t
-       (let ((parsed (ignore-errors
-                       (parse-complete-integer value "--bail"))))
-         (unless (and parsed (plusp parsed))
-           (error 'cli-error
-                  :message (format nil "--bail must be true, false, or a positive integer: ~A" value)))
-         parsed)))))
+    (normalize-runner-option
+     (cond
+       ((member normalized '("true" "yes" "on" "t") :test #'string=) t)
+       ((member normalized '("false" "no" "off" "0" "nil") :test #'string=) nil)
+       (t
+        (let ((parsed (ignore-errors
+                        (parse-complete-integer value "--bail"))))
+          (unless (and parsed (plusp parsed))
+            (error 'cli-error
+                   :message
+                   (format nil
+                           "--bail must be true, false, or a positive integer: ~A"
+                           value)))
+          parsed)))
+     "--bail"
+     #'cl-weave::normalize-bail)))
 
 (defun parse-shard (value)
+  (ensure-numeric-token-length value "--shard")
   (let ((slash (position #\/ value)))
     (unless slash
       (error 'cli-error
              :message (format nil "--shard must use INDEX/COUNT: ~A" value)))
-    (let ((index (parse-positive-integer (subseq value 0 slash) "--shard index"))
-          (count (parse-positive-integer (subseq value (1+ slash)) "--shard count")))
-      (unless (<= index count)
-        (error 'cli-error
-               :message (format nil "--shard requires INDEX <= COUNT: ~A" value)))
-      (list index count))))
+    (normalize-runner-option
+     (list (parse-positive-integer (subseq value 0 slash) "--shard index")
+           (parse-positive-integer (subseq value (1+ slash)) "--shard count"))
+     "--shard"
+     #'cl-weave::normalize-shard)))
 
 (defun parse-reporter-option (value ignore)
   (declare (ignore ignore))

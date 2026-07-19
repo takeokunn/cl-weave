@@ -96,16 +96,21 @@
            ,@body)))))
 
 (defmacro before-all (&body body)
-  `(register-before-all (lambda () ,@body)))
+  `(register-before-all (lambda () ,@body)
+                        :location ,(source-location-form)))
 
 (defmacro after-all (&body body)
-  `(register-after-all (lambda () ,@body)))
+  `(register-after-all (lambda () ,@body)
+                       :location ,(source-location-form)))
 
 (defmacro before-each (&body body)
-  `(register-before-each (lambda () ,@body)))
+  `(register-before-each (lambda () ,@body)
+                         :location ,(source-location-form)))
 
 (defmacro around-each ((next) &body body)
-  `(register-around-each (lambda (,next) ,@body)))
+  `(register-around-each (lambda (,next) ,@body)
+                         :location ,(source-location-form)))
 
 (defmacro after-each (&body body)
-  `(register-after-each (lambda () ,@body)))
+  `(register-after-each (lambda () ,@body)
+                        :location ,(source-location-form)))

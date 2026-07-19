@@ -146,19 +146,93 @@
   (it "reports allocation measurements in assertion failures"
     (expect-allocation-measurement-failure)))
 
-(describe "matcher argument validation"
-  (it "rejects malformed matcher arguments with stable errors"
-    (dolist (bad-expectation
-             (list (lambda () (expect 1 :to-be-close-to))
-                   (lambda () (expect 1 :to-be-close-to 2 :digits))
-                   (lambda () (expect 1 :to-be-close-to 2 -3))
-                   (lambda () (expect 1 :to-be-one-of))
-                   (lambda () (expect 1 :to-be-instance-of :no-such-class))
-                   (lambda () (expect (lambda () t) :to-throw 42))
-                   (lambda () (expect 42 :to-run-under-ms 5))
-                   (lambda () (expect (lambda () t) :to-run-under-ms "fast"))
-                   (lambda () (expect (lambda () t) :to-run-under-ms -1))
-                   (lambda () (expect (lambda () t) :to-allocate-under "few"))
-                   (lambda () (expect 42 :to-have-method-specialized-on 'name))
-                   (lambda () (expect 42 :to-have-slot))))
-      (expect bad-expectation :to-throw))))
+(progn
+  (describe "matcher argument validation"
+    (it "rejects malformed matcher arguments with stable errors"
+      (dolist (bad-expectation
+               (list (lambda () (expect 1 :to-be-close-to))
+                     (lambda () (expect 1 :to-be-close-to 2 :digits))
+                     (lambda () (expect 1 :to-be-close-to 2 -3))
+                     (lambda () (expect 1 :to-be-one-of))
+                     (lambda () (expect 1 :to-be-instance-of (find-symbol "NO-SUCH-CLASS" "KEYWORD")))
+                     (lambda () (expect (lambda () t) :to-throw 42))
+                     (lambda () (expect 42 :to-run-under-ms 5))
+                     (lambda () (expect (lambda () t) :to-run-under-ms "fast"))
+                     (lambda () (expect (lambda () t) :to-run-under-ms -1))
+                     (lambda () (expect (lambda () t) :to-allocate-under "few"))
+                     (lambda () (expect 42 :to-have-method-specialized-on 'name))
+                     (lambda () (expect 42 :to-have-slot))))
+        (expect bad-expectation :to-throw)))
+
+    (it "bounds close-to precision before exact arithmetic"
+      (expect 1 :to-be-close-to 1 cl-weave::+maximum-close-to-precision+)
+      (dolist (digits (list (1+ cl-weave::+maximum-close-to-precision+)
+                            (expt 10 10000)))
+        (expect (lambda ()
+                  (expect 1 :to-be-close-to 1 digits))
+                :to-throw
+                "integer digit count between")))
+
+    (it "rejects non-finite and unsupported one-of candidate collections"
+      (let ((cycle (list :candidate)))
+        (setf (cdr cycle) cycle)
+        #+sbcl
+        (sb-ext:with-timeout 1
+          (expect (lambda ()
+                    (expect :candidate :to-be-one-of cycle))
+                  :to-throw
+                  "finite proper list"))
+        #-sbcl
+        (expect (lambda ()
+                  (expect :candidate :to-be-one-of cycle))
+                :to-throw
+                "finite proper list"))
+      (dolist (candidates (list (cons :candidate :tail)
+                                42))
+        (expect (lambda ()
+                  (expect :candidate :to-be-one-of candidates))
+                :to-throw
+                "finite proper list")))
+
+    (it "bounds one-of candidate collections before normalization"
+      (let* ((limit cl-weave::+maximum-one-of-candidate-count+)
+             (oversize (1+ limit))
+             (table (make-hash-table :test #'eql :size oversize)))
+        (dotimes (index oversize)
+          (setf (gethash index table) index))
+        (dolist (candidates
+                 (list (make-list oversize :initial-element :candidate)
+                       (make-array oversize :initial-element :candidate)
+                       table))
+          (expect (lambda ()
+                    (expect :missing :to-be-one-of candidates))
+                  :to-throw
+                  "at most")))))
+
+  (describe "logic rule term instantiation"
+    (it "handles rule terms nested to depth 50000"
+      (let ((rule-term '?value)
+            (query-term :resolved))
+        (loop repeat 50000 do (setf rule-term (cons :node rule-term) query-term (cons :node query-term)))
+        (expect (logic-query
+                 (list (list ':- (cons :deep rule-term)))
+                 (list (cons :deep query-term)))
+                :to-equal
+                '(nil))))
+
+    (it "rejects cyclic rule terms before instantiation"
+      (let* ((cycle (list '?value))
+             (program (list (list ':- (cons :cyclic cycle)))))
+        (setf (cdr cycle) cycle)
+        (expect (lambda ()
+                  (logic-query program '((:cyclic :resolved))))
+                :to-throw
+                "cyclic logic value")))
+
+    (it "rejects cyclic top-level programs before normalization"
+      (let ((program (list (list :cyclic :resolved))))
+        (setf (cdr program) program)
+        (expect (lambda ()
+                  (logic-query program '((:cyclic :resolved)) :max-steps 1))
+                :to-throw
+                "cyclic logic value")))))

@@ -74,6 +74,51 @@
               :to-throw
               "CL_WEAVE_PROPERTY_SEED")))
 
+  (it "bounds property environment integer text before parsing"
+    (let* ((integer-boundary (make-string 128 :initial-element #\1))
+           (signed-boundary
+             (concatenate 'string "-" (make-string 127 :initial-element #\1)))
+           (digits-over-limit (make-string 129 :initial-element #\1))
+           (signed-over-limit
+             (concatenate 'string "-" (make-string 128 :initial-element #\1)))
+           (decimal-over-limit
+             (concatenate 'string "1." (make-string 127 :initial-element #\0)))
+           (exponent-over-limit
+             (concatenate 'string "1e" (make-string 127 :initial-element #\1))))
+      (expect
+       (cl-weave::parse-environment-integer
+        "CL_WEAVE_PROPERTY_SEED"
+        integer-boundary)
+       :to-satisfy
+       #'integerp)
+      (expect
+       (cl-weave::parse-environment-integer
+        "CL_WEAVE_PROPERTY_SEED"
+        signed-boundary)
+       :to-satisfy
+       #'minusp)
+      (dolist (value '("1.0" "1e3"))
+        (expect
+         (lambda ()
+           (cl-weave::parse-environment-integer
+            "CL_WEAVE_PROPERTY_SEED"
+            value))
+         :to-throw
+         "must be an integer"))
+      (dolist (value (list digits-over-limit
+                           signed-over-limit
+                           decimal-over-limit
+                           exponent-over-limit))
+        (let ((message
+                (handler-case
+                    (cl-weave::parse-environment-integer
+                     "CL_WEAVE_PROPERTY_SEED"
+                     value)
+                  (error (condition)
+                    (princ-to-string condition)))))
+          (expect message :to-contain "must not exceed 128 characters")
+          (expect (< (length message) 128) :to-be t)))))
+
   (it "expands it-property into the property runner"
     (expect (macroexpand-1
              '(it-property "positive identity"

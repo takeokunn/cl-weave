@@ -196,8 +196,22 @@ generated script, stdout, stderr, and temporary HOME directory paths are exposed
 via
 `isolated-result-script-path`, `isolated-result-stdout-path`,
 `isolated-result-stderr-path`, and `isolated-result-home-path`. With the
-default `:keep-files nil`, those path accessors return `nil` and the temporary
-artifacts are deleted before control returns to the parent process.
+default `:keep-files nil`, those public path accessors always return `nil`.
+Normally, synchronous cleanup deletes the temporary artifacts before control
+returns to the parent process. If cleanup cannot finish within its bounded
+time window, a private registry retains a strong internal owner without
+exposing its paths through the result. Cleanup owners receive bounded, fair
+retries toward eventual deletion; `drain-isolated-cleanups` provides explicit,
+bounded cleanup cycles. `isolated-cleanup-snapshots` reports primitive metadata
+only, never owner objects or artifact paths.
+
+`run-isolated` creates a separate session and process group. Process cleanup
+covers the isolated process and cooperative descendants that remain in that
+process group. Descendants that deliberately call `setsid`, `setpgid`, or
+otherwise leave the group are outside the containment guarantee. This boundary
+provides process cleanup, not an OS security sandbox. Once process-group
+authority is `:scope-lost`, cleanup is observe-only: it may observe exit and
+reap the process, but it never signals the PGID through that authority.
 
 ## ASDF System Runner And Watch Mode
 

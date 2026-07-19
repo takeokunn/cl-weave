@@ -25,61 +25,109 @@
         (values (cdr binding) t)
         (values nil nil))))
 
-(defun logic-walk (value bindings &optional seen)
-  (if (logic-variable-p value)
-      (if (member value seen :test #'eq)
-          value
-          (multiple-value-bind (bound found-p) (logic-binding-value value bindings)
-            (if found-p
-                (logic-walk bound bindings (cons value seen))
-                value)))
-      value))
+(progn
+  (defun logic-walk (value bindings &optional seen)
+    (let ((current value)
+          (visited (make-hash-table :test (function eq))))
+      (dolist (variable seen)
+        (setf (gethash variable visited) t))
+      (loop
+        (unless (logic-variable-p current)
+          (return current))
+        (when (gethash current visited)
+          (return current))
+        (setf (gethash current visited) t)
+        (multiple-value-bind (bound found-p)
+            (logic-binding-value current bindings)
+          (unless found-p
+            (return current))
+          (setf current bound)))))
+
+  (defun reject-cyclic-logic-value ()
+    (error "cl-weave: cyclic logic value is not supported."))
+
+  (defun ensure-acyclic-logic-value (value bindings)
+    (let ((active (make-hash-table :test (function eq)))
+          (stack (list (cons :visit value))))
+      (loop while stack
+            for frame = (pop stack)
+            do (if (eq (car frame) :leave)
+                   (remhash (cdr frame) active)
+                   (let ((part (logic-walk (cdr frame) bindings)))
+                     (when (consp part)
+                       (when (gethash part active)
+                         (reject-cyclic-logic-value))
+                       (setf (gethash part active) t)
+                       (push (cons :leave part) stack)
+                       (push (cons :visit (cdr part)) stack)
+                       (push (cons :visit (car part)) stack)))))
+      value)))
 
 (defun extend-logic-binding (variable value bindings)
   (acons variable value bindings))
 
 (defun logic-occurs-in-p (variable value bindings)
-  (let ((value (logic-walk value bindings)))
-    (cond
-      ((eql variable value) t)
-      ((consp value)
-       (or (logic-occurs-in-p variable (car value) bindings)
-           (logic-occurs-in-p variable (cdr value) bindings)))
-      (t nil))))
+  (ensure-acyclic-logic-value value bindings)
+  (let ((stack (list value)))
+    (loop while stack
+          for part = (logic-walk (pop stack) bindings)
+          do (cond
+               ((eql variable part)
+                (return-from logic-occurs-in-p t))
+               ((consp part)
+                (push (cdr part) stack)
+                (push (car part) stack))))
+    nil))
 
 (defun unify-logic-values (left right bindings)
-  (let ((left (logic-walk left bindings))
-        (right (logic-walk right bindings)))
-    (cond
-      ((and (consp left) (consp right))
-       (multiple-value-bind (head-bindings head-ok-p)
-           (unify-logic-values (first left) (first right) bindings)
-         (if head-ok-p
-             (unify-logic-values (rest left) (rest right) head-bindings)
-             (values nil nil))))
-      ((logic-variable-p left)
-       (if (logic-occurs-in-p left right bindings)
-           (values nil nil)
-           (values (extend-logic-binding left right bindings) t)))
-      ((logic-variable-p right)
-       (if (logic-occurs-in-p right left bindings)
-           (values nil nil)
-           (values (extend-logic-binding right left bindings) t)))
-      ((equal left right) (values bindings t))
-      (t (values nil nil)))))
+  (ensure-acyclic-logic-value left bindings)
+  (ensure-acyclic-logic-value right bindings)
+  (let ((pending (list (cons left right)))
+        (current-bindings bindings))
+    (loop while pending
+          for pair = (pop pending)
+          for resolved-left = (logic-walk (car pair) current-bindings)
+          for resolved-right = (logic-walk (cdr pair) current-bindings)
+          do (cond
+               ((and (consp resolved-left) (consp resolved-right))
+                (push (cons (cdr resolved-left) (cdr resolved-right)) pending)
+                (push (cons (car resolved-left) (car resolved-right)) pending))
+               ((logic-variable-p resolved-left)
+                (if (logic-occurs-in-p resolved-left resolved-right current-bindings)
+                    (return-from unify-logic-values (values nil nil))
+                    (setf current-bindings
+                          (extend-logic-binding resolved-left
+                                                resolved-right
+                                                current-bindings))))
+               ((logic-variable-p resolved-right)
+                (if (logic-occurs-in-p resolved-right resolved-left current-bindings)
+                    (return-from unify-logic-values (values nil nil))
+                    (setf current-bindings
+                          (extend-logic-binding resolved-right
+                                                resolved-left
+                                                current-bindings))))
+               ((not (equal resolved-left resolved-right))
+                (return-from unify-logic-values (values nil nil)))))
+    (values current-bindings t)))
 
 (defun resolve-logic-value (value bindings)
-  (let ((value (logic-walk value bindings)))
-    (if (consp value)
-        (let ((resolved '())
-              (cursor value))
-          (loop while (consp cursor)
-                do (push (resolve-logic-value (car cursor) bindings) resolved)
-                   (setf cursor (cdr cursor))
-                finally
-                   (return (nreconc resolved
-                                     (resolve-logic-value cursor bindings)))))
-        value)))
+  (ensure-acyclic-logic-value value bindings)
+  (let ((pending (list (cons :visit value)))
+        (resolved (quote ())))
+    (loop while pending
+          for frame = (pop pending)
+          do (if (eq frame :combine)
+                 (let ((right (pop resolved))
+                       (left (pop resolved)))
+                   (push (cons left right) resolved))
+                 (let ((part (logic-walk (cdr frame) bindings)))
+                   (if (consp part)
+                       (progn
+                         (push :combine pending)
+                         (push (cons :visit (cdr part)) pending)
+                         (push (cons :visit (car part)) pending))
+                       (push part resolved)))))
+    (pop resolved)))
 
 (defun normalize-logic-bindings (bindings)
   (nreverse
@@ -89,12 +137,18 @@
            bindings)))
 
 (defun collect-logic-variables (value)
-  (cond
-    ((logic-variable-p value) (list value))
-    ((consp value)
-     (append (collect-logic-variables (car value))
-             (collect-logic-variables (cdr value))))
-    (t '())))
+  (ensure-acyclic-logic-value value nil)
+  (let ((pending (list value))
+        (variables (quote ())))
+    (loop while pending
+          for part = (pop pending)
+          do (cond
+               ((logic-variable-p part)
+                (push part variables))
+               ((consp part)
+                (push (cdr part) pending)
+                (push (car part) pending))))
+    (nreverse variables)))
 
 (defun project-logic-bindings (bindings variables)
   (let ((normalized (normalize-logic-bindings bindings)))
@@ -128,18 +182,34 @@
   (make-symbol (format nil "~A/~D" (symbol-name variable) rule-id)))
 
 (defun instantiate-logic-term (term mapping rule-id)
-  (cond
-    ((logic-variable-p term)
-     (multiple-value-bind (renamed present-p) (gethash term mapping)
-       (if present-p
-           renamed
-           (let ((fresh (fresh-logic-variable term rule-id)))
-             (setf (gethash term mapping) fresh)
-             fresh))))
-    ((consp term)
-     (cons (instantiate-logic-term (car term) mapping rule-id)
-           (instantiate-logic-term (cdr term) mapping rule-id)))
-    (t term)))
+  (ensure-acyclic-logic-value term nil)
+  (let ((pending (list (cons :visit term)))
+        (instantiated '()))
+    (loop while pending
+          for frame = (pop pending)
+          do (if (eq frame :combine)
+                 (let ((right (pop instantiated))
+                       (left (pop instantiated)))
+                   (push (cons left right) instantiated))
+                 (let ((part (cdr frame)))
+                   (cond
+                     ((logic-variable-p part)
+                      (multiple-value-bind (renamed present-p)
+                          (gethash part mapping)
+                        (push (if present-p
+                                  renamed
+                                  (let ((fresh
+                                          (fresh-logic-variable part rule-id)))
+                                    (setf (gethash part mapping) fresh)
+                                    fresh))
+                              instantiated)))
+                     ((consp part)
+                      (push :combine pending)
+                      (push (cons :visit (cdr part)) pending)
+                      (push (cons :visit (car part)) pending))
+                     (t
+                      (push part instantiated))))))
+    (pop instantiated)))
 
 (defun instantiate-logic-rule (rule rule-id)
   (let ((mapping (make-hash-table :test #'eq)))
@@ -199,6 +269,7 @@
 (defun logic-query (program clauses &key limit max-steps)
   (validate-logic-query-bound "logic-query limit" limit)
   (validate-logic-query-bound "logic-query max-steps" max-steps)
+  (ensure-acyclic-logic-value program nil)
   (let ((normalized-program (normalize-logic-program program))
         (query-variables
           (remove-duplicate-logic-variables (collect-logic-variables clauses)))

@@ -38,6 +38,10 @@ of the recorded argument lists, `mock-results` returns return/throw reports,
 and `clear-mock` resets both histories for one mock. `reset-mock` resets
 histories and replaces that mock's implementation with
 the default no-op function.
+`dispose-mock` clears retained history references and unregisters a mock when
+it is no longer needed. A disposed mock cannot be inspected or called. Active
+spies must be restored with `mock-restore` before they can be disposed; this
+also applies to pending frames in nested spy stacks.
 `mock-implementation` replaces an existing mock's active implementation.
 `mock-return-value` pins a single return value, while `mock-return-values` pin
 Common Lisp multiple values.

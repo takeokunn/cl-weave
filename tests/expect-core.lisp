@@ -2,7 +2,96 @@
 
 (describe "expect core"
   (matcher-pass-cases
-    ("to-be" (expect 2 :to-be 2))
+    ("snapshot linearization preserves differences and sequence order"
+ (progn
+   (expect (cl-weave::snapshot-first-difference
+         (format nil "alpha~%beta")
+         (format nil "omega~%beta"))
+        :to-equal
+        (quote (:line 1 :expected "alpha" :actual "omega")))
+   (expect (cl-weave::snapshot-first-difference
+            (format nil "alpha~%beta~%gamma")
+            (format nil "alpha~%delta~%gamma"))
+           :to-equal
+           '(:line 2 :expected "beta" :actual "delta"))
+   (expect (cl-weave::snapshot-first-difference
+            "alpha"
+            (format nil "alpha~%beta"))
+           :to-equal
+           '(:line 2 :expected nil :actual "beta"))
+   (expect (cl-weave::snapshot-first-difference
+            (format nil "alpha~%beta")
+            "alpha")
+           :to-equal
+           '(:line 2 :expected "beta" :actual nil))
+   (expect (cl-weave::snapshot-first-difference
+            (format nil "alpha~%beta")
+            (format nil "alpha~%beta"))
+           :to-be-null)
+   (let* ((snapshot-root
+            (make-test-temporary-directory "snapshot-linearization"))
+          (cl-weave::*snapshot-directory* snapshot-root)
+          (cl-weave::*snapshot-file-name* "linearization.snapshots")
+          (cl-weave::*update-snapshots* t))
+     (unwind-protect
+          (progn
+            (cl-weave::write-snapshot-file
+             '(("before" . "before")
+               ("after" . "after")))
+            (expect
+             (cl-weave::snapshot-sequence-match-or-update-p
+              '(:created)
+              '("vm/run"))
+             :to-be-truthy)
+            (expect (cl-weave::read-snapshot-file)
+                    :to-equal
+                    '(("before" . "before")
+                      ("after" . "after")
+                      ("vm/run[0]" . ":created")))
+            (cl-weave::write-snapshot-file
+             '(("before" . "before")
+               ("vm/run[0]" . ":stale-0")
+               ("middle" . "middle")
+               ("vm/run[2]" . ":stale-2")
+               ("after" . "after")))
+            (expect
+             (cl-weave::snapshot-sequence-match-or-update-p
+              '(:first :second)
+              '("vm/run"))
+             :to-be-truthy)
+            (expect (cl-weave::read-snapshot-file)
+                    :to-equal
+                    '(("before" . "before")
+                      ("middle" . "middle")
+                      ("after" . "after")
+                      ("vm/run[0]" . ":first")
+                      ("vm/run[1]" . ":second")))
+            (let ((write-count 0))
+              (with-mocked-functions
+                  (((symbol-function
+                     'cl-weave::write-snapshot-file-unlocked)
+                    (lambda (entries file)
+                      (declare (ignore entries file))
+                      (incf write-count))))
+                (expect
+                 (cl-weave::snapshot-sequence-match-or-update-p
+                  '(:first :second)
+                  '("vm/run"))
+                 :to-be-truthy))
+              (expect write-count :to-be 0))
+            (expect
+             (cl-weave::snapshot-sequence-match-or-update-p
+              '()
+              '("vm/run"))
+             :to-be-truthy)
+            (expect (cl-weave::read-snapshot-file)
+                    :to-equal
+                    '(("before" . "before")
+                      ("middle" . "middle")
+                      ("after" . "after"))))
+       (uiop:delete-directory-tree snapshot-root
+                                   :validate t
+                                   :if-does-not-exist :ignore)))))
     ("to-equal" (expect (list :a 1) :to-equal (list :a 1)))
     ("to-equalp" (expect "ok" :to-equalp "OK"))
     ("to-be-truthy" (expect :value :to-be-truthy))
@@ -21,28 +110,36 @@
     #+sbcl
     ("to-be-nan" (expect (quiet-nan) :to-be-nan))
     ("to-be-one-of list" (expect :ready :to-be-one-of '(:pending :ready :done)))
-    ("to-be-one-of vector" (expect 2 :to-be-one-of #(1 2 3)))
-    ("to-be-one-of hash-table values"
+    ("to-be-one-of vector and hash-table values"
+     (progn
+       (expect 2 :to-be-one-of #(1 2 3))
+       (let ((table (make-hash-table :test #'equal)))
+         (setf (gethash :first table) :pending
+               (gethash :second table) :ready)
+         (expect :ready :to-be-one-of table))))
+    ("to-be-one-of empty vector negation"
+ (expect-not :ready :to-be-one-of #()))
+    ("to-be-one-of hash-table failure payload"
      (let ((table (make-hash-table :test #'equal)))
-       (setf (gethash "first" table) :pending
-             (gethash "second" table) :ready)
-       (expect :ready :to-be-one-of table)))
-    ("to-be-one-of failure payload"
-     (handler-case
-         (progn
-           (expect :blocked :to-be-one-of '(:pending :ready :done))
-           (error "Expected :to-be-one-of to fail."))
-       (cl-weave:assertion-failure (condition)
-        (with-assertion-detail (detail condition actual expected)
-           (expect (cl-weave::assertion-detail-matcher detail) :to-be :to-be-one-of)
-           (expect (getf actual :value) :to-be :blocked)
-           (expect (getf actual :candidates) :to-equal '(:pending :ready :done))
-           (expect (getf actual :test) :to-be 'eql)
-           (expect (getf actual :candidate-count) :to-be 3)
-           (expect (getf actual :matched-index) :to-be-null)
-           (expect (getf expected :candidates) :to-equal '(:pending :ready :done))
-           (expect (getf expected :test) :to-be 'eql)
-           (expect (getf expected :candidate-count) :to-be 3)))))
+       (setf (gethash :first table) :pending
+             (gethash :second table) :ready)
+       (handler-case
+           (progn
+             (expect :blocked :to-be-one-of table)
+             (error "Expected :to-be-one-of to fail."))
+         (cl-weave:assertion-failure (condition)
+           (with-assertion-detail (detail condition actual expected)
+             (expect (cl-weave::assertion-detail-matcher detail)
+                     :to-be
+                     :to-be-one-of)
+             (expect (getf actual :value) :to-be :blocked)
+             (expect (getf actual :candidates) :to-be table)
+             (expect (getf actual :test) :to-be 'eql)
+             (expect (getf actual :candidate-count) :to-be 2)
+             (expect (getf actual :matched-index) :to-be-null)
+             (expect (getf expected :candidates) :to-be table)
+             (expect (getf expected :test) :to-be 'eql)
+             (expect (getf expected :candidate-count) :to-be 2))))))
     ("to-be-nan failure payload"
      (handler-case
          (progn
@@ -144,7 +241,10 @@
              '(:users 1)
              "Grace"))
     ("to-be-close-to default digits" (expect 304/1000 :to-be-close-to 3/10))
-    ("to-be-close-to explicit digits" (expect (+ 0.1d0 0.2d0) :to-be-close-to 0.3d0 5))
+    ("to-be-close-to explicit digits"
+ (progn
+   (expect (+ 0.1d0 0.2d0) :to-be-close-to 0.3d0 5)
+   (expect 1 :to-be-close-to 1 cl-weave::+maximum-close-to-precision+)))
     ("to-be-greater-than" (expect 10 :to-be-greater-than 9))
     ("to-be-greater-than-or-equal" (expect 10 :to-be-greater-than-or-equal 10))
     ("to-be-less-than" (expect 9 :to-be-less-than 10))
@@ -392,3 +492,247 @@
     ("extend-expect matcher" (expect 5 :to-be-between 1 10))))
 
 )
+#+sb-thread
+(describe "snapshot concurrency"
+  (matcher-pass-cases
+    ("snapshot APIs preserve concurrent mixed updates"
+     (let* ((snapshot-root (make-test-temporary-directory "snapshot-concurrency"))
+            (cl-weave::*snapshot-directory* snapshot-root)
+            (cl-weave::*snapshot-file-name* "concurrent.snapshots")
+            (lock-registry (make-hash-table :test #'equal))
+            (cl-weave::*snapshot-file-locks* lock-registry)
+            (thread-count 64)
+            (ready (sb-thread:make-semaphore :count 0))
+            (release (sb-thread:make-semaphore :count 0))
+            (error-lock (sb-thread:make-mutex :name "snapshot test errors"))
+            (errors nil)
+            (threads nil))
+       (unwind-protect
+            (progn
+              (expect (cl-weave::write-snapshot-file
+                       (list (cons "direct-entry" "direct-value")))
+                      :to-be-null)
+              (expect (cl-weave::read-snapshot-file)
+                      :to-equal
+                      (list (cons "direct-entry" "direct-value")))
+              (setf threads
+                    (loop for index below thread-count
+                          collect
+                          (let ((worker-index index))
+                            (sb-thread:make-thread
+                             (lambda ()
+                               (let ((cl-weave::*snapshot-directory* snapshot-root)
+                                     (cl-weave::*snapshot-file-name*
+                                       "concurrent.snapshots")
+                                     (cl-weave::*snapshot-file-locks* lock-registry)
+                                     (cl-weave::*update-snapshots* t))
+                                 (handler-case
+                                     (progn
+                                       (sb-thread:signal-semaphore ready)
+                                       (sb-thread:wait-on-semaphore release)
+                                       (if (evenp worker-index)
+                                           (cl-weave::snapshot-match-or-update-p
+                                            (list :single worker-index)
+                                            (list
+                                             (format nil "single/~D"
+                                                     worker-index)))
+                                           (cl-weave::snapshot-sequence-match-or-update-p
+                                            (vector
+                                             (list :sequence worker-index :step 0)
+                                             (list :sequence worker-index :step 1))
+                                            (list
+                                             (format nil "sequence/~D"
+                                                     worker-index)))))
+                                   (error (condition)
+                                     (sb-thread:with-mutex (error-lock)
+                                       (push condition errors))))))
+                             :name (format nil "snapshot-worker-~D"
+                                           worker-index)))))
+              (loop repeat thread-count
+                    do (sb-thread:wait-on-semaphore ready))
+              (loop repeat thread-count
+                    do (sb-thread:signal-semaphore release))
+              (mapc #'sb-thread:join-thread threads)
+              (expect errors :to-be-null)
+              (let ((entries (cl-weave::read-snapshot-file)))
+                (expect (length entries) :to-be (1+ (* 3 (/ thread-count 2))))
+                (expect (cl-weave:snapshot-entries) :to-equal entries))
+              (multiple-value-bind (value present-p)
+                  (cl-weave:snapshot-value "direct-entry")
+                (expect value :to-equal "direct-value")
+                (expect present-p :to-be-truthy))
+              (dotimes (index thread-count)
+                (if (evenp index)
+                    (multiple-value-bind (value present-p)
+                        (cl-weave:snapshot-value
+                         (format nil "single/~D" index))
+                      (expect value
+                              :to-equal
+                              (cl-weave::snapshot-string
+                               (list :single index)))
+                      (expect present-p :to-be-truthy))
+                    (dotimes (step 2)
+                      (multiple-value-bind (value present-p)
+                          (cl-weave:snapshot-value
+                           (format nil "sequence/~D[~D]" index step))
+                        (expect value
+                                :to-equal
+                                (cl-weave::snapshot-string
+                                 (list :sequence index :step step)))
+                        (expect present-p :to-be-truthy)))))
+              (multiple-value-bind (value present-p)
+                  (cl-weave:snapshot-value "missing-snapshot-key")
+                (expect value :to-be-null)
+                (expect present-p :to-be-falsy))
+              (expect (lambda () (cl-weave:snapshot-value :not-a-string))
+                      :to-throw)
+              (expect (hash-table-count lock-registry) :to-be 0))
+         (when threads
+           (loop repeat thread-count
+                 do (sb-thread:signal-semaphore release))
+           (dolist (thread threads)
+             (when (sb-thread:thread-alive-p thread)
+               (sb-thread:terminate-thread thread))))
+         (uiop:delete-directory-tree snapshot-root
+                                     :validate t
+                                     :if-does-not-exist :ignore))))
+
+    ("snapshot file locks serialize the same path"
+     (let* ((snapshot-root (make-test-temporary-directory "snapshot-file-lock"))
+            (file (merge-pathnames "missing/same.snapshots" snapshot-root))
+            (lock-registry (make-hash-table :test #'equal))
+            (cl-weave::*snapshot-file-locks* lock-registry)
+            (thread-count 16)
+            (ready (sb-thread:make-semaphore :count 0))
+            (release (sb-thread:make-semaphore :count 0))
+            (counter-lock (sb-thread:make-mutex :name "snapshot test counter"))
+            (error-lock (sb-thread:make-mutex :name "snapshot lock test errors"))
+            (inside 0)
+            (peak 0)
+            (errors nil)
+            (threads nil))
+       (unwind-protect
+            (progn
+              (setf threads
+                    (loop for index below thread-count
+                          collect
+                          (let ((worker-index index))
+                            (sb-thread:make-thread
+                             (lambda ()
+                               (let ((cl-weave::*snapshot-file-locks* lock-registry))
+                                 (handler-case
+                                     (progn
+                                       (sb-thread:signal-semaphore ready)
+                                       (sb-thread:wait-on-semaphore release)
+                                       (cl-weave::call-with-snapshot-file-lock
+                                        file
+                                        (lambda ()
+                                          (sb-thread:with-mutex (counter-lock)
+                                            (incf inside)
+                                            (setf peak (max peak inside)))
+                                          (sleep 0.005)
+                                          (sb-thread:with-mutex (counter-lock)
+                                            (decf inside)))))
+                                   (error (condition)
+                                     (sb-thread:with-mutex (error-lock)
+                                       (push condition errors))))))
+                             :name (format nil "snapshot-lock-worker-~D"
+                                           worker-index)))))
+              (loop repeat thread-count
+                    do (sb-thread:wait-on-semaphore ready))
+              (loop repeat thread-count
+                    do (sb-thread:signal-semaphore release))
+              (mapc #'sb-thread:join-thread threads)
+              (expect errors :to-be-null)
+              (expect peak :to-be 1)
+              (expect (hash-table-count lock-registry) :to-be 0))
+         (when threads
+           (loop repeat thread-count
+                 do (sb-thread:signal-semaphore release))
+           (dolist (thread threads)
+             (when (sb-thread:thread-alive-p thread)
+               (sb-thread:terminate-thread thread))))
+         (uiop:delete-directory-tree snapshot-root
+                                     :validate t
+                                     :if-does-not-exist :ignore))))
+
+    ("snapshot file lock registry releases unique paths"
+     (let* ((snapshot-root (make-test-temporary-directory "snapshot-lock-registry"))
+            (lock-registry (make-hash-table :test #'equal))
+            (cl-weave::*snapshot-file-locks* lock-registry))
+       (unwind-protect
+            (progn
+              (dotimes (index 4096)
+                (cl-weave::call-with-snapshot-file-lock
+                 (merge-pathnames
+                  (format nil "missing/path-~D.snapshots" index)
+                  snapshot-root)
+                 (lambda () nil)))
+              (expect (hash-table-count lock-registry) :to-be 0))
+         (uiop:delete-directory-tree snapshot-root
+                                     :validate t
+                                     :if-does-not-exist :ignore))))))
+#+sbcl
+(describe "snapshot file permissions"
+  (it "creates a 0600 snapshot under umask 022"
+    (let* ((snapshot-root
+             (make-test-temporary-directory "snapshot-permissions-new"))
+           (cl-weave::*snapshot-directory* snapshot-root)
+           (cl-weave::*snapshot-file-name* "permissions.snapshots")
+           (file (cl-weave::snapshot-file-pathname))
+           old-umask)
+      (unwind-protect
+           (progn
+             (setf old-umask (sb-posix:umask #o022))
+             (unwind-protect
+                  (cl-weave::write-snapshot-file
+                   (list (cons "permission" "new")))
+               (sb-posix:umask old-umask)
+               (setf old-umask nil))
+             (expect
+              (logand #o777
+                      (sb-posix:stat-mode
+                       (sb-posix:stat (namestring file))))
+              :to-be
+              #o600))
+        (when old-umask
+          (sb-posix:umask old-umask))
+        (uiop:delete-directory-tree snapshot-root
+                                    :validate t
+                                    :if-does-not-exist :ignore))))
+
+  (it "does not broaden existing 0600 or 0400 snapshots"
+  (dolist (mode (list #o600 #o400))
+    (let* ((snapshot-root
+             (make-test-temporary-directory
+              (format nil "snapshot-permissions-existing-~O" mode)))
+           (cl-weave::*snapshot-directory* snapshot-root)
+           (cl-weave::*snapshot-file-name* "permissions.snapshots")
+           (file (cl-weave::snapshot-file-pathname))
+           old-umask)
+      (unwind-protect
+           (progn
+             (ensure-directories-exist file)
+             (with-open-file (stream file
+                                     :direction :output
+                                     :if-exists :supersede
+                                     :if-does-not-exist :create)
+               (write-line "old snapshot" stream))
+             (sb-posix:chmod (namestring file) mode)
+             (setf old-umask (sb-posix:umask #o022))
+             (unwind-protect
+                  (cl-weave::write-snapshot-file
+                   (list (cons "permission" "replacement")))
+               (sb-posix:umask old-umask)
+               (setf old-umask nil))
+             (expect
+              (logand #o777
+                      (sb-posix:stat-mode
+                       (sb-posix:stat (namestring file))))
+              :to-be
+              mode))
+        (when old-umask
+          (sb-posix:umask old-umask))
+        (uiop:delete-directory-tree snapshot-root
+                                    :validate t
+                                    :if-does-not-exist :ignore))))))

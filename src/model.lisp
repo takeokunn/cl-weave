@@ -3,6 +3,40 @@
 (defvar *root-suite* nil)
 (defvar *current-suite* nil)
 (defvar *named-suites* (make-hash-table :test #'equal))
+(defvar *registration-owners* (make-hash-table :test (function eq)))
+(progn
+  (defvar *test-registry-generation* 0)
+  #+sb-thread
+  (defvar *test-registry-lock*
+    (sb-thread:make-mutex :name "cl-weave test registry"))
+  (defmacro with-test-registry-lock (&body body)
+    #+sb-thread
+    `(sb-thread:with-mutex (*test-registry-lock*) ,@body)
+    #-sb-thread
+    `(progn ,@body)))
+
+(progn
+  (defun note-test-registry-change-unlocked ()
+    (incf *test-registry-generation*))
+  (defun note-test-registry-change ()
+    (with-test-registry-lock
+      (note-test-registry-change-unlocked))))
+
+(defun registration-location-pathname (location)
+  (let ((file (and location (getf location :file))))
+    (and file (uiop:ensure-absolute-pathname file))))
+
+(progn
+  (defun record-registration-owner-unlocked (registration pathname)
+    (when pathname
+      (setf (gethash registration *registration-owners*) pathname))
+    registration)
+  (defun record-registration-owner (registration location)
+  (let ((pathname (registration-location-pathname location)))
+    (with-test-registry-lock
+      (record-registration-owner-unlocked registration pathname)
+      (note-test-registry-change-unlocked)
+      registration))))
 (defvar *test-context* nil)
 (defvar *assertion-count* nil)
 (defvar *expected-assertion-count* nil)
@@ -122,20 +156,93 @@
    (causes :initarg :causes :reader hook-failure-causes))
   (:report report-hook-failure))
 
-(defun root-suite ()
-  (or *root-suite*
-      (setf *root-suite*
-            (make-suite :name "root"))))
+(progn
+  (defun root-suite-unlocked ()
+  (if *root-suite*
+      (values *root-suite* nil)
+      (values (setf *root-suite* (make-suite :name "root")) t)))
+  (defun root-suite ()
+  (with-test-registry-lock
+    (multiple-value-bind (root created-p)
+        (root-suite-unlocked)
+      (when created-p
+        (note-test-registry-change-unlocked))
+      root)))
+  (defun clone-suite-tree-unlocked (root)
+  (let ((suite-map (make-hash-table :test #'eq))
+        (pending (and root (list (cons root nil))))
+        (suites nil))
+    (loop while pending
+          for entry = (pop pending)
+          for suite = (car entry)
+          for parent = (cdr entry)
+          for clone = (make-suite
+                       :name (suite-name suite)
+                       :parent parent
+                       :focus (suite-focus suite)
+                       :execution-mode (suite-execution-mode suite)
+                       :skip-reason (suite-skip-reason suite)
+                       :todo-reason (suite-todo-reason suite))
+          do (setf (gethash suite suite-map) clone)
+             (push suite suites)
+             (dolist (child (suite-children suite))
+               (when (suite-p child)
+                 (push (cons child clone) pending))))
+    (dolist (suite suites)
+      (let* ((clone (gethash suite suite-map))
+             (children
+               (loop for child in (suite-children suite)
+                     collect (if (suite-p child)
+                                 (gethash child suite-map)
+                                 child)))
+             (before-all (copy-list (suite-before-all suite)))
+             (after-all (copy-list (suite-after-all suite)))
+             (before-each (copy-list (suite-before-each suite)))
+             (around-each (copy-list (suite-around-each suite)))
+             (after-each (copy-list (suite-after-each suite))))
+        (setf (suite-children clone) children
+              (suite-children-tail clone) (last children)
+              (suite-before-all clone) before-all
+              (suite-before-all-tail clone) (last before-all)
+              (suite-after-all clone) after-all
+              (suite-after-all-tail clone) (last after-all)
+              (suite-before-each clone) before-each
+              (suite-before-each-tail clone) (last before-each)
+              (suite-around-each clone) around-each
+              (suite-around-each-tail clone) (last around-each)
+              (suite-after-each clone) after-each
+              (suite-after-each-tail clone) (last after-each))))
+    (values (and root (gethash root suite-map))
+            suite-map)))
+  (defun snapshot-suite (suite)
+  (with-test-registry-lock
+    (let ((tree-root suite))
+      (loop while (and tree-root (suite-parent tree-root))
+            do (setf tree-root (suite-parent tree-root)))
+      (multiple-value-bind (clone suite-map)
+          (clone-suite-tree-unlocked tree-root)
+        (or (gethash suite suite-map) clone))))))
 
-(defun current-or-root-suite ()
-  (or *current-suite*
-      (root-suite)))
+(progn
+  (defun current-or-root-suite-unlocked ()
+    (or *current-suite*
+        (root-suite-unlocked)))
+  (defun current-or-root-suite ()
+  (with-test-registry-lock
+    (multiple-value-bind (suite created-p)
+        (current-or-root-suite-unlocked)
+      (when created-p
+        (note-test-registry-change-unlocked))
+      suite))))
 
 (defun clear-tests ()
-  (setf *root-suite* nil
-        *current-suite* nil
-        *named-suites* (make-hash-table :test #'equal))
-  t)
+  (with-test-registry-lock
+    (setf *root-suite* nil
+          *current-suite* nil
+          *named-suites* (make-hash-table :test (function equal))
+          *registration-owners* (make-hash-table :test (function eq)))
+    (note-test-registry-change-unlocked)
+    t))
 
 (defmacro append-to-tail-list (suite head tail value)
   (let ((suite-var (gensym "SUITE"))
@@ -152,14 +259,28 @@
        ,value-var)))
 
 (defmacro define-tail-registration (name head tail)
-  `(defun ,name (function)
-     (append-to-tail-list (current-or-root-suite)
-                          ,head
-                          ,tail
-                          function)))
+  `(defun ,name (function &key location)
+     (let ((pathname (registration-location-pathname location)))
+       (with-test-registry-lock
+         (let ((registration
+                 (append-to-tail-list (current-or-root-suite-unlocked)
+                                      ,head
+                                      ,tail
+                                      function)))
+           (record-registration-owner-unlocked registration pathname)
+           (note-test-registry-change-unlocked)
+           registration)))))
 
-(defun add-child (parent child)
-  (append-to-tail-list parent suite-children suite-children-tail child))
+(progn
+  (defun add-owned-child-unlocked (parent child pathname)
+    (append-to-tail-list parent
+                         suite-children
+                         suite-children-tail
+                         child)
+    (record-registration-owner-unlocked child pathname)
+    (note-test-registry-change-unlocked)
+    child)
+  (defun add-child (parent child) (with-test-registry-lock (add-owned-child-unlocked parent child nil))))
 
 (defun normalize-execution-mode (mode)
   (unless (member mode '(nil :concurrent :sequential))
@@ -195,20 +316,40 @@
            (when (eq slow fast)
              (return nil))))
 
+
+(defconstant +maximum-tag-count+ 100000)
+
 (defun normalize-tags (tags &optional (description "tags"))
   "Canonicalize tags to unique uppercase strings, comparing names case-insensitively."
-  (unless (tag-proper-list-p tags)
-    (error "cl-weave: ~A must be a proper list of keywords, symbols, or strings."
-           description))
-  (loop with normalized = '()
-        for tag in tags
-        for name = (etypecase tag
-                     (symbol (symbol-name tag))
-                     (string tag))
-        for canonical = (string-upcase name)
-        unless (member canonical normalized :test #'string=)
-          do (push canonical normalized)
-        finally (return (nreverse normalized))))
+  (loop with seen-cells = (make-hash-table :test #'eq)
+        with seen-names = (make-hash-table :test #'equal)
+        with normalized = nil
+        with count = 0
+        with cursor = tags
+        do (cond
+             ((null cursor)
+              (return (nreverse normalized)))
+             ((or (atom cursor)
+                  (gethash cursor seen-cells)
+                  (>= count +maximum-tag-count+))
+              (error
+               "cl-weave: ~A must be a finite proper list with at most ~D entries."
+               description
+               +maximum-tag-count+))
+             (t
+              (setf (gethash cursor seen-cells) t)
+              (incf count)
+              (let* ((tag (car cursor))
+                     (name
+                       (etypecase tag
+                         (symbol (symbol-name tag))
+                         (string tag)))
+                     (canonical (string-upcase name)))
+                (unless (gethash canonical seen-names)
+                  (setf (gethash canonical seen-names) t)
+                  (push canonical normalized)))
+              (setf cursor (cdr cursor))))))
+
 
 (defun collapse-parent-directory-components (pathname)
   (let ((directory (pathname-directory pathname)))
@@ -225,29 +366,52 @@
            finally (return (nreverse normalized)))
      :defaults pathname)))
 
+
+(defconstant +maximum-watch-dependency-count+ 100000)
+
 (defun normalize-watch-dependencies (dependencies location)
-  (unless (tag-proper-list-p dependencies)
-    (error "cl-weave: watch dependencies must be a proper list of pathnames or strings."))
   (let* ((source (getf location :file))
          (base (and source
                     (uiop:pathname-directory-pathname
                      (uiop:ensure-absolute-pathname source)))))
-    (loop with normalized = '()
-          for dependency in dependencies
-          for pathname = (etypecase dependency
+    (loop with seen-cells = (make-hash-table :test #'eq)
+          with seen-pathnames = (make-hash-table :test #'equal)
+          with normalized = '()
+          with count = 0
+          with cursor = dependencies
+          do (cond
+               ((null cursor)
+                (return (nreverse normalized)))
+               ((or (atom cursor)
+                    (gethash cursor seen-cells)
+                    (>= count +maximum-watch-dependency-count+))
+                (error
+                 "cl-weave: watch dependencies must be a finite proper list with at most ~D entries."
+                 +maximum-watch-dependency-count+))
+               (t
+                (setf (gethash cursor seen-cells) t)
+                (incf count)
+                (let* ((dependency (car cursor))
+                       (pathname
+                         (etypecase dependency
                            (pathname dependency)
-                           (string (pathname dependency)))
-          for absolute = (if (uiop:absolute-pathname-p pathname)
+                           (string (pathname dependency))))
+                       (absolute
+                         (if (uiop:absolute-pathname-p pathname)
                              pathname
                              (if base
                                  (merge-pathnames pathname base)
-                                 (error "cl-weave: relative watch dependency ~S requires a test source location."
-                                        dependency)))
-          for canonical = (collapse-parent-directory-components
-                           (uiop:ensure-absolute-pathname absolute))
-          unless (member canonical normalized :test #'equal)
-            do (push canonical normalized)
-          finally (return (nreverse normalized)))))
+                                 (error
+                                  "cl-weave: relative watch dependency ~S requires a test source location."
+                                  dependency))))
+                       (canonical
+                         (collapse-parent-directory-components
+                          (uiop:ensure-absolute-pathname absolute))))
+                  (unless (gethash canonical seen-pathnames)
+                    (setf (gethash canonical seen-pathnames) t)
+                    (push canonical normalized)))
+                (setf cursor (cdr cursor)))))))
+
 
 (defun test-registration-initargs
     (name function focus skip-reason todo-reason retry timeout-ms
@@ -265,27 +429,43 @@
         :tags (normalize-tags tags)
         :watch-dependencies (normalize-watch-dependencies watch-dependencies location)))
 
-(defun register-suite (name thunk &key focus execution-mode skip-reason todo-reason)
-  (let* ((parent (current-or-root-suite))
-         (suite (add-child parent
-                           (apply #'make-suite
-                                  (suite-registration-initargs
-                                   name parent focus execution-mode
-                                   skip-reason todo-reason)))))
+(defun register-suite
+    (name thunk &key focus execution-mode skip-reason todo-reason location)
+  (unless (stringp name)
+    (error "cl-weave: suite name must be a string."))
+  (let* ((pathname (registration-location-pathname location))
+         (suite
+           (apply (function make-suite)
+                  (suite-registration-initargs
+                   name *current-suite* focus execution-mode
+                   skip-reason todo-reason))))
+    (with-test-registry-lock
+      (let ((parent (current-or-root-suite-unlocked)))
+        (setf (suite-parent suite) parent)
+        (add-owned-child-unlocked parent suite pathname)))
     (let ((*current-suite* suite))
       (funcall thunk))
     suite))
 
 (defun register-test
-  (name function &key focus skip-reason todo-reason retry timeout-ms
-       execution-mode expected-failure-reason location tags watch-depends-on)
-  (let ((suite (current-or-root-suite)))
-    (add-child suite
-               (apply #'make-test-case
-                      (test-registration-initargs
-                       name function focus skip-reason todo-reason retry
-                       timeout-ms execution-mode expected-failure-reason
-                       location tags watch-depends-on)))))
+    (name function &key focus skip-reason todo-reason retry timeout-ms
+         execution-mode expected-failure-reason location tags watch-depends-on)
+  (unless (stringp name)
+    (error "cl-weave: test name must be a string."))
+  (let* ((pathname (registration-location-pathname location))
+         (test
+           (apply (function make-test-case)
+                  (test-registration-initargs
+                   name function focus skip-reason todo-reason retry
+                   timeout-ms execution-mode expected-failure-reason
+                   location tags watch-depends-on))))
+    (with-test-registry-lock
+      (add-owned-child-unlocked (current-or-root-suite-unlocked)
+                                test
+                                pathname))
+    test))
+
+
 
 (define-tail-registration register-before-all suite-before-all suite-before-all-tail)
 (define-tail-registration register-after-all suite-after-all suite-after-all-tail)

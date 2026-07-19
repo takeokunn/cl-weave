@@ -108,4 +108,167 @@
       (expect (lambda ()
                 (cl-weave:list-tests :reporter :tap
                                      :stream (make-broadcast-stream)))
-              :to-throw "list mode supports"))))
+              :to-throw "list mode supports")))
+
+  (it "rejects atoms, closed streams, and input-only streams"
+    (with-registered-demo-suites ("invalid stream api suite")
+      (let ((closed-stream (make-string-output-stream)))
+        (close closed-stream)
+        (dolist (stream (list :not-a-stream
+                              closed-stream
+                              (make-string-input-stream "")))
+          (expect (lambda ()
+                    (cl-weave:run "invalid stream api suite"
+                                  :reporter :spec
+                                  :stream stream))
+                  :to-throw
+                  "cl-weave: expected an open output stream."))
+        (expect (length (cl-weave:run "invalid stream api suite"
+                                      :reporter nil
+                                      :stream :not-a-stream))
+                :to-be 1))))
+
+  (it "validates RUN reporting before test execution"
+    (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (effects 0))
+      (describe "run stream preflight api suite"
+        (it "does not run"
+          (incf effects)))
+      (expect (lambda ()
+                (cl-weave:run "run stream preflight api suite"
+                              :reporter :unknown
+                              :stream (make-broadcast-stream)))
+              :to-throw "run mode supports")
+      (expect effects :to-be 0)
+      (expect (lambda ()
+                (cl-weave:run "run stream preflight api suite"
+                              :reporter :spec
+                              :stream :not-a-stream))
+              :to-throw "cl-weave: expected an open output stream.")
+      (expect effects :to-be 0)))
+
+  (it "validates RUN-ALL stream before coverage and test execution"
+    (let ((cl-weave::*root-suite* (cl-weave::make-suite :name "root"))
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (coverage-thunk-count 0)
+          (coverage-require-count 0)
+          (coverage-reset-count 0)
+          (effects 0))
+      (describe "run all stream preflight api suite"
+        (it "does not run"
+          (incf effects)))
+      (with-mocked-functions
+          (((symbol-function (quote cl-weave::call-with-coverage))
+            (lambda (coverage coverage-output coverage-report-directory
+                     reset-p thunk &rest options)
+              (declare (ignore coverage
+                               coverage-output
+                               coverage-report-directory
+                               reset-p
+                               options))
+              (incf coverage-thunk-count)
+              (cl-weave::require-coverage-support)
+              (cl-weave:reset-coverage)
+              (funcall thunk)))
+           ((symbol-function (quote cl-weave::require-coverage-support))
+            (lambda ()
+              (incf coverage-require-count)))
+           ((symbol-function (quote cl-weave:reset-coverage))
+            (lambda ()
+              (incf coverage-reset-count))))
+        (expect (lambda ()
+                  (cl-weave:run-all :coverage t
+                                    :stream :not-a-stream))
+                :to-throw "cl-weave: expected an open output stream."))
+      (expect coverage-thunk-count :to-be 0)
+      (expect coverage-require-count :to-be 0)
+      (expect coverage-reset-count :to-be 0)
+      (expect effects :to-be 0)))
+
+  (it "rejects invalid streams from LIST-TESTS and EXPLAIN!"
+      (with-registered-demo-suites ("invalid reporting api suite")
+        (expect (lambda ()
+                  (cl-weave:list-tests :stream :not-a-stream))
+                :to-throw "cl-weave: expected an open output stream.")
+        (expect (lambda ()
+                  (cl-weave:explain! (list :not-an-event)
+                                     :not-a-stream))
+                :to-throw "cl-weave: expected an open output stream.")))
+
+    (it "finds suites 50,000 levels deep without consuming the control stack"
+      (let* ((root (cl-weave::make-suite :name "root"))
+             (node root)
+             (target nil))
+        (loop repeat 49999
+              do (let ((child (cl-weave::make-suite :name "nested")))
+                   (setf (cl-weave::suite-children node) (list child)
+                         node child)))
+        (setf target (cl-weave::make-suite :name "deep target")
+              (cl-weave::suite-children node) (list target))
+        (expect (cl-weave::find-suite-by-designator-unlocked
+                 "deep target"
+                 root)
+                :to-be target)))
+
+    (it "normalizes 50,000 event conses without consuming the control stack"
+      (let ((event (cl-weave::make-test-event
+                    :status :pass
+                    :path (list "deep")))
+            (results nil))
+        (loop repeat 50000
+              do (push event results))
+        (let ((normalized (cl-weave::normalize-run-results results)))
+          (expect (length normalized) :to-be 50000)
+          (expect (first normalized) :to-be event)
+          (expect (car (last normalized)) :to-be event))))
+
+    (it "rejects circular and foreign run result structures deterministically"
+      (let* ((event (cl-weave::make-test-event
+                     :status :pass
+                     :path (list "cycle")))
+             (cycle (list event))
+             (message nil))
+        (setf (cdr cycle) cycle)
+        (handler-case
+            (cl-weave::normalize-run-results cycle)
+          (error (condition)
+            (setf message (princ-to-string condition))))
+        (expect message
+                :to-equal
+                "cl-weave: circular nested event lists are not supported.")
+        (expect (lambda ()
+                  (cl-weave::normalize-run-results :not-an-event))
+                :to-throw "expected test events")
+        (expect (lambda ()
+                  (cl-weave::normalize-run-results
+                   (cons event :not-an-event)))
+                :to-throw "expected test events")))
+
+    (it "preserves event order and expands shared result branches each time"
+      (let* ((first-event (cl-weave::make-test-event
+                           :status :pass
+                           :path (list "first")))
+             (second-event (cl-weave::make-test-event
+                            :status :pass
+                            :path (list "second")))
+             (third-event (cl-weave::make-test-event
+                           :status :pass
+                           :path (list "third")))
+             (shared (list first-event second-event))
+             (normalized
+               (cl-weave::normalize-run-results
+                (list (list third-event)
+                      shared
+                      (list first-event)
+                      shared))))
+        (expect normalized
+                :to-equal
+                (list third-event
+                      first-event
+                      second-event
+                      first-event
+                      first-event
+                      second-event)))))

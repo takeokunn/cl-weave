@@ -1,8 +1,11 @@
 (in-package #:cl-weave)
 
-(defun test-path (suite test)
-  (append (mapcar #'suite-name (rest (suite-lineage suite)))
-          (list (test-case-name test))))
+(progn
+  (defvar *collection-test-paths* nil)
+
+  (defun test-path (suite test)
+    (append (mapcar #'suite-name (rest (suite-lineage suite)))
+            (list (test-case-name test)))))
 
 (defun filter-path-string (path)
   (format nil "~{~A~^ > ~}" path))
@@ -10,7 +13,9 @@
 (defun make-event (status suite test start &key condition secondary-conditions assertion reason)
   (make-test-event
    :status status
-   :path (test-path suite test)
+   :path (or (and *collection-test-paths*
+                  (gethash test *collection-test-paths*))
+             (test-path suite test))
    :condition condition
    :secondary-conditions (or secondary-conditions
                              *attempt-secondary-conditions*)
@@ -22,22 +27,32 @@
 (defun normalize-retry-count (retry)
   (cond
     ((null retry) 0)
-    ((and (integerp retry) (not (minusp retry))) retry)
-    (t (error "Retry must be NIL or a non-negative integer: ~S" retry))))
+    ((and (integerp retry)
+          (<= 0 retry +maximum-retry-count+))
+     retry)
+    (t
+     (error "Retry must be NIL or an integer between 0 and ~D: ~S"
+            +maximum-retry-count+ retry))))
 
 (defun normalize-timeout-ms (timeout-ms)
   (cond
     ((null timeout-ms) nil)
-    ((and (integerp timeout-ms) (plusp timeout-ms)) timeout-ms)
-    (t (error "Timeout must be NIL or a positive integer in milliseconds: ~S"
-              timeout-ms))))
+    ((and (integerp timeout-ms)
+          (<= 1 timeout-ms +maximum-timeout-ms+))
+     timeout-ms)
+    (t
+     (error "Timeout must be NIL or an integer between 1 and ~D milliseconds: ~S"
+            +maximum-timeout-ms+ timeout-ms))))
 
 (defun normalize-max-workers (max-workers)
   (cond
     ((null max-workers) nil)
-    ((and (integerp max-workers) (plusp max-workers)) max-workers)
-    (t (error "Max workers must be NIL or a positive integer: ~S"
-              max-workers))))
+    ((and (integerp max-workers)
+          (<= 1 max-workers +maximum-worker-count+))
+     max-workers)
+    (t
+     (error "Max workers must be NIL or an integer between 1 and ~D: ~S"
+            +maximum-worker-count+ max-workers))))
 
 (defun retry-count (test)
   (normalize-retry-count

@@ -242,7 +242,7 @@
    #:with-replaced-function
    #:with-restored-binding
    #:with-restored-bindings
-   #:with-restored-hash-table))
+   #:with-restored-hash-table #:dispose-mock #:mock-disposed-error #:mock-disposed-error-mock #:active-spy-disposal-error #:active-spy-disposal-error-mock #:active-spy-disposal-error-symbol))
 
 (defpackage #:cl-weave/cli
   (:use #:cl)

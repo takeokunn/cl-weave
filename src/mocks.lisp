@@ -2,15 +2,39 @@
 
 (defstruct mock-state
   implementation
-  calls
-  results
+  (calls (make-array 16 :adjustable t :fill-pointer 0))
+  (results (make-array 16 :adjustable t :fill-pointer 0))
+  (generation 0)
   restore
+  resident-spy-frame
+  (disposed-p nil)
   #+sb-thread
   (lock (sb-thread:make-mutex :name "cl-weave mock state")))
+  (defstruct spy-frame
+    symbol
+    mock
+    state
+    original
+    restored-p)
+  (define-condition mock-disposed-error (error)
+    ((mock :initarg :mock :reader mock-disposed-error-mock))
+    (:report
+     (lambda (condition stream)
+       (declare (ignore condition))
+       (write-string "The mock has been disposed and can no longer be called." stream))))
+  (define-condition active-spy-disposal-error (error)
+    ((mock :initarg :mock :reader active-spy-disposal-error-mock)
+     (symbol :initarg :symbol :reader active-spy-disposal-error-symbol))
+    (:report
+     (lambda (condition stream)
+       (format stream "Cannot dispose the spy for ~S while it is active."
+               (active-spy-disposal-error-symbol condition)))))
 
 (defvar *mock-states* (make-hash-table :test #'eq))
+  (defvar *spy-stacks* (make-hash-table :test #'eq))
 
 #+sb-thread
+
 (defvar *mock-registry-lock*
   (sb-thread:make-mutex :name "cl-weave mock registry"))
 
@@ -39,25 +63,48 @@
   `(progn ,@body))
 
 (defun mock-registry-entries ()
-  ;; Never acquire a mock-state lock while holding the registry lock.  Bulk
-  ;; operations work from this snapshot so their lock order cannot cycle.
+  ;; Cross-lock order is registry then state.  Code holding a state lock must
+  ;; never acquire the registry lock.
   (with-mock-registry-lock
     (loop for mock being the hash-keys of *mock-states*
             using (hash-value state)
           collect (cons mock state))))
 
-(defun register-mock-call (state arguments)
-  (with-mock-state-lock (state)
-    (let ((index (length (mock-state-calls state))))
-      (setf (mock-state-calls state)
-            (append (mock-state-calls state) (list arguments))
-            (mock-state-results state)
-            (append (mock-state-results state) (list '(:type :incomplete))))
-      index)))
+(defun register-mock-call (state mock arguments)
+  (let ((disposed-p nil)
+        (call-token nil)
+        (implementation nil))
+    (with-mock-state-lock (state)
+      (if (mock-state-disposed-p state)
+          (setf disposed-p t)
+          (labels ((push-history (history value)
+                     (let ((size (array-total-size history)))
+                       (when (= (fill-pointer history) size)
+                         (setf history
+                               (adjust-array
+                                history
+                                (max 16 (* 2 size))
+                                :fill-pointer (fill-pointer history))))
+                       (vector-push value history)
+                       history)))
+            (let ((index (fill-pointer (mock-state-calls state))))
+              (setf (mock-state-calls state)
+                    (push-history (mock-state-calls state) arguments)
+                    (mock-state-results state)
+                    (push-history (mock-state-results state)
+                                  '(:type :incomplete))
+                    call-token
+                    (cons (mock-state-generation state) index)
+                    implementation
+                    (mock-state-implementation state))))))
+    (when disposed-p
+      (error 'mock-disposed-error :mock mock))
+    (values call-token implementation)))
 
-(defun register-mock-result (state index result)
+(defun register-mock-result (state call-token result)
   (with-mock-state-lock (state)
-    (setf (nth index (mock-state-results state)) result)))
+    (when (= (car call-token) (mock-state-generation state))
+      (setf (aref (mock-state-results state) (cdr call-token)) result))))
 
 (defun mock-state-for (mock)
   (or (with-mock-registry-lock
@@ -69,61 +116,102 @@
         :condition-type (class-name (class-of condition))
         :message (princ-to-string condition)))
 
-(defun make-mock-function (&optional (implementation #'default-mock-implementation))
-  (let* ((state (make-mock-state :implementation (ensure-mock-implementation implementation)
-                                 :calls nil
-                                 :results nil
-                                 :restore nil))
-          (mock (lambda (&rest arguments)
-                  (let ((index (register-mock-call state arguments))
-                        (completed nil)
-                        (signaled-error nil))
-                    (unwind-protect
-                        (handler-bind
-                            ((error
-                               (lambda (condition)
-                                 (setf signaled-error condition))))
-                          (let* ((implementation
-                                   (with-mock-state-lock (state)
-                                     (mock-state-implementation state)))
-                                 (values (multiple-value-list
-                                          (apply implementation arguments))))
-                            (register-mock-result state index
-                                                  (list :type :return
-                                                        :value (first values)
-                                                        :values values))
-                            (setf completed t)
-                            (values-list values)))
-                     (unless completed
-                       (register-mock-result
-                        state
-                        index
-                        (if signaled-error
-                            (mock-thrown-result signaled-error)
-                            '(:type :non-local-exit)))))))))
-    (with-mock-registry-lock
-      (setf (gethash mock *mock-states*) state))
-    mock))
+(defun make-unregistered-mock-function (implementation)
+  (let ((state (make-mock-state
+                :implementation (ensure-mock-implementation implementation)
+                :restore nil))
+        (mock nil))
+    (setf mock
+          (lambda (&rest arguments)
+            (multiple-value-bind (call-token implementation)
+                (register-mock-call state mock arguments)
+              (let ((completed nil)
+                    (signaled-error nil))
+                (unwind-protect
+                    (handler-bind
+                        ((error
+                           (lambda (condition)
+                             (setf signaled-error condition))))
+                      (let ((values
+                              (multiple-value-list
+                               (apply implementation arguments))))
+                        (register-mock-result
+                         state call-token
+                         (list :type :return
+                               :value (first values)
+                               :values values))
+                        (setf completed t)
+                        (values-list values)))
+                  (unless completed
+                    (register-mock-result
+                     state
+                     call-token
+                     (if signaled-error
+                         (mock-thrown-result signaled-error)
+                         '(:type :non-local-exit)))))))))
+    (values mock state)))
+  (defun make-mock-function
+      (&optional (implementation #'default-mock-implementation))
+    (multiple-value-bind (mock state)
+        (make-unregistered-mock-function implementation)
+      (with-mock-registry-lock
+        (setf (gethash mock *mock-states*) state))
+      mock))
 
 (defun mock-function-p (value)
   (with-mock-registry-lock
     (nth-value 1 (gethash value *mock-states*))))
 
-(defun mock-calls (mock)
+(defun copy-cons-graph (root)
+  (if (atom root)
+      root
+      (let ((copies (make-hash-table :test (function eq)))
+            (pending nil))
+        (labels ((copy-reference (value)
+                   (if (consp value)
+                       (multiple-value-bind (copy present-p)
+                           (gethash value copies)
+                         (unless present-p
+                           (setf copy (cons nil nil)
+                                 (gethash value copies) copy)
+                           (push value pending))
+                         copy)
+                       value)))
+          (let ((root-copy (copy-reference root)))
+            (loop while pending
+                  do (let* ((original (pop pending))
+                            (copy (gethash original copies)))
+                       (setf (car copy) (copy-reference (car original))
+                             (cdr copy) (copy-reference (cdr original)))))
+            root-copy)))))
+  (defun mock-history-snapshot (mock)
   (let ((state (mock-state-for mock)))
-    (with-mock-state-lock (state)
-      (copy-tree (mock-state-calls state)))))
-
-(defun mock-results (mock)
-  (let ((state (mock-state-for mock)))
-    (with-mock-state-lock (state)
-      (copy-tree (mock-state-results state)))))
-
-(defun mock-implementation (mock implementation)
+    (multiple-value-bind (calls results)
+        (with-mock-state-lock (state)
+          (values (coerce (mock-state-calls state) (quote list))
+                  (coerce (mock-state-results state) (quote list))))
+      (let ((snapshot (copy-cons-graph (cons calls results))))
+        (values (car snapshot) (cdr snapshot))))))
+  (defun mock-calls (mock)
+  (let* ((state (mock-state-for mock))
+         (calls (with-mock-state-lock (state)
+                  (coerce (mock-state-calls state) (quote list)))))
+    (copy-cons-graph calls)))
+  (defun mock-results (mock)
+  (let* ((state (mock-state-for mock))
+         (results (with-mock-state-lock (state)
+                    (coerce (mock-state-results state) (quote list)))))
+    (copy-cons-graph results)))
+  (defun mock-implementation (mock implementation)
   (let ((state (mock-state-for mock))
-        (implementation (ensure-mock-implementation implementation)))
+        (implementation (ensure-mock-implementation implementation))
+        (disposed-p nil))
     (with-mock-state-lock (state)
-      (setf (mock-state-implementation state) implementation)))
+      (if (mock-state-disposed-p state)
+          (setf disposed-p t)
+          (setf (mock-state-implementation state) implementation)))
+    (when disposed-p
+      (error 'mock-disposed-error :mock mock)))
   mock)
 
 (defun mock-return-values (mock &rest values)
@@ -134,28 +222,91 @@
 (defun mock-return-value (mock value)
   (mock-return-values mock value))
 
-(defun spy-on (symbol)
+(defun collapse-restored-spies (symbol)
+  (let ((stack (gethash symbol *spy-stacks*)))
+    (loop while (and stack (spy-frame-restored-p (first stack)))
+          for frame = (pop stack)
+          do (when (and (fboundp symbol)
+                        (eq (symbol-function symbol) (spy-frame-mock frame)))
+               (setf (symbol-function symbol) (spy-frame-original frame)))
+             (with-mock-state-lock ((spy-frame-state frame))
+               (setf (mock-state-implementation (spy-frame-state frame))
+                     (spy-frame-original frame)
+                     (mock-state-resident-spy-frame (spy-frame-state frame))
+                     nil)))
+    (if stack
+        (setf (gethash symbol *spy-stacks*) stack)
+        (remhash symbol *spy-stacks*))))
+  (defun spy-on (symbol)
   (unless (symbolp symbol)
     (error "cl-weave: spy target must be a symbol, got ~S." symbol))
-  (unless (fboundp symbol)
-    (error "cl-weave: spy target must name a function cell, got ~S." symbol))
-  (let* ((original (symbol-function symbol))
-         (mock (make-mock-function original))
-         (state (mock-state-for mock)))
-    (setf (mock-state-restore state)
-          (lambda ()
-            (setf (mock-state-implementation state) original)
-            (when (eq (symbol-function symbol) mock)
-              (setf (symbol-function symbol) original))))
-    (setf (symbol-function symbol) mock)
+  (let ((missing-target-p nil)
+        (mock nil))
+    (with-mock-registry-lock
+      (if (not (fboundp symbol))
+          (setf missing-target-p t)
+          (let ((original (symbol-function symbol)))
+            (multiple-value-bind (created-mock state)
+                (make-unregistered-mock-function original)
+              (let ((frame (make-spy-frame :symbol symbol
+                                           :mock created-mock
+                                           :state state
+                                           :original original
+                                           :restored-p nil)))
+                (setf mock created-mock
+                      (mock-state-restore state) frame
+                      (mock-state-resident-spy-frame state) frame
+                      (gethash created-mock *mock-states*) state)
+                (push frame (gethash symbol *spy-stacks*))
+                (setf (symbol-function symbol) created-mock))))))
+    (when missing-target-p
+      (error "cl-weave: spy target must name a function cell, got ~S." symbol))
     mock))
 
-(defun clear-mock (mock)
-  (let ((state (mock-state-for mock)))
+(defun clear-mock-history-unlocked (state)
+    (let ((calls (mock-state-calls state))
+          (results (mock-state-results state)))
+      (fill calls nil :end (fill-pointer calls))
+      (fill results nil :end (fill-pointer results))
+      (setf (fill-pointer calls) 0
+            (fill-pointer results) 0)
+      (incf (mock-state-generation state))))
+  (defun clear-mock-state (state)
     (with-mock-state-lock (state)
-      (setf (mock-state-calls state) nil
-            (mock-state-results state) nil)))
-  mock)
+      (clear-mock-history-unlocked state)))
+  (defun clear-mock (mock)
+    (clear-mock-state (mock-state-for mock))
+    mock)
+  (defun dispose-mock (mock)
+  (let ((state nil)
+        (registered-p nil)
+        (frame nil)
+        (disposed-p nil))
+    (with-mock-registry-lock
+      (multiple-value-setq (state registered-p)
+        (gethash mock *mock-states*))
+      (when registered-p
+        (setf frame (mock-state-resident-spy-frame state))
+        (unless frame
+          (with-mock-state-lock (state)
+            (if (mock-state-disposed-p state)
+                (setf disposed-p t)
+                (progn
+                  (setf (mock-state-disposed-p state) t
+                        (mock-state-implementation state)
+                        #'default-mock-implementation)
+                  (clear-mock-history-unlocked state)
+                  (remhash mock *mock-states*)))))))
+    (cond
+      ((not registered-p)
+       (error "Value is not a cl-weave mock function: ~S" mock))
+      (frame
+       (error 'active-spy-disposal-error
+              :mock mock
+              :symbol (spy-frame-symbol frame)))
+      (disposed-p
+       (error 'mock-disposed-error :mock mock)))
+    mock))
 
 (defun reset-mock (mock)
   (mock-implementation mock #'default-mock-implementation)
@@ -163,12 +314,14 @@
   mock)
 
 (defun mock-restore (mock)
-  (let* ((state (mock-state-for mock))
-         (restore (mock-state-restore state)))
-    (when restore
-      (clear-mock mock)
-      (funcall restore)
-      (setf (mock-state-restore state) nil))
+  (let ((state (mock-state-for mock)))
+    (with-mock-registry-lock
+      (let ((frame (mock-state-restore state)))
+        (when frame
+          (clear-mock-state state)
+          (setf (spy-frame-restored-p frame) t
+                (mock-state-restore state) nil)
+          (collapse-restored-spies (spy-frame-symbol frame)))))
     mock))
 
 (defun map-mocks (function)
@@ -191,16 +344,20 @@
                (when (mock-state-restore state)
                  (mock-restore mock)))))
 
-(defun mock-called-with-p (mock expected-arguments)
+(defun mock-called-with-p (mock expected-arguments &optional report)
   (some (lambda (actual-arguments)
           (equal actual-arguments expected-arguments))
-        (mock-calls mock)))
+        (if report
+            (getf report :calls)
+            (mock-calls mock))))
 
-(defun mock-returned-with-p (mock expected-values)
+(defun mock-returned-with-p (mock expected-values &optional report)
   (some (lambda (result)
           (and (eq (getf result :type) :return)
                (equal (getf result :values) expected-values)))
-        (mock-results mock)))
+        (if report
+            (getf report :results)
+            (mock-results mock))))
 
 (defun one-based-index-expected (index matcher)
   (unless (and (integerp index) (plusp index))
@@ -229,8 +386,8 @@
                  results))
 
 (defun mock-report (mock)
-  (let ((calls (mock-calls mock))
-        (results (mock-results mock)))
+  (multiple-value-bind (calls results)
+      (mock-history-snapshot mock)
     (list :call-count (length calls)
           :calls calls
           :result-count (length results)

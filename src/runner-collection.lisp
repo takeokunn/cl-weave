@@ -11,84 +11,110 @@
    :condition (make-condition 'hook-failure :phase phase :causes causes)
    :elapsed-internal-time 0))
 
-(defun collect-suite-events/k
-    (suite control continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
-  (if (or (execution-control-stopped control)
-          (not (selected-suite-p suite filter ancestor-focused)))
-      (funcall continue '())
-      (let ((active-execution-mode
-              (effective-suite-execution-mode suite inherited-execution-mode)))
-        (multiple-value-bind (active-status active-reason)
-            (suite-suppression suite suppressed-status suppressed-reason)
-          (if active-status
-              (collect-children/k
-               suite
-               (ordered-children suite (suite-children suite))
-               control
-               continue
-               filter
-               ancestor-focused
-               active-status
-               active-reason
-               active-execution-mode)
-              (let ((before-errors
-                      (call-hooks/collect-errors (suite-hook suite before-all))))
-                (labels ((finish (events)
-                           (let* ((after-errors
-                                   (call-hooks/collect-errors
-                                    (reverse (suite-hook suite after-all))))
-                                  (all-events
-                                    (append
-                                     (when before-errors
-                                       (list (record-event/control
-                                              control
-                                              (make-suite-hook-event
-                                               suite :before-all before-errors))))
-                                     events
-                                     (when after-errors
-                                       (list (record-event/control
-                                              control
-                                              (make-suite-hook-event
-                                               suite :after-all after-errors)))))))
-                             (funcall continue all-events))))
-                  (if before-errors
-                      (finish '())
-                      (collect-children/k
-                       suite
-                       (ordered-children suite (suite-children suite))
-                       control
-                       #'finish
-                       filter
-                       ancestor-focused
-                       nil
-                       nil
-                       active-execution-mode)))))))))
+
+(defun link-collection-segments (head head-last tail tail-last)
+   (cond
+     ((null head) (values tail tail-last))
+     ((null tail) (values head head-last))
+     (t
+      (setf (cdr head-last) tail)
+      (values head tail-last))))
+ (defun collect-suite-events/k
+     (suite control continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
+   (if (or (execution-control-stopped control)
+           (not (selected-suite-p suite filter ancestor-focused)))
+       (funcall continue nil nil)
+       (let ((active-execution-mode
+               (effective-suite-execution-mode suite inherited-execution-mode)))
+         (multiple-value-bind (active-status active-reason)
+             (suite-suppression suite suppressed-status suppressed-reason)
+           (if active-status
+               (collect-children/k
+                suite
+                (ordered-children suite (suite-children suite))
+                control
+                continue
+                filter
+                ancestor-focused
+                active-status
+                active-reason
+                active-execution-mode)
+               (let ((before-errors
+                       (call-hooks/collect-errors (suite-hook suite before-all))))
+                 (labels ((finish (events events-last)
+                            (let* ((after-errors
+                                    (call-hooks/collect-errors
+                                     (reverse (suite-hook suite after-all))))
+                                   (before-events
+                                    (when before-errors
+                                      (list (record-event/control
+                                             control
+                                             (make-suite-hook-event
+                                              suite :before-all before-errors)))))
+                                   (after-events
+                                    (when after-errors
+                                      (list (record-event/control
+                                             control
+                                             (make-suite-hook-event
+                                              suite :after-all after-errors))))))
+                              (multiple-value-bind (with-before with-before-last)
+                                  (link-collection-segments
+                                   before-events
+                                   before-events
+                                   events
+                                   events-last)
+                                (multiple-value-call continue
+                                  (link-collection-segments
+                                   with-before
+                                   with-before-last
+                                   after-events
+                                   after-events))))))
+                   (if before-errors
+                       (finish nil nil)
+                       (collect-children/k
+                        suite
+                        (ordered-children suite (suite-children suite))
+                        control
+                        #'finish
+                        filter
+                        ancestor-focused
+                        nil
+                        nil
+                        active-execution-mode)))))))))
+
+
 
 (defun collect-children/k
     (suite children control continue filter &optional ancestor-focused suppressed-status suppressed-reason execution-mode)
   (macrolet ((recur (remaining next-continue)
-               `(collect-children/k
-                 suite
-                 ,remaining
-                 control
-                 ,next-continue
-                 filter
-                 ancestor-focused
-                 suppressed-status
-                 suppressed-reason
-                 execution-mode)))
-    (labels ((continue-with-tail (head-events remaining)
+  `(collect-children/k
+    suite
+    ,remaining
+    control
+    ,next-continue
+    filter
+    ancestor-focused
+    suppressed-status
+    suppressed-reason
+    execution-mode)))
+    (labels ((continue-with-tail
+                 (head-events head-last remaining)
                (recur remaining
-                      (lambda (tail)
-                       (funcall continue (append head-events tail)))))
+                      (lambda (tail tail-last)
+                        (multiple-value-call continue
+                          (link-collection-segments
+                           head-events head-last tail tail-last)))))
              (continue-with-event (event)
-               (if (execution-control-stopped control)
-                   (funcall continue (list event))
-                   (recur (rest children)
-                          (lambda (tail)
-                            (funcall continue (cons event tail)))))))
+               (let ((events (list event)))
+                 (if (execution-control-stopped control)
+                     (funcall continue events events)
+                     (recur (rest children)
+                            (lambda (tail tail-last)
+                              (multiple-value-call continue
+                                (link-collection-segments
+                                 events events tail tail-last))))))))
       (if (or (null children) (execution-control-stopped control))
-          (funcall continue '())
+          (funcall continue nil nil)
           (let ((child (first children)))
             (multiple-value-bind (step payload rest-children)
                 (describe-event-collection-step
@@ -108,79 +134,160 @@
                  (collect-suite-events/k
                   child
                   control
-                  (lambda (events)
+                  (lambda (events events-last)
                     (if (execution-control-stopped control)
-                        (funcall continue events)
-                        (continue-with-tail events (rest children))))
+                        (funcall continue events events-last)
+                        (continue-with-tail
+                         events events-last (rest children))))
                   filter
                   payload
                   suppressed-status
                   suppressed-reason
                   execution-mode))
                 (:collect-concurrent
-                 (continue-with-tail
-                  (mapcar (lambda (event)
-                            (record-event/control control event))
-                          (run-concurrent-test-cases suite payload))
-                  rest-children))
+                 (let ((events
+                         (mapcar (lambda (event)
+                                   (record-event/control control event))
+                                 (run-concurrent-test-cases suite payload))))
+                   (continue-with-tail
+                    events (last events) rest-children)))
                 (:collect-test
                  (continue-with-event payload)))))))))
 
-(defun call-with-collection-context
-    (suite name-filter location-filter test-path-filter include-tags exclude-tags shard order seed
-     retry timeout-ms max-workers continue)
-  (let* ((filter (make-selection-filter
-                  :focus-enabled (focused-suite-p suite)
-                  :name-filter (normalized-test-filter name-filter)
-                  :location-filter (normalize-location-filter location-filter)
-                  :test-path-filter test-path-filter
-                  :include-tags (normalize-tags include-tags "include-tags")
-                  :exclude-tags (normalize-tags exclude-tags "exclude-tags")))
-         (normalized-shard (normalize-shard shard))
-         (normalized-order (normalize-sequence-order order))
-         (normalized-seed (normalize-sequence-seed seed))
-         (normalized-retry (normalize-retry-count retry))
-         (normalized-timeout-ms (normalize-timeout-ms timeout-ms))
-         (normalized-max-workers (normalize-max-workers max-workers)))
-    (setf (selection-filter-shard-paths filter)
-          (collect-shard-paths suite filter normalized-shard))
-    (let ((*test-sequence-order* normalized-order)
-          (*test-sequence-seed* normalized-seed)
-          (*default-retry* normalized-retry)
-          (*default-timeout-ms* normalized-timeout-ms)
-          (*max-workers* normalized-max-workers))
-      (funcall continue filter))))
+
+
+(defstruct collection-options
+  name-filter
+  location-filter
+  test-path-filter
+  include-tags
+  exclude-tags
+  bail
+  shard
+  order
+  seed
+  retry
+  timeout-ms
+  max-workers)
+
+(defun normalize-collection-options
+    (&key name-filter location-filter test-path-filter
+          include-tags exclude-tags bail shard order seed
+          retry timeout-ms max-workers)
+  (make-collection-options
+   :name-filter (normalized-test-filter name-filter)
+   :location-filter (normalize-location-filter location-filter)
+   :test-path-filter (normalize-test-path-filter test-path-filter)
+   :include-tags (normalize-tags include-tags "include-tags")
+   :exclude-tags (normalize-tags exclude-tags "exclude-tags")
+   :bail (normalize-bail bail)
+   :shard (normalize-shard shard)
+   :order (normalize-sequence-order order)
+   :seed (normalize-sequence-seed seed)
+   :retry (normalize-retry-count retry)
+   :timeout-ms (normalize-timeout-ms timeout-ms)
+   :max-workers (normalize-max-workers max-workers)))
+
+(defun call-with-collection-context (suite options continue)
+  (let* ((location-filter
+           (collection-options-location-filter options))
+         (location-filter-index
+           (when location-filter
+             (let ((index
+                     (make-hash-table
+                      :test #'equal
+                      :size (length location-filter))))
+               (dolist (pathname location-filter index)
+                 (setf (gethash pathname index) t)))))
+         (test-path-filter
+           (collection-options-test-path-filter options))
+         (test-path-index
+           (when test-path-filter
+             (let ((index
+                     (make-hash-table
+                      :test #'equal
+                      :size (length test-path-filter))))
+               (dolist (path test-path-filter index)
+                 (setf (gethash path index) t))))))
+    (multiple-value-bind (focus-enabled focus-index)
+        (build-focus-index suite)
+      (let ((filter
+              (make-selection-filter
+               :focus-enabled focus-enabled
+               :focus-index focus-index
+               :name-filter (collection-options-name-filter options)
+               :location-filter location-filter
+               :location-filter-index location-filter-index
+               :test-path-filter test-path-filter
+               :test-path-index test-path-index
+               :include-tags (collection-options-include-tags options)
+               :exclude-tags (collection-options-exclude-tags options))))
+        (multiple-value-bind (selected-tests selected-suites test-paths)
+            (collect-selection-indexes
+             suite filter (collection-options-shard options))
+          (setf (selection-filter-test-paths filter) test-paths
+                (selection-filter-selected-tests filter) selected-tests
+                (selection-filter-selected-suites filter) selected-suites))
+        (let ((*collection-test-paths*
+                (selection-filter-test-paths filter))
+              (*test-sequence-order* (collection-options-order options))
+              (*test-sequence-seed* (collection-options-seed options))
+              (*default-retry* (collection-options-retry options))
+              (*default-timeout-ms* (collection-options-timeout-ms options))
+              (*max-workers* (collection-options-max-workers options)))
+          (funcall continue filter))))))
+
+
+
+
+(defun collect-events-with-options (suite options)
+  (let ((suite (snapshot-suite suite)))
+    (with-runner-condition-propagation (nil)
+      (call-with-collection-context
+       suite
+       options
+       (lambda (filter)
+         (collect-suite-events/k
+          suite
+          (make-execution-control
+           :bail-limit
+           (if (eq (collection-options-bail options) t)
+               1
+               (collection-options-bail options)))
+          (lambda (events events-last)
+            (declare (ignore events-last))
+            events)
+          filter))))))
 
 (defun collect-events
-    (suite &key name-filter location-filter test-path-filter include-tags exclude-tags bail shard
-                  order seed retry timeout-ms max-workers)
-  (with-runner-condition-propagation (nil)
-    (call-with-collection-context
-     suite
-     name-filter
-     location-filter
-     test-path-filter
-     include-tags
-     exclude-tags
-     shard
-     order
-     seed
-     retry
-     timeout-ms
-     max-workers
-     (lambda (filter)
-       (collect-suite-events/k
-        suite
-        (make-execution-control :bail-limit (normalize-bail bail))
-        #'identity
-        filter)))))
+    (suite &key name-filter location-filter test-path-filter
+                include-tags exclude-tags bail shard order seed
+                retry timeout-ms max-workers)
+  (collect-events-with-options
+   suite
+   (normalize-collection-options
+    :name-filter name-filter
+    :location-filter location-filter
+    :test-path-filter test-path-filter
+    :include-tags include-tags
+    :exclude-tags exclude-tags
+    :bail bail
+    :shard shard
+    :order order
+    :seed seed
+    :retry retry
+    :timeout-ms timeout-ms
+    :max-workers max-workers)))
+
+
 
 (declaim (ftype (function (suite list function selection-filter &optional t t t t) *) collect-children-plan/k))
+
 
 (defun collect-suite-plan/k
     (suite continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
   (if (not (selected-suite-p suite filter ancestor-focused))
-      (funcall continue '())
+      (funcall continue nil nil)
       (let ((active-execution-mode
               (effective-suite-execution-mode suite inherited-execution-mode)))
         (multiple-value-bind (active-status active-reason)
@@ -195,28 +302,35 @@
            active-reason
            active-execution-mode)))))
 
+
+
 (defun collect-children-plan/k
     (suite children continue filter &optional ancestor-focused suppressed-status suppressed-reason execution-mode)
   (macrolet ((recur (remaining next-continue)
-               `(collect-children-plan/k
-                 suite
-                 ,remaining
-                 ,next-continue
-                 filter
-                 ancestor-focused
-                 suppressed-status
-                 suppressed-reason
-                 execution-mode)))
-    (labels ((continue-with-tail (entries)
+  `(collect-children-plan/k
+    suite
+    ,remaining
+    ,next-continue
+    filter
+    ancestor-focused
+    suppressed-status
+    suppressed-reason
+    execution-mode)))
+    (labels ((continue-with-tail (entries entries-last)
                (recur (rest children)
-                      (lambda (tail)
-                        (funcall continue (append entries tail)))))
+                      (lambda (tail tail-last)
+                        (multiple-value-call continue
+                          (link-collection-segments
+                           entries entries-last tail tail-last)))))
              (continue-with-entry (entry)
-               (recur (rest children)
-                      (lambda (tail)
-                       (funcall continue (cons entry tail))))))
+               (let ((entries (list entry)))
+                 (recur (rest children)
+                        (lambda (tail tail-last)
+                          (multiple-value-call continue
+                            (link-collection-segments
+                             entries entries tail tail-last)))))))
       (if (null children)
-          (funcall continue '())
+          (funcall continue nil nil)
           (let ((child (first children)))
             (multiple-value-bind (step payload)
                 (describe-plan-collection-step
@@ -242,21 +356,36 @@
                 (:collect-test
                  (continue-with-entry payload)))))))))
 
+
+
+
+(defun collect-test-plan-with-options (suite options)
+  (let ((suite (snapshot-suite suite)))
+    (call-with-collection-context
+     suite
+     options
+     (lambda (filter)
+       (collect-suite-plan/k
+        suite
+        (lambda (entries entries-last)
+          (declare (ignore entries-last))
+          entries)
+        filter)))))
+
 (defun collect-test-plan
-    (suite &key name-filter location-filter test-path-filter include-tags exclude-tags
-                  shard order seed retry timeout-ms)
-  (call-with-collection-context
+    (suite &key name-filter location-filter test-path-filter
+                include-tags exclude-tags shard order seed retry
+                timeout-ms)
+  (collect-test-plan-with-options
    suite
-   name-filter
-   location-filter
-   test-path-filter
-   include-tags
-   exclude-tags
-   shard
-   order
-   seed
-   retry
-   timeout-ms
-   nil
-   (lambda (filter)
-     (collect-suite-plan/k suite #'identity filter))))
+   (normalize-collection-options
+    :name-filter name-filter
+    :location-filter location-filter
+    :test-path-filter test-path-filter
+    :include-tags include-tags
+    :exclude-tags exclude-tags
+    :shard shard
+    :order order
+    :seed seed
+    :retry retry
+    :timeout-ms timeout-ms)))
