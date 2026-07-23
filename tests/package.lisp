@@ -63,6 +63,7 @@
    #:it-each
    #:it-fails
    #:it-fails-each
+   #:it-fuzz
    #:it-isolated
    #:it-property
    #:it-only

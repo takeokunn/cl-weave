@@ -317,3 +317,59 @@
         (lambda ,names ,@body)
         ',names
         '(it-property ,name ,bindings ,@body)))))
+
+(defun %fuzz-options-plist (options)
+  (unless (registration-proper-list-p options)
+    (registration-syntax-error
+     "IT-FUZZ requires OPTIONS to be a literal proper list, got ~S." options))
+  (loop for (key value) on options by #'cddr
+        unless (member key '(:trials :timeout-per-trial))
+          do (registration-syntax-error
+              "IT-FUZZ OPTIONS accepts only :TRIALS and :TIMEOUT-PER-TRIAL, got ~S." key)
+        collect key
+        collect value))
+
+(defmacro it-fuzz (name bindings options &body body)
+  "Fuzz test built on IT-PROPERTY's generator and shrinking machinery.
+
+Unlike IT-PROPERTY, BODY is not a boolean predicate: a trial passes simply
+by running without signaling an ERROR. Each trial runs under a
+TIMEOUT-PER-TRIAL second budget (default 5); a trial that merely times out
+is not evidence of a bug, so it counts as neither a pass nor a failure and
+is skipped rather than shrunk. A trial that signals an ERROR is a failure,
+and its generated inputs are minimized the same way a failing
+IT-PROPERTY's are.
+
+BINDINGS is a literal ((NAME GENERATOR)...) list, as in IT-PROPERTY.
+OPTIONS is a literal property list accepting :TRIALS (default 100) and
+:TIMEOUT-PER-TRIAL seconds (default 5, or NIL to disable the timeout)."
+  (unless (registration-proper-list-p bindings)
+    (registration-syntax-error
+     "IT-FUZZ requires BINDINGS to be a literal proper list, got ~S." bindings))
+  (loop for binding in bindings
+        for index from 0
+        unless (and (registration-proper-list-p binding)
+                    (= (length binding) 2)
+                    (symbolp (first binding))
+                    (first binding))
+          do (let ((*print-circle* t))
+               (error "IT-FUZZ binding ~D must have the form (NAME GENERATOR), got ~S."
+                      index binding)))
+  (let* ((plist (%fuzz-options-plist options))
+         (names (mapcar #'first bindings))
+         (generators (mapcar #'second bindings))
+         (trials (getf plist :trials 100))
+         (timeout-per-trial (getf plist :timeout-per-trial 5)))
+    `(it ,name
+       (let ((*property-test-count* ,trials))
+         (run-property
+          (list ,@generators)
+          (lambda ,names
+            (handler-case
+                (call-with-platform-timeout/k
+                 ,timeout-per-trial
+                 (lambda () ,@body)
+                 #'identity)
+              (platform-timeout () :fuzz-trial-timed-out)))
+          ',names
+          '(it-fuzz ,name ,bindings ,options ,@body))))))
