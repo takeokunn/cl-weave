@@ -109,13 +109,59 @@
                      (summary-count items (getf spec :status) accessor))))
 
 (defun result-summary (events)
-  (append (list :total (length events))
-          (collect-summary-fields events #'test-event-status
-                                  *result-summary-field-specs*)
-          (list :failed-paths (event-path-strings-with-status events :fail)
-                :errored-paths (event-path-strings-with-status events :error))))
+  (let ((total 0)
+        (passed 0)
+        (skipped 0)
+        (todos 0)
+        (failed 0)
+        (errored 0)
+        (failed-paths nil)
+        (failed-paths-tail nil)
+        (errored-paths nil)
+        (errored-paths-tail nil))
+    (dolist (event events)
+      (incf total)
+      (case (test-event-status event)
+        (:pass (incf passed))
+        (:skip (incf skipped))
+        (:todo (incf todos))
+        (:fail
+         (incf failed)
+         (let ((path (list (path-string (test-event-path event)))))
+           (if failed-paths-tail
+               (setf (cdr failed-paths-tail) path
+                     failed-paths-tail path)
+               (setf failed-paths path
+                     failed-paths-tail path))))
+        (:error
+         (incf errored)
+         (let ((path (list (path-string (test-event-path event)))))
+           (if errored-paths-tail
+               (setf (cdr errored-paths-tail) path
+                     errored-paths-tail path)
+               (setf errored-paths path
+                     errored-paths-tail path))))))
+    (list :total total
+          :passed passed
+          :skipped skipped
+          :todos todos
+          :failed failed
+          :errored errored
+          :failed-paths failed-paths
+          :errored-paths errored-paths)))
 
 (defun plan-summary (plan)
-  (append (list :total (length plan))
-          (collect-summary-fields plan #'test-plan-entry-status
-                                  *plan-summary-field-specs*)))
+  (let ((total 0)
+        (runnable 0)
+        (skipped 0)
+        (todos 0))
+    (dolist (entry plan)
+      (incf total)
+      (case (test-plan-entry-status entry)
+        (:run (incf runnable))
+        (:skip (incf skipped))
+        (:todo (incf todos))))
+    (list :total total
+          :runnable runnable
+          :skipped skipped
+          :todos todos)))

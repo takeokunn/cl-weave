@@ -204,9 +204,16 @@
       (values nil body)))
 
 (defun test-registration-form (name forms options)
-  `(register-test ,name (lambda () ,@forms)
-                  ,@options
-                  ,@(source-location-option)))
+  (if forms
+      `(register-test ,name (lambda () ,@forms)
+                      ,@options
+                      ,@(source-location-option))
+      (let ((function (gensym "TEST-FUNCTION")))
+        `(let ((,function (lambda ())))
+           (register-test ,name ,function
+                          :trusted-empty-function ,function
+                          ,@options
+                          ,@(source-location-option))))))
 
 (defun test-options-with-registration-options (options prefix-options)
   (let* ((registration-options (test-registration-options options))

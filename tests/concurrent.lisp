@@ -52,7 +52,7 @@
                               ("concurrent" "second")))))))
 
   (it
-      "limits concurrent tests to max worker batches"
+      "executes one-worker batches on the calling thread"
       (let* ((root (cl-weave::make-suite :name "root"))
              (suite
             (cl-weave::add-child
@@ -98,7 +98,7 @@
                 (reverse events-log)
                 :to-equal
                 '(:first-start :first-end :second-start :second-end))
-              (expect thread-count :to-be 1))))))
+              (expect thread-count :to-be 0))))))
 
   (progn
   (it
@@ -163,6 +163,12 @@
           :to-throw
           "Max workers must be")
         (expect executed :to-be nil)))))
+
+  (it "returns no events for an empty concurrent test list"
+    (let ((suite (cl-weave::make-suite :name "empty")))
+      (expect
+        (cl-weave::run-concurrent-test-cases suite nil)
+        :to-be-null)))
 
   (it "inherits concurrent execution mode from suites"
     (let* ((root (cl-weave::make-suite :name "root"))

@@ -453,3 +453,67 @@
           (expect (cl-weave::assertion-detail-expected detail)
                   :to-equal
                   '(when ready (setf *fixture-value* :done))))))))
+
+(describe "trusted empty test registration"
+  (it "marks only macro-generated strictly empty bodies"
+    (let ((cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (cl-weave::*registration-owners* (make-hash-table :test (function eq)))
+          (cl-weave::*test-registry-generation* 0))
+      (let ((empty (it "empty probe"))
+            (explicit-nil (it "explicit nil probe" nil))
+            (constructed
+              (cl-weave::make-test-case
+               :name "constructed probe"
+               :function (lambda ())))
+            (registered
+              (cl-weave::register-test
+               "directly registered probe"
+               (lambda ()))))
+        (expect
+         (eq (cl-weave::test-case-function empty)
+             (cl-weave::test-case-trusted-empty-function empty))
+         :to-be t)
+        (expect
+         (cl-weave::test-case-trusted-empty-function explicit-nil)
+         :to-be nil)
+        (expect
+         (cl-weave::test-case-trusted-empty-function constructed)
+         :to-be nil)
+        (expect
+         (cl-weave::test-case-trusted-empty-function registered)
+         :to-be nil))))
+
+  (it "invalidates trust when the registered function is replaced"
+    (let ((cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (cl-weave::*registration-owners* (make-hash-table :test (function eq)))
+          (cl-weave::*test-registry-generation* 0))
+      (let* ((test (it "mutable empty probe"))
+             (marker
+               (cl-weave::test-case-trusted-empty-function test)))
+        (expect (eq (cl-weave::test-case-function test) marker) :to-be t)
+        (setf (cl-weave::test-case-function test) (lambda () :replacement))
+        (expect (eq (cl-weave::test-case-function test) marker) :to-be nil))))
+
+  (it "refreshes the marker when an empty test is redefined"
+    (let ((cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (cl-weave::*registration-owners* (make-hash-table :test (function eq)))
+          (cl-weave::*test-registry-generation* 0))
+      (let* ((original (it "redefined empty probe"))
+             (original-function (cl-weave::test-case-function original))
+             (replacement (it "redefined empty probe"))
+             (replacement-function (cl-weave::test-case-function replacement)))
+        (expect
+         (eq original-function
+             (cl-weave::test-case-trusted-empty-function original))
+         :to-be t)
+        (expect
+         (eq replacement-function
+             (cl-weave::test-case-trusted-empty-function replacement))
+         :to-be t)
+        (expect (eq replacement-function original-function) :to-be nil)))))

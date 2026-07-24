@@ -69,38 +69,35 @@
                    (values (nreverse selected) remaining)))))
     (walk children '())))
 
-(defstruct child-selection
-  kind
-  focused)
-
 (defun classify-selected-child (suite child filter ancestor-focused)
   (cond
     ((suite-p child)
      (let ((child-focused (or ancestor-focused (suite-focus child))))
        (if (selected-child-suite-p child filter child-focused)
-           (make-child-selection :kind :suite :focused child-focused)
-           (make-child-selection :kind :skip))))
+           (values :suite child-focused)
+           (values :skip nil))))
     ((test-case-p child)
-     (make-child-selection
-      :kind (if (selected-child-test-p suite child filter ancestor-focused)
-                :test
-                :skip)))
+     (values (if (selected-child-test-p suite child filter ancestor-focused)
+                 :test
+                 :skip)
+             nil))
     (t
-     (make-child-selection :kind :skip))))
+     (values :skip nil))))
 
 (defun describe-event-collection-step
     (suite child children control filter ancestor-focused suppressed-status suppressed-reason execution-mode)
-  (let ((selection (classify-selected-child suite child filter ancestor-focused)))
-    (ecase (child-selection-kind selection)
+  (multiple-value-bind (selection-kind child-focused)
+      (classify-selected-child suite child filter ancestor-focused)
+    (ecase selection-kind
       (:suite
-       (values :collect-suite (child-selection-focused selection) nil nil))
+       (values :collect-suite child-focused nil nil))
       (:test
        (if (and (effective-concurrent-test-case-p child execution-mode)
-                  (concurrent-batching-enabled-p control suppressed-status))
-             (multiple-value-bind (tests rest-children)
-                 (collect-leading-concurrent-tests
-                  suite children filter ancestor-focused execution-mode)
-               (values :collect-concurrent tests rest-children nil))
+                (concurrent-batching-enabled-p control suppressed-status))
+           (multiple-value-bind (tests rest-children)
+               (collect-leading-concurrent-tests
+                suite children filter ancestor-focused execution-mode)
+             (values :collect-concurrent tests rest-children nil))
            (values :collect-test
                    (record-event/control
                     control
@@ -114,21 +111,22 @@
 
 (defun describe-plan-collection-step
     (suite child filter ancestor-focused suppressed-status suppressed-reason execution-mode)
-  (let ((selection (classify-selected-child suite child filter ancestor-focused)))
-    (ecase (child-selection-kind selection)
+  (multiple-value-bind (selection-kind child-focused)
+      (classify-selected-child suite child filter ancestor-focused)
+    (ecase selection-kind
       (:suite
-       (values :collect-suite (child-selection-focused selection) nil))
+       (values :collect-suite child-focused nil))
       (:test
        (let* ((status (planned-test-status child suppressed-status))
-                (reason (planned-test-reason child suppressed-status suppressed-reason status))
-                (entry (make-plan-entry
-                        suite
-                        child
-                        status
-                        reason
-                        filter
-                        ancestor-focused
-                        execution-mode)))
+              (reason (planned-test-reason child suppressed-status suppressed-reason status))
+              (entry (make-plan-entry
+                      suite
+                      child
+                      status
+                      reason
+                      filter
+                      ancestor-focused
+                      execution-mode)))
          (values :collect-test entry nil)))
       (:skip
        (values :skip nil nil)))))

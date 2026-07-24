@@ -86,8 +86,8 @@
     (after-each `(suite-after-each ,suite))))
 
 (define-record-class test-case
-  (name function focus skip-reason todo-reason retry timeout-ms execution-mode
-   expected-failure-reason location tags watch-dependencies))
+  (name function trusted-empty-function focus skip-reason todo-reason retry timeout-ms
+   execution-mode expected-failure-reason location tags watch-dependencies))
 
 (defmethod print-object ((test test-case) stream)
   (print-unreadable-object (test stream :type t)
@@ -168,52 +168,80 @@
       (when created-p
         (note-test-registry-change-unlocked))
       root)))
+  (progn
+  (defun copy-list-with-tail (values)
+    (loop with head = nil
+          with tail = nil
+          for value in values
+          for cell = (list value)
+          do (if tail
+                 (setf (cdr tail) cell
+                       tail cell)
+                 (setf head cell
+                       tail cell))
+          finally (return (values head tail))))
+
+  (defun copy-suite-children-with-tail (children suite-map)
+    (loop with head = nil
+          with tail = nil
+          for child in children
+          for value = (if (suite-p child)
+                          (gethash child suite-map)
+                          child)
+          for cell = (list value)
+          do (if tail
+                 (setf (cdr tail) cell
+                       tail cell)
+                 (setf head cell
+                       tail cell))
+          finally (return (values head tail))))
+
   (defun clone-suite-tree-unlocked (root)
-  (let ((suite-map (make-hash-table :test #'eq))
-        (pending (and root (list (cons root nil))))
-        (suites nil))
+  (let ((suite-map (make-hash-table :test (function eq)))
+        (pending (and root (list (cons root nil)))))
+    ;; Allocate suite shells before rebuilding child and hook list spines.
     (loop while pending
           for entry = (pop pending)
           for suite = (car entry)
           for parent = (cdr entry)
-          for clone = (make-suite
-                       :name (suite-name suite)
-                       :parent parent
-                       :focus (suite-focus suite)
-                       :execution-mode (suite-execution-mode suite)
-                       :skip-reason (suite-skip-reason suite)
-                       :todo-reason (suite-todo-reason suite))
+          for clone = (make-suite :name (suite-name suite)
+                                  :parent parent
+                                  :focus (suite-focus suite)
+                                  :skip-reason (suite-skip-reason suite)
+                                  :todo-reason (suite-todo-reason suite)
+                                  :execution-mode (suite-execution-mode suite))
           do (setf (gethash suite suite-map) clone)
-             (push suite suites)
              (dolist (child (suite-children suite))
                (when (suite-p child)
                  (push (cons child clone) pending))))
-    (dolist (suite suites)
-      (let* ((clone (gethash suite suite-map))
-             (children
-               (loop for child in (suite-children suite)
-                     collect (if (suite-p child)
-                                 (gethash child suite-map)
-                                 child)))
-             (before-all (copy-list (suite-before-all suite)))
-             (after-all (copy-list (suite-after-all suite)))
-             (before-each (copy-list (suite-before-each suite)))
-             (around-each (copy-list (suite-around-each suite)))
-             (after-each (copy-list (suite-after-each suite))))
-        (setf (suite-children clone) children
-              (suite-children-tail clone) (last children)
-              (suite-before-all clone) before-all
-              (suite-before-all-tail clone) (last before-all)
-              (suite-after-all clone) after-all
-              (suite-after-all-tail clone) (last after-all)
-              (suite-before-each clone) before-each
-              (suite-before-each-tail clone) (last before-each)
-              (suite-around-each clone) around-each
-              (suite-around-each-tail clone) (last around-each)
-              (suite-after-each clone) after-each
-              (suite-after-each-tail clone) (last after-each))))
-    (values (and root (gethash root suite-map))
-            suite-map)))
+    (maphash
+     (lambda (suite clone)
+       (multiple-value-bind (children children-tail)
+           (copy-suite-children-with-tail (suite-children suite) suite-map)
+         (setf (suite-children clone) children
+               (suite-children-tail clone) children-tail))
+       (multiple-value-bind (before-each before-each-tail)
+           (copy-list-with-tail (suite-before-each suite))
+         (setf (suite-before-each clone) before-each
+               (suite-before-each-tail clone) before-each-tail))
+       (multiple-value-bind (after-each after-each-tail)
+           (copy-list-with-tail (suite-after-each suite))
+         (setf (suite-after-each clone) after-each
+               (suite-after-each-tail clone) after-each-tail))
+       (multiple-value-bind (before-all before-all-tail)
+           (copy-list-with-tail (suite-before-all suite))
+         (setf (suite-before-all clone) before-all
+               (suite-before-all-tail clone) before-all-tail))
+       (multiple-value-bind (after-all after-all-tail)
+           (copy-list-with-tail (suite-after-all suite))
+         (setf (suite-after-all clone) after-all
+               (suite-after-all-tail clone) after-all-tail))
+       (multiple-value-bind (around-each around-each-tail)
+           (copy-list-with-tail (suite-around-each suite))
+         (setf (suite-around-each clone) around-each
+               (suite-around-each-tail clone) around-each-tail)))
+     suite-map)
+    (values (and root (gethash root suite-map)) suite-map))))
   (defun snapshot-suite (suite)
   (with-test-registry-lock
     (let ((tree-root suite))
@@ -415,9 +443,11 @@
 
 (defun test-registration-initargs
     (name function focus skip-reason todo-reason retry timeout-ms
-     execution-mode expected-failure-reason location tags watch-dependencies)
+     execution-mode expected-failure-reason location tags watch-dependencies
+     &optional trusted-empty-function)
   (list :name name
         :function function
+        :trusted-empty-function trusted-empty-function
         :focus focus
         :skip-reason skip-reason
         :todo-reason todo-reason
@@ -449,7 +479,8 @@
 
 (defun register-test
     (name function &key focus skip-reason todo-reason retry timeout-ms
-         execution-mode expected-failure-reason location tags watch-depends-on)
+         execution-mode expected-failure-reason location tags watch-depends-on
+         trusted-empty-function)
   (unless (stringp name)
     (error "cl-weave: test name must be a string."))
   (let* ((pathname (registration-location-pathname location))
@@ -458,7 +489,7 @@
                   (test-registration-initargs
                    name function focus skip-reason todo-reason retry
                    timeout-ms execution-mode expected-failure-reason
-                   location tags watch-depends-on))))
+                   location tags watch-depends-on trusted-empty-function))))
     (with-test-registry-lock
       (add-owned-child-unlocked (current-or-root-suite-unlocked)
                                 test

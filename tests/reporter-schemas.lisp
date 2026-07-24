@@ -201,4 +201,33 @@
           (expect mutation-output :to-contain "\"score\":")
           (expect mutation-output :to-contain "\"results\":[")))))
 
-)
+  (it "summarizes results and plans in one stable schema pass"
+    (let ((events (list
+                   (make-sample-event :status :fail :path (quote ("suite" "fail-1")))
+                   (make-sample-event :status :unknown :path (quote ("suite" "unknown")))
+                   (make-sample-event :status :error :path (quote ("suite" "error-1")))
+                   (make-sample-event :status :fail :path (quote ("suite" "fail-2")))
+                   (make-sample-event :status :pass :path (quote ("suite" "pass")))
+                   (make-sample-event :status :skip :path (quote ("suite" "skip")))
+                   (make-sample-event :status :todo :path (quote ("suite" "todo")))))
+          (plan (list
+                 (cl-weave::make-test-plan-entry :status :run :path (quote ("suite" "run-1")))
+                 (cl-weave::make-test-plan-entry :status :unknown :path (quote ("suite" "unknown")))
+                 (cl-weave::make-test-plan-entry :status :skip :path (quote ("suite" "skip")))
+                 (cl-weave::make-test-plan-entry :status :todo :path (quote ("suite" "todo")))
+                 (cl-weave::make-test-plan-entry :status :run :path (quote ("suite" "run-2"))))))
+      (expect (cl-weave::result-summary events)
+              :to-equal
+              (quote (:total 7 :passed 1 :skipped 1 :todos 1 :failed 2 :errored 1
+                      :failed-paths ("suite > fail-1" "suite > fail-2")
+                      :errored-paths ("suite > error-1"))))
+      (expect (cl-weave::plan-summary plan)
+              :to-equal
+              (quote (:total 5 :runnable 2 :skipped 1 :todos 1)))
+      (expect (cl-weave::result-summary nil)
+              :to-equal
+              (quote (:total 0 :passed 0 :skipped 0 :todos 0 :failed 0 :errored 0
+                      :failed-paths nil :errored-paths nil)))
+      (expect (cl-weave::plan-summary nil)
+              :to-equal
+              (quote (:total 0 :runnable 0 :skipped 0 :todos 0))))))

@@ -22,16 +22,17 @@
                             :condition "primary"
                             :secondary-conditions '("cleanup <one>" "cleanup & two")))
                      stream))))
-      (expect output :to-contain "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
-      (expect output :to-contain "<testsuite name=\"cl-weave\" tests=\"4\"")
-      (expect output :to-contain "failures=\"1\"")
-      (expect output :to-contain "errors=\"0\"")
-      (expect output :to-contain "skipped=\"2\"")
-      (expect output :to-contain "<skipped message=\"needs &lt;thing&gt;\"/>")
-      (expect output :to-contain "<skipped message=\"TODO: pending\"/>")
-      (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">")
-      (expect output :to-contain
-              (format nil "secondary condition: cleanup &lt;one&gt;~%secondary condition: cleanup &amp; two"))))
+        (expect output :to-contain "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+        (expect output :to-contain "<testsuite name=\"cl-weave\" tests=\"4\"")
+        (expect output :to-contain "failures=\"1\"")
+        (expect output :to-contain "errors=\"0\"")
+        (expect output :to-contain "skipped=\"2\"")
+        (expect output :to-contain "time=\"0.000\"")
+        (expect output :to-contain "<skipped message=\"needs &lt;thing&gt;\"/>")
+        (expect output :to-contain "<skipped message=\"TODO: pending\"/>")
+        (expect output :to-contain "<failure message=\"bad &lt;value&gt; &amp; reason\">")
+        (expect output :to-contain
+                (format nil "secondary condition: cleanup &lt;one&gt;~%secondary condition: cleanup &amp; two"))))
 
   (it "sanitizes JUnit XML strings with portable control-character rules"
     (let ((escaped (cl-weave::xml-escaped-string

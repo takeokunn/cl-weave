@@ -253,21 +253,26 @@
     ((integerp seed) seed)
     (t (error "Sequence seed must be an integer: ~S" seed))))
 
-(defun stable-string-hash (string seed)
-  (let ((hash (mod (+ +stable-hash-offset+ seed) +stable-hash-modulus+)))
+(progn
+  (defun update-stable-string-hash (hash string)
     (loop for char across string
           do (setf hash
                    (mod (* (logxor hash (char-code char))
                            +stable-hash-prime+)
                         +stable-hash-modulus+))
-          finally (return hash))))
+          finally (return hash)))
+
+  (defun stable-string-hash (string seed)
+    (update-stable-string-hash
+     (mod (+ +stable-hash-offset+ seed) +stable-hash-modulus+)
+     string)))
 
 (defun sequence-suite-prefix (suite)
   (format nil "~{~A~^ > ~}" (mapcar #'suite-name (rest (suite-lineage suite)))))
 
-(defun sequence-child-label (suite child)
+(defun sequence-child-label (suite child &optional prefix)
   (format nil "~A :: ~A:~A"
-          (sequence-suite-prefix suite)
+          (or prefix (sequence-suite-prefix suite))
           (cond
             ((suite-p child) "suite")
             ((test-case-p child) "test")
@@ -277,19 +282,45 @@
             ((test-case-p child) (test-case-name child))
             (t child))))
 
-(defun ordered-children (suite children)
-  (if (eq *test-sequence-order* :random)
-      (mapcar #'cdr
-              (stable-sort
-               (mapcar (lambda (child)
-                         (cons (stable-string-hash
-                                (sequence-child-label suite child)
-                                *test-sequence-seed*)
-                               child))
-                       children)
-               #'<
-               :key #'car))
-      children))
+(progn
+  (defun sequence-child-hash (suite child prefix prefix-hash)
+    (let ((kind (cond
+                  ((suite-p child) "suite")
+                  ((test-case-p child) "test")))
+          (name (cond
+                  ((suite-p child) (suite-name child))
+                  ((test-case-p child) (test-case-name child)))))
+      (if (and kind (stringp name))
+          (update-stable-string-hash
+           (update-stable-string-hash
+            (update-stable-string-hash
+             (update-stable-string-hash prefix-hash " :: ")
+             kind)
+            ":")
+           name)
+          (stable-string-hash
+           (sequence-child-label suite child prefix)
+           *test-sequence-seed*))))
+
+  (defun ordered-children (suite children)
+    (if (eq *test-sequence-order* :random)
+        (let* ((prefix (sequence-suite-prefix suite))
+               (prefix-hash
+                 (stable-string-hash prefix *test-sequence-seed*))
+               (decorated
+                 (stable-sort
+                  (mapcar
+                   (lambda (child)
+                     (cons (sequence-child-hash
+                            suite child prefix prefix-hash)
+                           child))
+                   children)
+                  (function <)
+                  :key (function car))))
+          (loop for cell on decorated
+                do (setf (car cell) (cdar cell)))
+          decorated)
+        children)))
 
 (defun selected-test-case-p (suite test filter ancestor-focused)
   (declare (ignore suite ancestor-focused))

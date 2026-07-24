@@ -63,21 +63,24 @@
       (expand-smart-truthy-assertion actual form)))
 
 (defun expand-matcher-expectation (macro-name actual expectation &key negated)
-  (when (null expectation)
-    (error "cl-weave: ~A requires a matcher, for example (~(~A~) value :to-be expected)."
-           macro-name
-           macro-name))
-  (let ((value (gensym "ACTUAL-"))
-        (tokens (if negated
-                    `(:not ,@expectation)
-                    expectation)))
+  (unless (and (listp expectation) expectation)
+    (error "~A requires a matcher form" macro-name))
+  (let* ((matcher-designator (first expectation))
+         (expected-forms (rest expectation))
+         (tokens
+           (append
+            (when negated (list :not))
+            (list matcher-designator)
+            expected-forms))
+         (value (gensym "ACTUAL")))
     `(progn
        (record-assertion)
        (let ((,value ,actual))
          (assert-expectation
           ,value
           (list ,@tokens)
-          '(,macro-name ,actual ,@expectation))))))
+          (quote (,macro-name ,actual ,@expectation))
+          nil)))))
 
 (defun ensure-expect-thunk (thunk matcher form)
   (unless (functionp thunk)

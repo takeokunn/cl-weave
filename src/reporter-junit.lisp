@@ -31,16 +31,28 @@
     (format stream "  </testcase>~%")))
 
 (defun report-junit (events stream)
-  (let* ((summary (result-summary events))
-         (skipped (+ (getf summary :skipped)
-                     (getf summary :todos))))
+  (let ((total 0)
+        (skipped 0)
+        (todos 0)
+        (failed 0)
+        (errored 0)
+        (duration 0.0d0))
+    (dolist (event events)
+      (incf total)
+      (incf duration (event-duration-seconds event))
+      (case (test-event-status event)
+        (:pass)
+        (:skip (incf skipped))
+        (:todo (incf todos))
+        (:fail (incf failed))
+        (:error (incf errored))))
     (format stream "<?xml version=\"1.0\" encoding=\"UTF-8\"?>~%")
     (format stream "<testsuite name=\"cl-weave\" tests=\"~D\" failures=\"~D\" errors=\"~D\" skipped=\"~D\" time=\"~,3F\">~%"
-            (getf summary :total)
-            (getf summary :failed)
-            (getf summary :errored)
-            skipped
-            (reduce #'+ events :key #'event-duration-seconds :initial-value 0))
+            total
+            failed
+            errored
+            (+ skipped todos)
+            duration)
     (dolist (event events)
       (report-junit-event event stream))
     (format stream "</testsuite>~%")

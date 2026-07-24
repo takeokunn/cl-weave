@@ -54,7 +54,8 @@
                               :pass (assertion-detail-pass detail))))))
 
 (defun report-sexp (events stream)
-  (let ((summary (result-summary events)))
+  (let ((*print-pretty* nil)
+        (summary (result-summary events)))
     (prin1 (append (list :cl-weave/results
                          :schema-version 4)
                    summary

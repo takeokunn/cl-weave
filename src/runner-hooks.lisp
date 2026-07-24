@@ -6,20 +6,33 @@
         collect current into suites
         finally (return (nreverse suites))))
 
-(defun effective-hook-lists (suite)
-  (let ((before-hooks nil)
-        (around-hooks nil)
-        (after-hooks nil))
-    (dolist (current (suite-lineage suite)
-                     (values (nreverse before-hooks)
-                             (nreverse around-hooks)
-                             after-hooks))
-      (dolist (hook (suite-hook current before-each))
-        (push hook before-hooks))
-      (dolist (hook (suite-hook current around-each))
-        (push hook around-hooks))
-      (dolist (hook (suite-hook current after-each))
-        (push hook after-hooks)))))
+(progn
+  (defun effective-before-hooks/from-lineage (lineage)
+    (loop for current in lineage
+          append (suite-hook current before-each)))
+
+  (defun effective-around-hooks/from-lineage (lineage)
+    (loop for current in lineage
+          append (suite-hook current around-each)))
+
+  (defun effective-after-hooks/from-lineage (lineage)
+    (loop for current in (reverse lineage)
+          append (reverse (suite-hook current after-each))))
+
+  (defun effective-test-hooks (suite)
+    (let ((lineage (suite-lineage suite)))
+      (values (effective-before-hooks/from-lineage lineage)
+              (effective-around-hooks/from-lineage lineage)
+              (effective-after-hooks/from-lineage lineage))))
+
+  (defun effective-before-hooks (suite)
+    (effective-before-hooks/from-lineage (suite-lineage suite))))
+
+(defun effective-around-hooks (suite)
+  (effective-around-hooks/from-lineage (suite-lineage suite)))
+
+(defun effective-after-hooks (suite)
+  (effective-after-hooks/from-lineage (suite-lineage suite)))
 
 (defun call-hooks/collect-errors (hooks)
   (loop for hook in hooks
@@ -54,36 +67,38 @@
         (*expected-assertion-count-form* nil)
         (*has-assertions-required* nil)
         (*has-assertions-form* nil))
-    (multiple-value-bind (before-hooks around-hooks after-hooks)
-        (effective-hook-lists suite)
-      (let ((primary-condition nil)
-            (result nil)
-            (cleanup-errors nil))
-        ;; SERIOUS-CONDITION includes both ERROR and implementation conditions that
-        ;; cannot be classified portably as ERROR, such as SBCL timeout conditions.
-        (unwind-protect
-             (handler-case
-                 (setf result
-                       (let ((before-errors
-                               (call-hooks/collect-errors before-hooks)))
-                         (when before-errors
-                           (error 'hook-failure
-                                  :phase :before-each
-                                  :causes before-errors))
-                         (call-around-hooks/k
-                          around-hooks
-                          (lambda ()
-                            (funcall (test-case-function test))
-                            (verify-assertion-counts)
-                            (funcall continue)))))
-               (serious-condition (condition)
-                 (setf primary-condition condition)))
-          (setf cleanup-errors
-                (call-hooks/collect-errors after-hooks)))
-        (cond
-          (primary-condition
-           (setf *attempt-secondary-conditions* cleanup-errors)
-           (error primary-condition))
-          (cleanup-errors
-           (error 'hook-failure :phase :after-each :causes cleanup-errors))
-          (t result))))))
+    (let ((lineage (suite-lineage suite))
+          (primary-condition nil)
+          (result nil)
+          (cleanup-errors nil))
+      ;; SERIOUS-CONDITION includes both ERROR and implementation conditions that
+      ;; cannot be classified portably as ERROR, such as SBCL timeout conditions.
+      ;; UNWIND-PROTECT guarantees after-each cleanup runs even on non-local exit.
+      (unwind-protect
+           (handler-case
+               (setf result
+                     (let ((before-errors
+                             (call-hooks/collect-errors
+                              (effective-before-hooks/from-lineage lineage))))
+                       (when before-errors
+                         (error 'hook-failure
+                                :phase :before-each
+                                :causes before-errors))
+                       (call-around-hooks/k
+                        (effective-around-hooks/from-lineage lineage)
+                        (lambda ()
+                          (funcall (test-case-function test))
+                          (verify-assertion-counts)
+                          (funcall continue)))))
+             (serious-condition (condition)
+               (setf primary-condition condition)))
+        (setf cleanup-errors
+              (call-hooks/collect-errors
+               (effective-after-hooks/from-lineage lineage))))
+      (cond
+        (primary-condition
+         (setf *attempt-secondary-conditions* cleanup-errors)
+         (error primary-condition))
+        (cleanup-errors
+         (error 'hook-failure :phase :after-each :causes cleanup-errors))
+        (t result)))))

@@ -276,6 +276,34 @@
                         :to-be
                         (last clone-hooks)))))))))
 
+  (progn
+  (it "keeps snapshot list spines independent from later source mutations"
+    (let* ((hook-one (lambda () :one))
+           (hook-two (lambda () :two))
+           (root-hooks (list hook-one))
+           (root (cl-weave::make-suite
+                  :name "root"
+                  :before-each root-hooks
+                  :before-each-tail (last root-hooks)))
+           (first-test (cl-weave::make-test-case :name "first" :function (lambda ())))
+           (late-test (cl-weave::make-test-case :name "late" :function (lambda ()))))
+      (cl-weave::add-child root first-test)
+      (let ((snapshot (cl-weave::snapshot-suite root)))
+        (cl-weave::add-child root late-test)
+        (let ((cell (list hook-two)))
+          (setf (cdr (cl-weave::suite-before-each-tail root)) cell
+                (cl-weave::suite-before-each-tail root) cell))
+        (expect (mapcar (function cl-weave::test-case-name)
+                        (cl-weave::suite-children snapshot))
+                :to-equal
+                (list "first"))
+        (expect (cl-weave::suite-before-each snapshot)
+                :to-equal
+                (list hook-one))
+        (expect (cl-weave::suite-before-each-tail snapshot)
+                :to-be
+                (last (cl-weave::suite-before-each snapshot))))))
+
   (it "clones suite trees 50000 levels deep without consuming control stack"
     (let* ((depth 50000)
            (root (cl-weave::make-suite :name "root"))
@@ -297,7 +325,7 @@
           (expect source :to-be current)
           (expect (cl-weave::suite-name copy) :to-be (1- depth))
           (expect (cl-weave::suite-children copy) :to-be-null)
-          (expect (hash-table-count suite-map) :to-be (1+ depth)))))))
+          (expect (hash-table-count suite-map) :to-be (1+ depth))))))))
 
   (it "rejects CI-incompatible plan reporters before dispatch"
     (dolist (reporter '(:github :junit :tap))

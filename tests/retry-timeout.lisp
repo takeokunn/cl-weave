@@ -181,6 +181,7 @@
       (exercise))))
 
 
+(progn
 (describe "retry and timeout"
   (it "keeps the test continuation inside the platform timeout boundary"
     (let* ((continuation-calls 0)
@@ -489,6 +490,98 @@
       (expect (cl-weave::test-event-reason event) :to-equal "directly skipped")
       (expect cleanup-count :to-be 1)))
 
+  (it "does not invoke an identity-matched trusted empty function"
+    (let* ((calls 0)
+           (function (lambda () (incf calls)))
+           (test (cl-weave::make-test-case
+                  :name "trusted empty"
+                  :function function
+                  :trusted-empty-function function))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect calls :to-be 0)
+      (expect (cl-weave::test-event-status event) :to-be :pass)))
+
+  (it "falls back when the trusted function is replaced"
+    (let* ((calls 0)
+           (marker (lambda () (error "stale trusted marker invoked")))
+           (test (cl-weave::make-test-case
+                  :name "replaced trusted empty"
+                  :function marker
+                  :trusted-empty-function marker)))
+      (setf (cl-weave::test-case-function test)
+            (lambda () (incf calls)))
+      (let ((event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+        (expect calls :to-be 1)
+        (expect (cl-weave::test-event-status event) :to-be :pass))))
+
+  (it "falls back for directly constructed and registered tests"
+    (let ((cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal)))
+          (cl-weave::*registration-owners* (make-hash-table :test (function eq)))
+          (cl-weave::*test-registry-generation* 0))
+      (let* ((constructed-calls 0)
+             (registered-calls 0)
+             (constructed
+               (cl-weave::make-test-case
+                :name "direct constructor"
+                :function (lambda () (incf constructed-calls))))
+             (registered
+               (cl-weave::register-test
+                "direct registration"
+                (lambda () (incf registered-calls)))))
+        (cl-weave::run-test-case (cl-weave::root-suite) constructed)
+        (cl-weave::run-test-case (cl-weave::root-suite) registered)
+        (expect constructed-calls :to-be 1)
+        (expect registered-calls :to-be 1))))
+
+  (it "preserves expected-failure event semantics for trusted empty tests"
+    (let* ((function (lambda () (error "trusted empty function invoked")))
+           (test (cl-weave::make-test-case
+                  :name "expected trusted empty"
+                  :function function
+                  :trusted-empty-function function
+                  :expected-failure-reason "known failure"))
+           (event (cl-weave::run-test-case (cl-weave::root-suite) test)))
+      (expect (cl-weave::test-event-status event) :to-be :fail)
+      (expect
+       (typep (cl-weave::test-event-condition event)
+              (quote cl-weave::expected-failure-missed))
+       :to-be t)))
+
+  (it "excludes hooks retries and timeouts from the trusted empty fast path"
+    (let* ((body-calls 0)
+           (hook-calls 0)
+           (function (lambda () (incf body-calls)))
+           (suite (cl-weave::make-suite
+                   :name "trusted empty hook exclusion"
+                   :before-each (list (lambda () (incf hook-calls)))))
+           (test (cl-weave::make-test-case
+                  :name "trusted empty with hook"
+                  :function function
+                  :trusted-empty-function function)))
+      (cl-weave::add-child suite test)
+      (cl-weave::run-test-case suite test)
+      (expect body-calls :to-be 1)
+      (expect hook-calls :to-be 1))
+    (let* ((calls 0)
+           (function (lambda () (incf calls)))
+           (test (cl-weave::make-test-case
+                  :name "trusted empty with retry"
+                  :function function
+                  :trusted-empty-function function
+                  :retry 1)))
+      (cl-weave::run-test-case (cl-weave::root-suite) test)
+      (expect calls :to-be 1))
+    (let* ((calls 0)
+           (function (lambda () (incf calls)))
+           (test (cl-weave::make-test-case
+                  :name "trusted empty with timeout"
+                  :function function
+                  :trusted-empty-function function
+                  :timeout-ms 1000)))
+      (cl-weave::run-test-case (cl-weave::root-suite) test)
+      (expect calls :to-be 1)))
   (it "allows warnings and notification conditions to continue"
     (dolist (test-function
              (list (lambda ()
@@ -502,6 +595,18 @@
              (event (handler-bind ((warning #'muffle-warning))
                       (cl-weave::run-test-case (cl-weave::root-suite) test))))
         (expect (cl-weave::test-event-status event) :to-be :pass))))
+  (it "records non-error serious conditions as errors in the generic path"
+  (let* ((condition (make-condition (quote serious-condition)))
+         (suite (cl-weave::make-suite
+                 :name "serious condition generic path"
+                 :before-each (list (lambda () nil))))
+         (test (cl-weave::make-test-case
+                :name "serious condition"
+                :function (lambda () (signal condition)))))
+    (cl-weave::add-child suite test)
+    (let ((event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :error)
+      (expect (cl-weave::test-event-condition event) :to-be condition))))
 
   (it "charges interactive retries to the configured retry budget"
     (dolist (case '((1 2 :pass)
@@ -566,3 +671,218 @@
       (expect (cl-weave::test-event-status event) :to-be :pass)
       (expect attempts :to-be 2)
       (expect cleanup-count :to-be 2))))
+(describe "strict empty batch collection"
+  (it "collects a root batch without invoking bodies and preserves event shape"
+    (let* ((calls 0)
+           (first-location #P"/tmp/strict-empty-first.lisp")
+           (second-location #P"/tmp/strict-empty-second.lisp")
+           (first-function (lambda () (incf calls)))
+           (second-function (lambda () (incf calls)))
+           (suite (cl-weave::make-suite :name "root")))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "first"
+        :function first-function
+        :trusted-empty-function first-function
+        :location first-location))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "second"
+        :function second-function
+        :trusted-empty-function second-function
+        :location second-location))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::call-with-collection-context)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (error "generic collection context invoked"))))
+        (let ((events (cl-weave::collect-events suite)))
+          (expect calls :to-be 0)
+          (expect (length events) :to-be 2)
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass :pass))
+          (expect (mapcar #'cl-weave::test-event-path events)
+                  :to-equal '(("first") ("second")))
+          (expect (mapcar #'cl-weave::test-event-condition events)
+                  :to-equal '(nil nil))
+          (expect (mapcar #'cl-weave::test-event-secondary-conditions events)
+                  :to-equal '(nil nil))
+          (expect (mapcar #'cl-weave::test-event-assertion events)
+                  :to-equal '(nil nil))
+          (expect (mapcar #'cl-weave::test-event-reason events)
+                  :to-equal '(nil nil))
+          (expect (mapcar #'cl-weave::test-event-location events)
+                  :to-equal (list first-location second-location))
+          (expect (every #'cl-weave::test-event-p events) :to-be t)
+          (expect
+           (every
+            (lambda (event)
+              (let ((elapsed
+                      (cl-weave::test-event-elapsed-internal-time event)))
+                (and (integerp elapsed)
+                     (not (minusp elapsed)))))
+            events)
+           :to-be t)))))
+
+  (it "prefixes direct nested batch paths exactly once"
+    (let* ((calls 0)
+           (function (lambda () (incf calls)))
+           (root (cl-weave::make-suite :name "root"))
+           (parent (cl-weave::make-suite :name "parent" :parent root))
+           (suite (cl-weave::make-suite :name "target" :parent parent)))
+      (cl-weave::add-child root parent)
+      (cl-weave::add-child parent suite)
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "case"
+        :function function
+        :trusted-empty-function function))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::call-with-collection-context)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (error "generic collection context invoked"))))
+        (let ((events (cl-weave::collect-events suite)))
+          (expect calls :to-be 0)
+          (expect (mapcar #'cl-weave::test-event-path events)
+                  :to-equal '(("parent" "target" "case")))
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass))))))
+
+  (it "falls back for a replaced trusted marker"
+    (let* ((calls 0)
+           (marker (lambda () (error "stale marker invoked")))
+           (suite (cl-weave::make-suite :name "root"))
+           (test (cl-weave::make-test-case
+                  :name "replaced"
+                  :function marker
+                  :trusted-empty-function marker)))
+      (setf (cl-weave::test-case-function test)
+            (lambda () (incf calls)))
+      (cl-weave::add-child suite test)
+      (let ((events (cl-weave::collect-events suite)))
+        (expect calls :to-be 1)
+        (expect (mapcar #'cl-weave::test-event-status events)
+                :to-equal '(:pass))
+        (expect (mapcar #'cl-weave::test-event-path events)
+                :to-equal '(("replaced"))))))
+
+  (it "preflights the whole batch before creating direct events"
+    (let* ((calls 0)
+           (function (lambda () (incf calls)))
+           (suite (cl-weave::make-suite :name "root")))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "eligible"
+        :function function
+        :trusted-empty-function function))
+      (cl-weave::add-child
+       suite
+       (cl-weave::make-test-case
+        :name "later skipped"
+        :function (lambda () (error "skipped body invoked"))
+        :skip-reason "not now"))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::make-pass-event-with-path)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (error "batch event created before preflight completed"))))
+        (let ((events (cl-weave::collect-events suite)))
+          (expect calls :to-be 0)
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass :skip))
+          (expect (mapcar #'cl-weave::test-event-reason events)
+                  :to-equal '(nil "not now"))))))
+
+  (it "rejects hooks expected failures filters and nested suites"
+    (labels ((collect-without-batch (suite &rest options)
+               (with-mocked-functions
+                   (((symbol-function 'cl-weave::make-pass-event-with-path)
+                     (lambda (&rest arguments)
+                       (declare (ignore arguments))
+                       (error "ineligible suite entered batch path"))))
+                 (apply #'cl-weave::collect-events suite options))))
+      (let* ((body-calls 0)
+             (hook-calls 0)
+             (function (lambda () (incf body-calls)))
+             (suite (cl-weave::make-suite
+                     :name "root"
+                     :before-each
+                     (list (lambda () (incf hook-calls))))))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "hooked"
+          :function function
+          :trusted-empty-function function))
+        (let ((events (collect-without-batch suite)))
+          (expect body-calls :to-be 1)
+          (expect hook-calls :to-be 1)
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass))))
+      (let* ((calls 0)
+             (function (lambda () (incf calls)))
+             (suite (cl-weave::make-suite :name "root")))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "expected failure"
+          :function function
+          :trusted-empty-function function
+          :expected-failure-reason "known"))
+        (let ((events (collect-without-batch suite)))
+          (expect calls :to-be 0)
+          (expect (mapcar (function cl-weave::test-event-status) events)
+                  :to-equal (quote (:fail)))
+          (expect (cl-weave::test-event-condition (first events))
+                  :to-be-instance-of
+                  (quote cl-weave:expected-failure-missed))))
+      (let* ((calls 0)
+             (function (lambda () (incf calls)))
+             (suite (cl-weave::make-suite :name "root")))
+        (cl-weave::add-child
+         suite
+         (cl-weave::make-test-case
+          :name "filter match"
+          :function function
+          :trusted-empty-function function))
+        (let ((events (collect-without-batch suite :name-filter "filter")))
+          (expect calls :to-be 0)
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass))))
+      (let* ((calls 0)
+             (function (lambda () (incf calls)))
+             (root (cl-weave::make-suite :name "root"))
+             (child (cl-weave::make-suite :name "child" :parent root)))
+        (cl-weave::add-child root child)
+        (cl-weave::add-child
+         child
+         (cl-weave::make-test-case
+          :name "nested"
+          :function function
+          :trusted-empty-function function))
+        (let ((events (collect-without-batch root)))
+          (expect calls :to-be 0)
+          (expect (mapcar #'cl-weave::test-event-path events)
+                  :to-equal '(("child" "nested")))
+          (expect (mapcar #'cl-weave::test-event-status events)
+                  :to-equal '(:pass))))))
+
+  (it "distinguishes an empty collected batch from an ineligible suite"
+    (let* ((suite (cl-weave::make-suite :name "root"))
+           (options (cl-weave::normalize-collection-options)))
+      (multiple-value-bind (events collected-p)
+          (cl-weave::try-collect-strict-empty-batch-events suite options)
+        (expect events :to-be nil)
+        (expect collected-p :to-be t))
+      (with-mocked-functions
+          (((symbol-function 'cl-weave::call-with-collection-context)
+            (lambda (&rest arguments)
+              (declare (ignore arguments))
+              (error "generic collection context invoked"))))
+        (expect (cl-weave::collect-events suite) :to-be nil)))))
+)

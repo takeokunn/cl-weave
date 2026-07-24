@@ -7,7 +7,7 @@
       (values t (second tokens) (cddr tokens))
       (values nil (first tokens) (rest tokens))))
 
-(defun assert-expectation (actual expectation form)
+(defun assert-expectation (actual expectation form &optional (capture-success-detail-p t))
   (multiple-value-bind (negated matcher-name expected) (normalize-expectation expectation)
     (call-with-matcher-result/k
      (matcher-named matcher-name)
@@ -16,13 +16,14 @@
      (lambda (raw-pass reported-actual reported-expected)
        (let* ((pass (if negated (not raw-pass) raw-pass))
               (detail
-                (make-assertion-detail
-                 :form form
-                 :matcher matcher-name
-                 :actual reported-actual
-                 :expected reported-expected
-                 :negated negated
-                 :pass raw-pass)))
+                (when (or capture-success-detail-p (not pass))
+                  (make-assertion-detail
+                   :form form
+                   :matcher matcher-name
+                   :actual reported-actual
+                   :expected reported-expected
+                   :negated negated
+                   :pass raw-pass))))
          (unless pass
            (signal-assertion-failure detail))
          (values pass detail))))))

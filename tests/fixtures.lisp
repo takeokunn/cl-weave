@@ -99,6 +99,7 @@
       (expect (reverse events)
               :to-equal '(:before (:enter 41) (:body :inner) (:exit 41) :after))))
 
+  (progn
   (it "runs around-each cleanup before after-each when body fails"
     (let ((root (cl-weave::make-suite :name "root"))
           (events nil))
@@ -116,8 +117,34 @@
            (it "case"
              (error "boom")))))
       (let ((result (cl-weave::collect-events root)))
-        (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
-      (expect (reverse events) :to-equal '(:around-cleanup :after)))))
+        (expect (mapcar (function cl-weave::test-event-status) result) :to-equal (quote (:error))))
+      (expect (reverse events) :to-equal (quote (:around-cleanup :after)))))
+
+  (it "resolves dynamically added hooks at their execution phase"
+    (let ((events nil)
+          (suite (cl-weave::make-suite :name "dynamic hooks")))
+      (setf (cl-weave::suite-before-each suite)
+            (list
+             (lambda ()
+               (push :before events)
+               (setf (cl-weave::suite-around-each suite)
+                     (list
+                      (lambda (next)
+                        (push :around-enter events)
+                        (funcall next)
+                        (push :around-exit events)))))))
+      (let ((test
+              (cl-weave::make-test-case
+               :name "case"
+               :function
+               (lambda ()
+                 (push :body events)
+                 (setf (cl-weave::suite-after-each suite)
+                       (list (lambda () (push :after events))))))))
+        (cl-weave::run-test-case suite test))
+      (expect (reverse events)
+              :to-equal
+              (quote (:before :around-enter :body :around-exit :after)))))))
 
   (it "runs after-all exactly once without replacing a non-local exit"
   (let* ((after-count 0)
@@ -164,6 +191,7 @@
       (expect (cl-weave::test-event-status event) :to-be :error)
       (expect (cl-weave::test-event-condition event) :to-be cause)))
 
+  (progn
   (it "runs inherited hooks in parent-child order"
     (let* ((events nil)
            (root (cl-weave::make-suite :name "root"))
@@ -206,6 +234,42 @@
                           :parent-around-exit
                           :child-after
                           :parent-after))))
+  (it "resolves around-each after before-each mutations"
+  (let ((events nil)
+        (suite nil))
+    (setf suite
+          (cl-weave::make-suite
+           :name "mutated around hook"
+           :before-each
+           (list (lambda ()
+                   (setf (cl-weave::suite-around-each suite)
+                         (list (lambda (next)
+                                 (push :around events)
+                                 (funcall next))))))))
+    (let* ((test
+             (cl-weave::make-test-case
+              :name "case"
+              :function (lambda () (push :body events))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :pass)
+      (expect (reverse events) :to-equal '(:around :body)))))
+  (it "resolves after-each after test body mutations"
+    (let* ((events nil)
+           (suite
+             (cl-weave::make-suite
+              :name "mutated after hook"
+              :after-each (list (lambda () (push :original-after events)))))
+           (test
+             (cl-weave::make-test-case
+              :name "case"
+              :function
+              (lambda ()
+                (push :body events)
+                (setf (cl-weave::suite-after-each suite)
+                      (list (lambda () (push :updated-after events))))))))
+      (let ((event (cl-weave::run-test-case suite test)))
+        (expect (cl-weave::test-event-status event) :to-be :pass)
+        (expect (reverse events) :to-equal '(:body :updated-after))))))
 
 (describe "fixture failures"
   (it "aggregates before-each failures without running the body"

@@ -1,14 +1,14 @@
 (in-package #:cl-weave/tests)
 
 (describe "expect structured failures"
-  (it "rejects expected values for predicate matchers"
-    (dolist (case '((:to-be-truthy :value)
-                    (:to-be-falsy nil)
-                    (:to-be-null nil)
-                    (:to-be-defined :value)
-                    (:to-have-been-called :not-a-mock)
-                    (:to-have-returned :not-a-mock)
-                    (:to-have-thrown :not-a-mock)))
+  (it "validates assertion expectation contracts"
+    (dolist (case (quote ((:to-be-truthy :value)
+                          (:to-be-falsy nil)
+                          (:to-be-null nil)
+                          (:to-be-defined :value)
+                          (:to-have-been-called :not-a-mock)
+                          (:to-have-returned :not-a-mock)
+                          (:to-have-thrown :not-a-mock))))
       (destructuring-bind (matcher actual) case
         (let ((condition
                 (handler-case
@@ -20,13 +20,24 @@
                       nil)
                   (simple-error (caught)
                     caught))))
-          (expect condition :to-be-type-of 'simple-error)
+          (expect condition :to-be-type-of (quote simple-error))
           (expect (princ-to-string condition)
                   :to-contain
                   "expects no expected values")
           (expect (princ-to-string condition)
                   :to-contain
-                  (symbol-name matcher))))))
+                  (symbol-name matcher)))))
+    (multiple-value-bind (pass detail)
+        (cl-weave::assert-expectation 1 (list :to-be 1) (quote (expect 1 :to-be 1)))
+      (expect pass :to-be-truthy)
+      (expect detail :to-be-type-of (quote cl-weave::assertion-detail)))
+    (multiple-value-bind (pass detail)
+        (cl-weave::assert-expectation 1 (list :to-be 1) (quote (expect 1 :to-be 1)) nil)
+      (expect pass :to-be-truthy)
+      (expect detail :to-be-null))
+    (multiple-value-bind (pass detail) (expect 1 :to-be 1)
+      (expect pass :to-be-truthy)
+      (expect detail :to-be-null)))
 
   (it "signals assertion-failure with structured data"
     (handler-case
@@ -327,7 +338,8 @@
          (push :mismatch continuations)))
       (expect continuations :to-equal '(:match))))
 
-  (it "reports external snapshot sequence length drift"
+  (progn
+(it "reports external snapshot sequence length drift"
     (let* ((snapshot-root (make-test-temporary-directory "sequence-extra"))
            (cl-weave::*snapshot-directory* snapshot-root)
            (cl-weave::*snapshot-file-name* "sequence-extra.snapshots")
@@ -360,5 +372,9 @@
         (uiop:delete-directory-tree snapshot-root
                                     :validate t
                                     :if-does-not-exist :ignore))))
+  (it "evaluates dynamic matcher designators"
+    (let ((matcher :to-be))
+      (expect 1 matcher 1)
+      (expect-not 1 matcher 2))))
 
 )
