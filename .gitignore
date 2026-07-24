@@ -30,3 +30,6 @@ result-*
 .\#*
 tmp/
 .worktrees/
+
+# Claude Code tooling state (worktrees, session data)
+.claude/

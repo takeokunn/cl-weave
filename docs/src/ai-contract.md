@@ -43,7 +43,7 @@ verification and scope policy for those channels lives in
 {
   "schemaVersion": 23,
   "kind": "cl-weave-metadata",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "homepage": "https://github.com/takeokunn/cl-weave",
   "bugTracker": "https://github.com/takeokunn/cl-weave/issues",
   "license": "MIT",
@@ -554,7 +554,9 @@ forms such as `describe-each`, `it-concurrent`, `it-todo-each`,
 (cl-weave:run-all :reporter :sexp)
 ```
 
-The reporter prints one form:
+The reporter prints one form on a single line (it binds `*print-pretty*` to
+`nil` for stable, machine-readable output); it is shown here across multiple
+lines only for readability:
 
 ```lisp
 (:cl-weave/results
