@@ -18,6 +18,15 @@
 
 (in-package #:cl-weave/tests)
 
+;; Proclaimed special so the compile-time references below do not raise
+;; undefined-variable warnings.  The values are installed at run time by the
+;; define-json-plist-*-schema/endpoint macros (invoked under EVAL inside the
+;; test), and stray compile warnings would otherwise leak onto the
+;; *error-output* captured by the "preserves Unicode isolated output" test.
+(defvar *coverage-fuzz-array-schema-fields*)
+(defvar *coverage-fuzz-object-schema-fields*)
+(defvar *coverage-fuzz-endpoint-fields*)
+
 (describe "cli metadata schema contracts"
   (it "keeps the AI contract synchronized with metadata root fields"
     (let ((docs (read-text-file (merge-pathnames #P"docs/src/ai-contract.md"
@@ -39,6 +48,50 @@
            (version (cl-weave/cli::cli-version)))
       (expect version :not :to-equal "unknown")
       (expect docs :to-contain (format nil "\"version\": \"~A\"" version))))
+
+  (it "generates working writers from every json-plist definition macro"
+    (eval '(cl-weave/metadata::define-json-plist-array-writer
+            coverage-fuzz-array-writer
+            '((:value "value" cl-weave/metadata::write-json-string-value))))
+    (expect (with-output-to-string (stream)
+              (funcall 'coverage-fuzz-array-writer '((:value "a") (:value "b")) stream))
+            :to-equal "[{\"value\":\"a\"},{\"value\":\"b\"}]")
+
+    (eval '(cl-weave/metadata::define-json-plist-object-writer
+            coverage-fuzz-object-writer
+            '((:value "value" cl-weave/metadata::write-json-string-value))))
+    (expect (with-output-to-string (stream)
+              (funcall 'coverage-fuzz-object-writer '(:value "a") stream))
+            :to-equal "{\"value\":\"a\"}")
+
+    (eval '(cl-weave/metadata::define-json-plist-array-schema
+            *coverage-fuzz-array-schema-fields*
+            coverage-fuzz-array-schema-writer
+            '((:value "value" cl-weave/metadata::write-json-string-value))))
+    (expect *coverage-fuzz-array-schema-fields* :not :to-be nil)
+    (expect (with-output-to-string (stream)
+              (funcall 'coverage-fuzz-array-schema-writer '((:value "a")) stream))
+            :to-equal "[{\"value\":\"a\"}]")
+
+    (eval '(cl-weave/metadata::define-json-plist-object-schema
+            *coverage-fuzz-object-schema-fields*
+            coverage-fuzz-object-schema-writer
+            '((:value "value" cl-weave/metadata::write-json-string-value))))
+    (expect *coverage-fuzz-object-schema-fields* :not :to-be nil)
+    (expect (with-output-to-string (stream)
+              (funcall 'coverage-fuzz-object-schema-writer '(:value "a") stream))
+            :to-equal "{\"value\":\"a\"}")
+
+    (eval '(cl-weave/metadata::define-json-plist-object-endpoint
+            *coverage-fuzz-endpoint-fields*
+            coverage-fuzz-endpoint-field-writer
+            coverage-fuzz-endpoint-emitter
+            record
+            '((:value "value" cl-weave/metadata::write-json-string-value))))
+    (expect *coverage-fuzz-endpoint-fields* :not :to-be nil)
+    (expect (with-output-to-string (stream)
+              (funcall 'coverage-fuzz-endpoint-emitter '(:value "a") stream))
+            :to-equal (format nil "{\"value\":\"a\"}~%")))
 
   (it "keeps the AI contract release-process example synchronized with metadata"
     (let* ((docs (read-text-file (merge-pathnames #P"docs/src/ai-contract.md"

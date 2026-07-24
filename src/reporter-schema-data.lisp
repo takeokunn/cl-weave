@@ -130,7 +130,9 @@
                (:name "test.timeoutMs" :kind "integer" :required t
                 :description "Nullable per-entry timeout in milliseconds.")
                (:name "test.concurrent" :kind "boolean" :required t
-                :description "Whether the entry requested concurrent execution.")))
+                :description "Whether the entry requested concurrent execution.")
+               (:name "test.tags" :kind "array" :required t
+                :description "Normalized tags declared on the entry.")))
     (:kind "test-plan-summary"
      :commands ("list")
      :reporters ("jsonl")

@@ -35,15 +35,12 @@
           (getf summary :total))
   (values)))
 
-(defun report-plan-sexp (plan stream)
-  (let ((summary (plan-summary plan)))
-    (prin1 (append (list :cl-weave/test-plan
-                         :schema-version 3)
-                   summary
-                   (list :tests (mapcar #'serializable-plan-entry plan)))
-           stream))
-  (terpri stream)
-  (values))
+(define-sexp-reporter report-plan-sexp (plan stream)
+  :tag :cl-weave/test-plan
+  :schema-version 3
+  :summary-fn plan-summary
+  :payload-key :tests
+  :serializer-fn serializable-plan-entry)
 
 (defun json-write-plan-entry (entry stream)
   (write-string "{" stream)

@@ -38,4 +38,24 @@
               (eval '(cl-weave:it-fuzz "bad options" ((n (cl-weave:gen-integer)))
                           (:unsupported-option t)
                         n)))
-            :to-throw)))
+            :to-throw))
+
+  (it "rejects malformed IT-FUZZ options and bindings at macroexpansion time"
+    (expect (lambda ()
+              (eval '(cl-weave:it-fuzz "bad options shape" ((n (cl-weave:gen-integer)))
+                          (:trials . 1)
+                        n)))
+            :to-throw
+            "IT-FUZZ requires OPTIONS to be a literal proper list")
+    (expect (lambda ()
+              (eval '(cl-weave:it-fuzz "bad bindings shape" ((n (cl-weave:gen-integer)) . 5)
+                          (:trials 1)
+                        n)))
+            :to-throw
+            "IT-FUZZ requires BINDINGS to be a literal proper list")
+    (expect (lambda ()
+              (eval '(cl-weave:it-fuzz "malformed binding" ((n))
+                          (:trials 1)
+                        n)))
+            :to-throw
+            "must have the form (NAME GENERATOR)")))

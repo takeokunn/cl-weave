@@ -4,23 +4,15 @@
   (it "advertises parsed CLI options as structured metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (options (getf metadata :options))
-           (filter-option (find "--filter" options
-                                :key (lambda (entry) (getf entry :name))
-                                :test #'string=))
-           (reporter-option (find "--reporter" options
-                                  :key (lambda (entry) (getf entry :name))
-                                  :test #'string=))
+           (filter-option (find-metadata-entry :name "--filter" options))
+           (reporter-option (find-metadata-entry :name "--reporter" options))
            (reporter-command-choices
              (getf reporter-option :command-choices))
-           (sequence-option (find "--sequence" options
-                                  :key (lambda (entry) (getf entry :name))
-                                  :test #'string=))
-           (max-workers-option (find "--max-workers" options
-                                     :key (lambda (entry) (getf entry :name))
-                                     :test #'string=))
-           (snapshot-option (find "--update-snapshots" options
-                                  :key (lambda (entry) (getf entry :name))
-                                  :test #'string=)))
+           (sequence-option (find-metadata-entry :name "--sequence" options))
+           (max-workers-option
+             (find-metadata-entry :name "--max-workers" options))
+           (snapshot-option
+             (find-metadata-entry :name "--update-snapshots" options)))
       (expect filter-option :not :to-be nil)
       (expect (getf filter-option :commands) :to-contain "run")
       (expect (getf filter-option :value-kind) :to-be :test-name-pattern)
@@ -72,9 +64,7 @@
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (environment (getf metadata :environment))
          (options (getf metadata :options))
-           (watch-once-option (find "--once" options
-                                    :key (lambda (entry) (getf entry :name))
-                                    :test #'string=)))
+           (watch-once-option (find-metadata-entry :name "--once" options)))
       (expect environment :to-contain "CL_WEAVE_WATCH_ONCE")
       (expect watch-once-option :not :to-be nil)
       (expect (getf watch-once-option :commands) :to-equal '("watch"))
@@ -85,37 +75,26 @@
   (it "advertises reporter artifact schemas as structured metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (schemas (getf metadata :artifact-schemas))
-           (results-schema (find "test-results" schemas
-                                 :key (lambda (entry) (getf entry :kind))
-                                 :test #'string=))
-           (event-schema (find "test-event" schemas
-                               :key (lambda (entry) (getf entry :kind))
-                               :test #'string=))
-            (plan-schema (find "test-plan" schemas
-                               :key (lambda (entry) (getf entry :kind))
-                               :test #'string=))
-            (plan-entry-schema (find "test-plan-entry" schemas
-                                      :key (lambda (entry) (getf entry :kind))
-                                      :test #'string=))
-            (mutations-schema (find "mutations" schemas
-                                    :key (lambda (entry) (getf entry :kind))
-                                    :test #'string=))
-           (field-name (lambda (entry) (getf entry :name))))
+           (results-schema (find-metadata-entry :kind "test-results" schemas))
+           (event-schema (find-metadata-entry :kind "test-event" schemas))
+           (plan-schema (find-metadata-entry :kind "test-plan" schemas))
+           (plan-entry-schema
+             (find-metadata-entry :kind "test-plan-entry" schemas))
+           (mutations-schema
+             (find-metadata-entry :kind "mutations" schemas)))
       (expect (getf metadata :schema-version) :to-be 23)
       (expect results-schema :not :to-be nil)
       (expect (getf results-schema :commands) :to-equal '("run" "watch"))
       (expect (getf results-schema :reporters) :to-equal '("json"))
       (expect (getf results-schema :schema-version) :to-be 6)
       (expect (getf results-schema :streaming) :to-be nil)
-      (expect (find "events" (getf results-schema :fields)
-                    :key field-name :test #'string=)
+      (expect (find-metadata-entry :name "events" (getf results-schema :fields))
               :not :to-be nil)
       (expect event-schema :not :to-be nil)
       (expect (getf event-schema :reporters) :to-equal '("jsonl"))
       (expect (getf event-schema :schema-version) :to-be 3)
       (expect (getf event-schema :streaming) :to-be t)
-      (expect (find "event" (getf event-schema :fields)
-                    :key field-name :test #'string=)
+      (expect (find-metadata-entry :name "event" (getf event-schema :fields))
               :not :to-be nil)
       (expect (getf event-schema :commands) :to-equal '("run" "watch"))
       (expect plan-schema :not :to-be nil)
@@ -127,18 +106,18 @@
       (expect (getf mutations-schema :commands) :to-equal '())
       (expect (getf mutations-schema :reporters) :to-equal '("json" "sexp"))
       (expect (getf mutations-schema :streaming) :to-be nil)
-      (expect (mapcar field-name (getf mutations-schema :fields))
+      (expect (mapcar (lambda (entry) (getf entry :name))
+                      (getf mutations-schema :fields))
               :to-equal '("schemaVersion" "kind" "total" "killed"
                           "survived" "errored" "score" "results"))
-      (let ((doctor-schema (find "doctor-report" schemas
-                                 :key (lambda (entry) (getf entry :kind))
-                                 :test #'string=)))
+      (let ((doctor-schema (find-metadata-entry :kind "doctor-report" schemas)))
         (expect doctor-schema :not :to-be nil)
         (expect (getf doctor-schema :commands) :to-equal '("doctor"))
         (expect (getf doctor-schema :reporters) :to-equal '("json" "sexp"))
         (expect (getf doctor-schema :schema-version) :to-be 1)
         (expect (getf doctor-schema :streaming) :to-be nil)
-        (expect (mapcar field-name (getf doctor-schema :fields))
+        (expect (mapcar (lambda (entry) (getf entry :name))
+                        (getf doctor-schema :fields))
                 :to-equal '("schemaVersion" "kind" "status" "version"
                             "runtime" "checks")))))
 

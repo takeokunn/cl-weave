@@ -57,21 +57,24 @@
     (let ((replacement (second (assoc (first form) replacements :test #'eq))))
       (when replacement (list (cons replacement (rest form)))))))
 
-(register-mutation-operator :arithmetic-operator
- (lambda (form path) (declare (ignore path))
-   (operator-symbol-replacement form *arithmetic-operator-mutations*))
- :description "Swaps arithmetic operator heads such as +, -, *, and /.")
-(register-mutation-operator :comparison-operator
- (lambda (form path) (declare (ignore path))
-   (operator-symbol-replacement form *comparison-operator-mutations*))
- :description "Swaps comparison operator heads such as =, /=, <, >, <=, and >=.")
-(register-mutation-operator :boolean-literal
- (lambda (form path) (declare (ignore path))
-   (cond ((eq form t) (list nil)) ((null form) (list t)) (t nil)))
- :description "Flips literal T and NIL forms.")
-(register-mutation-operator :conditional-branch
- (lambda (form path) (declare (ignore path))
-   (when (and (consp form) (eq (first form) 'if) (>= (length form) 3))
-     (let ((test (second form)) (then-form (third form)) (else-form (fourth form)))
-       (list `(if ,test ,else-form ,then-form)))))
- :description "Swaps IF then/else branches while preserving the test form.")
+(defmutation-operator :arithmetic-operator (form path)
+  "Swaps arithmetic operator heads such as +, -, *, and /."
+  (declare (ignore path))
+  (operator-symbol-replacement form *arithmetic-operator-mutations*))
+
+(defmutation-operator :comparison-operator (form path)
+  "Swaps comparison operator heads such as =, /=, <, >, <=, and >=."
+  (declare (ignore path))
+  (operator-symbol-replacement form *comparison-operator-mutations*))
+
+(defmutation-operator :boolean-literal (form path)
+  "Flips literal T and NIL forms."
+  (declare (ignore path))
+  (cond ((eq form t) (list nil)) ((null form) (list t)) (t nil)))
+
+(defmutation-operator :conditional-branch (form path)
+  "Swaps IF then/else branches while preserving the test form."
+  (declare (ignore path))
+  (when (and (consp form) (eq (first form) 'if) (>= (length form) 3))
+    (let ((test (second form)) (then-form (third form)) (else-form (fourth form)))
+      (list `(if ,test ,else-form ,then-form)))))

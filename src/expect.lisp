@@ -36,7 +36,7 @@
            (error "cl-weave: skip requested outside a running test: ~A" reason)))))
 
 (defmacro expect-poll (thunk &body body)
-  (multiple-value-bind (options expectation) (split-expect-poll-body body)
+  (multiple-value-bind (options expectation) (split-leading-option-plist body)
     (when (null expectation)
       (error "cl-weave: EXPECT-POLL requires a matcher, for example (EXPECT-POLL thunk :to-be expected)."))
     `(progn

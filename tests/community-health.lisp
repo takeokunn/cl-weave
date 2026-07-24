@@ -81,10 +81,8 @@
   (it "keeps license contracts synchronized with repository metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (reference-documents (getf metadata :reference-documents))
-           (license-entry (find "LICENSE"
-                                reference-documents
-                                :key (lambda (entry) (getf entry :path))
-                                :test #'string=))
+           (license-entry
+             (find-metadata-entry :path "LICENSE" reference-documents))
            (license-document (read-text-file
                               (merge-pathnames #P"LICENSE"
                                                (uiop:getcwd)))))
@@ -198,9 +196,8 @@
   (it "keeps issue reporting guidance synchronized with bug intake contracts"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (community-health (getf metadata :community-health))
-           (bug-report-entry (find "bug-report-form" community-health
-                                   :key (lambda (entry) (getf entry :name))
-                                   :test #'string=))
+           (bug-report-entry
+             (find-metadata-entry :name "bug-report-form" community-health))
            (issue-guide (normalize-markdown-text
                          (read-text-file
                           (merge-pathnames #P"docs/src/issue-reporting.md"
@@ -254,9 +251,8 @@
   (it "keeps pull request intake guidance synchronized with PR contracts"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (community-health (getf metadata :community-health))
-           (pr-entry (find "pull-request-template" community-health
-                           :key (lambda (entry) (getf entry :name))
-                           :test #'string=))
+           (pr-entry
+             (find-metadata-entry :name "pull-request-template" community-health))
            (community-document (normalize-markdown-text
                                 (read-text-file
                                  (merge-pathnames #P"docs/src/community-health.md"

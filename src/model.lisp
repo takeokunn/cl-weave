@@ -286,6 +286,22 @@
                  (,tail ,suite-var) ,cell-var))
        ,value-var)))
 
+(defun set-suite-hook-lists
+    (suite children before-all after-all before-each around-each after-each)
+  "Replace SUITE's children and hook lists, recomputing each tail pointer."
+  (setf (suite-children suite) children
+        (suite-children-tail suite) (last children)
+        (suite-before-all suite) before-all
+        (suite-before-all-tail suite) (last before-all)
+        (suite-after-all suite) after-all
+        (suite-after-all-tail suite) (last after-all)
+        (suite-before-each suite) before-each
+        (suite-before-each-tail suite) (last before-each)
+        (suite-around-each suite) around-each
+        (suite-around-each-tail suite) (last around-each)
+        (suite-after-each suite) after-each
+        (suite-after-each-tail suite) (last after-each)))
+
 (defmacro define-tail-registration (name head tail)
   `(defun ,name (function &key location)
      (let ((pathname (registration-location-pathname location)))
@@ -331,52 +347,50 @@
         :skip-reason skip-reason
         :todo-reason todo-reason))
 
-(defun tag-proper-list-p (value)
-  (loop with slow = value
-        with fast = value
-        do (cond
-             ((null fast) (return t))
-             ((atom fast) (return nil))
-             ((null (cdr fast)) (return t))
-             ((atom (cdr fast)) (return nil)))
-           (setf slow (cdr slow)
-                 fast (cddr fast))
-           (when (eq slow fast)
-             (return nil))))
-
-
-(defconstant +maximum-tag-count+ 100000)
-
-(defun normalize-tags (tags &optional (description "tags"))
-  "Canonicalize tags to unique uppercase strings, comparing names case-insensitively."
+(defun collect-bounded-unique (list maximum overflow-error-fn canonicalize-fn)
+  "Walk LIST once, deduplicating by the canonical key CANONICALIZE-FN
+returns for each element, and return the unique values in original order.
+Calls OVERFLOW-ERROR-FN (expected to signal an error) instead of returning
+if LIST is circular, improper, or longer than MAXIMUM elements."
   (loop with seen-cells = (make-hash-table :test #'eq)
-        with seen-names = (make-hash-table :test #'equal)
-        with normalized = nil
+        with seen-keys = (make-hash-table :test #'equal)
+        with normalized = '()
         with count = 0
-        with cursor = tags
+        with cursor = list
         do (cond
              ((null cursor)
               (return (nreverse normalized)))
              ((or (atom cursor)
                   (gethash cursor seen-cells)
-                  (>= count +maximum-tag-count+))
-              (error
-               "cl-weave: ~A must be a finite proper list with at most ~D entries."
-               description
-               +maximum-tag-count+))
+                  (>= count maximum))
+              (funcall overflow-error-fn))
              (t
               (setf (gethash cursor seen-cells) t)
               (incf count)
-              (let* ((tag (car cursor))
-                     (name
-                       (etypecase tag
-                         (symbol (symbol-name tag))
-                         (string tag)))
-                     (canonical (string-upcase name)))
-                (unless (gethash canonical seen-names)
-                  (setf (gethash canonical seen-names) t)
-                  (push canonical normalized)))
+              (multiple-value-bind (key value) (funcall canonicalize-fn (car cursor))
+                (unless (gethash key seen-keys)
+                  (setf (gethash key seen-keys) t)
+                  (push value normalized)))
               (setf cursor (cdr cursor))))))
+
+(defconstant +maximum-tag-count+ 100000)
+
+(defun normalize-tags (tags &optional (description "tags"))
+  "Canonicalize tags to unique uppercase strings, comparing names case-insensitively."
+  (collect-bounded-unique
+   tags +maximum-tag-count+
+   (lambda ()
+     (error
+      "cl-weave: ~A must be a finite proper list with at most ~D entries."
+      description
+      +maximum-tag-count+))
+   (lambda (tag)
+     (let* ((name
+              (etypecase tag
+                (symbol (symbol-name tag))
+                (string tag)))
+            (canonical (string-upcase name)))
+       (values canonical canonical)))))
 
 
 (defun collapse-parent-directory-components (pathname)
@@ -402,43 +416,29 @@
          (base (and source
                     (uiop:pathname-directory-pathname
                      (uiop:ensure-absolute-pathname source)))))
-    (loop with seen-cells = (make-hash-table :test #'eq)
-          with seen-pathnames = (make-hash-table :test #'equal)
-          with normalized = '()
-          with count = 0
-          with cursor = dependencies
-          do (cond
-               ((null cursor)
-                (return (nreverse normalized)))
-               ((or (atom cursor)
-                    (gethash cursor seen-cells)
-                    (>= count +maximum-watch-dependency-count+))
-                (error
-                 "cl-weave: watch dependencies must be a finite proper list with at most ~D entries."
-                 +maximum-watch-dependency-count+))
-               (t
-                (setf (gethash cursor seen-cells) t)
-                (incf count)
-                (let* ((dependency (car cursor))
-                       (pathname
-                         (etypecase dependency
-                           (pathname dependency)
-                           (string (pathname dependency))))
-                       (absolute
-                         (if (uiop:absolute-pathname-p pathname)
-                             pathname
-                             (if base
-                                 (merge-pathnames pathname base)
-                                 (error
-                                  "cl-weave: relative watch dependency ~S requires a test source location."
-                                  dependency))))
-                       (canonical
-                         (collapse-parent-directory-components
-                          (uiop:ensure-absolute-pathname absolute))))
-                  (unless (gethash canonical seen-pathnames)
-                    (setf (gethash canonical seen-pathnames) t)
-                    (push canonical normalized)))
-                (setf cursor (cdr cursor)))))))
+    (collect-bounded-unique
+     dependencies +maximum-watch-dependency-count+
+     (lambda ()
+       (error
+        "cl-weave: watch dependencies must be a finite proper list with at most ~D entries."
+        +maximum-watch-dependency-count+))
+     (lambda (dependency)
+       (let* ((pathname
+                (etypecase dependency
+                  (pathname dependency)
+                  (string (pathname dependency))))
+              (absolute
+                (if (uiop:absolute-pathname-p pathname)
+                    pathname
+                    (if base
+                        (merge-pathnames pathname base)
+                        (error
+                         "cl-weave: relative watch dependency ~S requires a test source location."
+                         dependency))))
+              (canonical
+                (collapse-parent-directory-components
+                 (uiop:ensure-absolute-pathname absolute))))
+         (values canonical canonical))))))
 
 
 (defun test-registration-initargs

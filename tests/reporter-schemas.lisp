@@ -27,6 +27,47 @@
           (expect (getf field :kind) :not :to-be nil)
           (expect (getf field :required) :to-be t)))))
 
+  (it "validates declarative reporter schema contracts at definition time"
+    (let ((cl-weave::*reporter-artifact-schemas* cl-weave::*reporter-artifact-schemas*))
+      (eval '(cl-weave::define-reporter-artifact-schemas
+              (:kind "fuzz-test-schema" :commands ("run") :reporters ("json")
+               :schema-version 1 :streaming nil
+               :fields ((:name "value" :kind "string" :required t
+                         :description "d")))))
+      (expect (find "fuzz-test-schema" (cl-weave:reporter-artifact-schemas)
+                    :key (lambda (schema) (getf schema :kind))
+                    :test #'string=)
+              :not :to-be nil))
+    (expect (lambda ()
+              (eval '(cl-weave::define-reporter-artifact-schemas
+                      (:commands () :reporters () :schema-version 1
+                       :streaming nil :fields ()))))
+            :to-throw
+            "must declare :KIND")
+    (expect (lambda ()
+              (eval '(cl-weave::define-reporter-artifact-schemas
+                      (:kind "dup" :commands () :reporters () :schema-version 1
+                       :streaming nil :fields ())
+                      (:kind "dup" :commands () :reporters () :schema-version 1
+                       :streaming nil :fields ()))))
+            :to-throw
+            "contains duplicate")
+    (expect (lambda ()
+              (eval '(cl-weave::define-reporter-artifact-schemas
+                      (:kind "missing-field-kind" :commands () :reporters ()
+                       :schema-version 1 :streaming nil
+                       :fields ((:name "x" :required t))))))
+            :to-throw
+            "must declare :KIND")
+    (expect (lambda ()
+              (eval '(cl-weave::define-reporter-artifact-schemas
+                      (:kind "dup-field-names" :commands () :reporters ()
+                       :schema-version 1 :streaming nil
+                       :fields ((:name "x" :kind "string" :required t)
+                                (:name "x" :kind "string" :required t))))))
+            :to-throw
+            "contains duplicate"))
+
   (it "protects reporter schema data from callers"
     (let ((schemas (cl-weave:reporter-artifact-schemas)))
       (setf (getf (first schemas) :kind) "mutated")
@@ -35,10 +76,8 @@
 
   (it "exposes stable reporter artifact schema metadata"
     (labels ((schema-for (kind)
-               (find kind
-                     (cl-weave:reporter-artifact-schemas)
-                     :key (lambda (entry) (getf entry :kind))
-                     :test #'string=))
+               (find-metadata-entry
+                :kind kind (cl-weave:reporter-artifact-schemas)))
              (field-names (schema)
                (mapcar (lambda (entry) (getf entry :name))
                        (getf schema :fields))))
@@ -91,7 +130,7 @@
                 :to-equal '("schemaVersion" "kind" "test" "test.status"
                             "test.path" "test.pathString" "test.location"
                             "test.reason" "test.focused" "test.retry"
-                            "test.timeoutMs" "test.concurrent"))
+                            "test.timeoutMs" "test.concurrent" "test.tags"))
 
         (expect mutations :not :to-be nil)
         (expect (getf mutations :commands) :to-equal '())
@@ -104,10 +143,8 @@
 
   (it "keeps reporter artifact schemas aligned with emitted artifacts"
     (labels ((schema-for (kind)
-               (find kind
-                     (cl-weave:reporter-artifact-schemas)
-                     :key (lambda (entry) (getf entry :kind))
-                     :test #'string=)))
+               (find-metadata-entry
+                :kind kind (cl-weave:reporter-artifact-schemas))))
       (let* ((events (list (make-sample-event
                             :status :pass
                             :path '("schema" "result"))

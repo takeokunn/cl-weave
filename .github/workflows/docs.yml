@@ -20,6 +20,7 @@ jobs:
   build:
     name: Build documentation
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
     env:
@@ -66,8 +67,10 @@ jobs:
           extraPullNames: nix-community
 
       - name: Build documentation
+        timeout-minutes: 10
         run: |
-          nix build .#docs
+          set -euo pipefail
+          timeout 540s nix build .#docs
           cp -rL result public
           chmod -R u+w public
 
@@ -80,6 +83,7 @@ jobs:
     name: Deploy documentation
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pages: write # Publish the uploaded artifact to GitHub Pages.
       id-token: write # Authenticate the deployment with GitHub OIDC.

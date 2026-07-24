@@ -38,13 +38,9 @@
            (report (cl-weave/cli::doctor-report options))
            (checks (getf report :checks))
            (requested-system
-             (find "requested-system" checks
-                   :key (lambda (entry) (getf entry :name))
-                   :test #'string=))
+             (find-metadata-entry :name "requested-system" checks))
            (output-target
-             (find "output-target" checks
-                   :key (lambda (entry) (getf entry :name))
-                   :test #'string=)))
+             (find-metadata-entry :name "output-target" checks)))
       (expect (getf requested-system :status) :to-equal "pass")
       (expect (getf requested-system :summary)
               :to-contain "runtime-only mode")
@@ -57,17 +53,11 @@
            (report (cl-weave/cli::doctor-report options))
            (checks (getf report :checks))
            (cl-weave-system
-             (find "cl-weave-system" checks
-                   :key (lambda (entry) (getf entry :name))
-                   :test #'string=))
+             (find-metadata-entry :name "cl-weave-system" checks))
            (requested-system
-             (find "requested-system" checks
-                   :key (lambda (entry) (getf entry :name))
-                   :test #'string=))
+             (find-metadata-entry :name "requested-system" checks))
            (output-target
-             (find "output-target" checks
-                   :key (lambda (entry) (getf entry :name))
-                   :test #'string=)))
+             (find-metadata-entry :name "output-target" checks)))
       (expect (getf cl-weave-system :status) :to-equal "pass")
       (expect (getf requested-system :status) :to-equal "fail")
       (expect (getf requested-system :summary)

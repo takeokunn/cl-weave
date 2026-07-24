@@ -180,21 +180,14 @@
   (it "advertises CI quality gates as structured metadata"
     (let* ((metadata (cl-weave/metadata:framework-metadata))
            (gates (getf metadata :quality-gates))
-           (flake-gate (find "flake-check" gates
-                             :key (lambda (entry) (getf entry :name))
-                             :test #'string=))
-           (metadata-gate (find "ai-metadata-artifact" gates
-                                :key (lambda (entry) (getf entry :name))
-                                :test #'string=))
-           (jsonl-gate (find "jsonl-events-artifact" gates
-                             :key (lambda (entry) (getf entry :name))
-                             :test #'string=))
-           (watch-once-gate (find "watch-once-artifact" gates
-                                  :key (lambda (entry) (getf entry :name))
-                                  :test #'string=))
-           (junit-gate (find "junit-artifact" gates
-                             :key (lambda (entry) (getf entry :name))
-                             :test #'string=)))
+           (flake-gate (find-metadata-entry :name "flake-check" gates))
+           (metadata-gate
+             (find-metadata-entry :name "ai-metadata-artifact" gates))
+           (jsonl-gate
+             (find-metadata-entry :name "jsonl-events-artifact" gates))
+           (watch-once-gate
+             (find-metadata-entry :name "watch-once-artifact" gates))
+           (junit-gate (find-metadata-entry :name "junit-artifact" gates)))
       (expect (getf metadata :schema-version) :to-be 23)
       (expect flake-gate :not :to-be nil)
       (expect (getf flake-gate :kind) :to-equal "nix")
@@ -391,15 +384,12 @@
            (channels (getf metadata :distribution-channels))
            (readme (read-text-file #P"README.md"))
            (flake (read-text-file #P"flake.nix"))
-           (source-channel (find "source-self-test" channels
-                                 :key (lambda (entry) (getf entry :name))
-                                 :test #'string=))
-           (local-channel (find "nix-local-cli" channels
-                                :key (lambda (entry) (getf entry :name))
-                                :test #'string=))
-           (remote-channel (find "nix-remote-cli" channels
-                                 :key (lambda (entry) (getf entry :name))
-                                 :test #'string=))
+           (source-channel
+             (find-metadata-entry :name "source-self-test" channels))
+           (local-channel
+             (find-metadata-entry :name "nix-local-cli" channels))
+           (remote-channel
+             (find-metadata-entry :name "nix-remote-cli" channels))
            (homepage (getf metadata :homepage))
            (github-prefix "https://github.com/")
            (remote-ref (concatenate 'string

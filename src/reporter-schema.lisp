@@ -165,3 +165,20 @@
           :runnable runnable
           :skipped skipped
           :todos todos)))
+
+(defmacro define-sexp-reporter
+    (name (collection stream) &key tag schema-version summary-fn payload-key
+                                    serializer-fn)
+  "Define NAME as a function of (COLLECTION STREAM) that prints an
+S-expression artifact (TAG :SCHEMA-VERSION SCHEMA-VERSION ...summary...
+PAYLOAD-KEY (serialized elements)) to STREAM, where the summary plist
+comes from SUMMARY-FN and each element is serialized by SERIALIZER-FN."
+  `(defun ,name (,collection ,stream)
+     (let ((*print-pretty* nil)
+           (summary (,summary-fn ,collection)))
+       (prin1 (append (list ,tag :schema-version ,schema-version)
+                      summary
+                      (list ,payload-key (mapcar #',serializer-fn ,collection)))
+              ,stream))
+     (terpri ,stream)
+     (values)))

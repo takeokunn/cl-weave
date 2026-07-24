@@ -295,6 +295,34 @@
               :to-contain
               "arithmetic")))
 
+  (it "rejects unknown or malformed mutation operator designators"
+    (expect (lambda () (cl-weave::mutation-operator-named :no-such-operator))
+            :to-throw
+            "Unknown mutation operator")
+    (expect (lambda () (collect-mutations '(+ 1 1) :operators '(:no-such-operator)))
+            :to-throw
+            "Unknown mutation operator")
+    (expect (lambda () (collect-mutations '(+ 1 1) :operators (list 42)))
+            :to-throw
+            "Invalid mutation operator designator")
+    (expect (lambda () (cl-weave:mutation-operator-metadata 42))
+            :to-throw
+            "Invalid mutation operator designator"))
+
+  (it "rejects malformed mutation operator registrations"
+    (expect (lambda ()
+              (cl-weave::register-mutation-operator
+               "not-a-keyword" (lambda (f p) (declare (ignore f p)))))
+            :to-throw)
+    (expect (lambda ()
+              (cl-weave::register-mutation-operator :ok "not-a-function"))
+            :to-throw)
+    (expect (lambda ()
+              (cl-weave::register-mutation-operator
+               :ok (lambda (f p) (declare (ignore f p)))
+               :description 42))
+            :to-throw))
+
   (it "exposes mutation result fields"
     (let* ((mutation (first (collect-mutations '(+ 1 1)
                                                 :operators '(:arithmetic-operator))))

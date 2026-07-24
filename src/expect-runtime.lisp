@@ -97,11 +97,6 @@
 (defparameter *expect-poll-default-timeout-ms* 1000)
 (defparameter *expect-poll-default-interval-ms* 50)
 
-(defun split-expect-poll-body (body)
-  (if (and body (option-plist-form-p (first body)))
-      (values (first body) (rest body))
-      (values nil body)))
-
 (defun unknown-plist-keys (plist allowed-keys)
   (loop for (key nil) on plist by #'cddr
         unless (member key allowed-keys :test #'eq)

@@ -149,14 +149,7 @@
     (dolist (workers `(,(1+ cl-weave::+maximum-worker-count+) 0 -1 :many "2"))
       (let ((executed nil)
             (root (cl-weave::make-suite :name "root")))
-        (cl-weave::add-child
-          root
-          (cl-weave::make-test-case
-            :name
-            "must not run"
-            :function
-            (lambda ()
-              (setf executed t))))
+        (add-tripwire-test-case root (lambda () (setf executed t)))
         (expect
           (lambda ()
             (cl-weave::collect-events root :max-workers workers))

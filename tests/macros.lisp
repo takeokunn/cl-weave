@@ -1,5 +1,10 @@
 (in-package #:cl-weave/tests)
 
+(defvar *coverage-fixture-value* :outer)
+(defvar *coverage-fixture-events* '(:original))
+(defun coverage-fixture-sample-function (value) (length value))
+(defvar *coverage-fuzz-suite* (cl-weave::make-suite :name "coverage-fuzz-suite"))
+
 (describe "macros"
   (it-each ((1 2 3)
             (13 21 34))
@@ -259,6 +264,19 @@
                   (lambda (message)
                     (search "literal proper list" message)))))))
 
+  (it "rejects malformed it-property bindings at expansion time"
+    (expect (lambda ()
+              (macroexpand-1 '(cl-weave:it-property "bad bindings shape"
+                               ((n (cl-weave:gen-integer)) . 5)
+                               n)))
+            :to-throw
+            "IT-PROPERTY requires BINDINGS to be a literal proper list")
+    (expect (lambda ()
+              (macroexpand-1 '(cl-weave:it-property "malformed binding" ((n))
+                               n)))
+            :to-throw
+            "must have the form (NAME GENERATOR)"))
+
   (it "restores replaced functions and bindings after temporary mutation"
     (expect (sample-size '(a b c)) :to-be 3)
     (with-replaced-function (sample-size (lambda (value)
@@ -316,6 +334,41 @@
         (expect (hash-table-count table) :to-be 0))
       (expect place-evaluations :to-be 1)
       (expect (gethash "persist" table) :to-be 1)))
+
+  (it "exercises fixture restoration macro expansion via a fresh invocation"
+    (setf *coverage-fixture-value* :outer)
+    (eval '(cl-weave::with-restored-binding (*coverage-fixture-value*)
+            (setf *coverage-fixture-value* :inner)))
+    (expect *coverage-fixture-value* :to-be :outer)
+
+    (setf *coverage-fixture-events* '(:original))
+    (eval '(cl-weave::with-restored-bindings
+               ((*coverage-fixture-value*) (*coverage-fixture-events*))
+             (setf *coverage-fixture-value* :mutated
+                   *coverage-fixture-events* '(:changed))))
+    (expect *coverage-fixture-value* :to-be :outer)
+    (expect *coverage-fixture-events* :to-equal '(:original))
+
+    (expect (coverage-fixture-sample-function '(a b c)) :to-be 3)
+    (eval '(cl-weave::with-replaced-function
+               (coverage-fixture-sample-function (lambda (value) (+ 10 (length value))))
+             (funcall 'coverage-fixture-sample-function '(a b c))))
+    (expect (coverage-fixture-sample-function '(a b c)) :to-be 3)
+
+    (let ((table (make-hash-table :test #'equal)))
+      (setf (gethash "keep" table) 1)
+      (eval `(cl-weave::with-restored-hash-table (,table)
+               (remhash "keep" ,table)
+               (setf (gethash "add" ,table) 3)))
+      (expect (hash-table-count table) :to-be 1)
+      (expect (gethash "keep" table) :to-be 1))
+
+    (let ((table (make-hash-table :test #'equal)))
+      (setf (gethash "keep" table) 1)
+      (eval `(cl-weave::with-cleared-hash-table (,table)
+               (setf (gethash "temp" ,table) 1)))
+      (expect (hash-table-count table) :to-be 1)
+      (expect (gethash "keep" table) :to-be 1)))
 
   (it "expands it-concurrent into concurrent test registration"
     (expect (macroexpand-1
@@ -517,3 +570,26 @@
              (cl-weave::test-case-trusted-empty-function replacement))
          :to-be t)
         (expect (eq replacement-function original-function) :to-be nil)))))
+
+(describe "model record and suite-hook macros"
+  (it "exercises define-record-class expansion via a fresh invocation"
+    (eval '(cl-weave::define-record-class coverage-fuzz-record (alpha beta)))
+    (let* ((constructor (intern "MAKE-COVERAGE-FUZZ-RECORD"))
+           (predicate (intern "COVERAGE-FUZZ-RECORD-P"))
+           (instance (funcall constructor :alpha 1 :beta 2)))
+      (expect (funcall predicate instance) :to-be-truthy)
+      (expect (funcall predicate 42) :to-be nil)
+      (expect (slot-value instance 'alpha) :to-be 1)
+      (expect (slot-value instance 'beta) :to-be 2)))
+
+  (it "exercises every suite-hook branch via a fresh invocation"
+    (expect (eval '(cl-weave::suite-hook *coverage-fuzz-suite* before-all))
+            :to-be (cl-weave::suite-before-all *coverage-fuzz-suite*))
+    (expect (eval '(cl-weave::suite-hook *coverage-fuzz-suite* after-all))
+            :to-be (cl-weave::suite-after-all *coverage-fuzz-suite*))
+    (expect (eval '(cl-weave::suite-hook *coverage-fuzz-suite* before-each))
+            :to-be (cl-weave::suite-before-each *coverage-fuzz-suite*))
+    (expect (eval '(cl-weave::suite-hook *coverage-fuzz-suite* around-each))
+            :to-be (cl-weave::suite-around-each *coverage-fuzz-suite*))
+    (expect (eval '(cl-weave::suite-hook *coverage-fuzz-suite* after-each))
+            :to-be (cl-weave::suite-after-each *coverage-fuzz-suite*))))

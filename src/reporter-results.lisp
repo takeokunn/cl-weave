@@ -53,16 +53,12 @@
                               :negated (assertion-detail-negated detail)
                               :pass (assertion-detail-pass detail))))))
 
-(defun report-sexp (events stream)
-  (let ((*print-pretty* nil)
-        (summary (result-summary events)))
-    (prin1 (append (list :cl-weave/results
-                         :schema-version 4)
-                   summary
-                   (list :events (mapcar #'serializable-event events)))
-           stream))
-  (terpri stream)
-  (values))
+(define-sexp-reporter report-sexp (events stream)
+  :tag :cl-weave/results
+  :schema-version 4
+  :summary-fn result-summary
+  :payload-key :events
+  :serializer-fn serializable-event)
 
 (defun json-write-results-summary-fields (summary stream)
   (json-write-summary-count-fields summary *result-summary-field-specs* stream)

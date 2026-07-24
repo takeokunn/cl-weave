@@ -161,8 +161,28 @@
                      (lambda () (expect (lambda () t) :to-run-under-ms -1))
                      (lambda () (expect (lambda () t) :to-allocate-under "few"))
                      (lambda () (expect 42 :to-have-method-specialized-on 'name))
-                     (lambda () (expect 42 :to-have-slot))))
+                     (lambda () (expect 42 :to-have-slot))
+                     (lambda () (expect :no-such-class-designator :to-have-slot 'value))))
         (expect bad-expectation :to-throw)))
+
+    (it "rejects malformed custom matcher definitions with stable errors"
+      (dolist (bad-definition
+               (list (lambda () (eval '(cl-weave:defmatcher "not-a-symbol" (a e) t)))
+                     (lambda () (eval '(cl-weave:defmatcher :ok (1 e) t)))
+                     (lambda () (eval '(cl-weave:defmatcher :ok (a 2) t)))
+                     (lambda () (eval '(cl-weave:expect-extend ("not-a-symbol" (a e) t))))
+                     (lambda () (eval '(cl-weave:expect-extend (:ok (1 e) t))))
+                     (lambda () (eval '(cl-weave:expect-extend (:ok (a 2) t))))
+                     (lambda ()
+                       (cl-weave:extend-expect
+                        (list (list "not-a-symbol" (lambda (a e) t)))))
+                     (lambda ()
+                       (cl-weave:extend-expect
+                        (list (list :ok "not-a-function"))))
+                     (lambda ()
+                       (cl-weave:extend-expect
+                        (list (list :ok (lambda (a e) t) :bad-key "x"))))))
+        (expect bad-definition :to-throw)))
 
     (it "bounds close-to precision before exact arithmetic"
       (expect 1 :to-be-close-to 1 cl-weave::+maximum-close-to-precision+)

@@ -81,6 +81,18 @@
                            "?"
                            (string (code-char #x2603))
                            (string (code-char #x1f600))))))
+
+  (it-fuzz "escapes arbitrary strings into XML with no raw markup character"
+      ((text (gen-string
+              :min-length 0 :max-length 40
+              :alphabet (coerce (list #\< #\> #\& #\" #\'
+                                      (code-char 9) (code-char 10) (code-char 13)
+                                      (code-char 1) (code-char 31)
+                                      #\a #\z #\Space #\0)
+                                'string))))
+      (:trials 300 :timeout-per-trial 1)
+    (expect (xml-escaped-output-safe-p (cl-weave::xml-escaped-string text))
+            :to-be-truthy))
   (it "prints CI-readable TAP results"
     (let ((output (with-output-to-string (stream)
                     (cl-weave::report-tap

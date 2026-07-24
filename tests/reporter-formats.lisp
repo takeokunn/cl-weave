@@ -188,6 +188,18 @@
                            "\\r"
                            "\\u0001"))))
 
+  (it-fuzz "escapes arbitrary strings into JSON with no raw quote or control character"
+      ((text (gen-string
+              :min-length 0 :max-length 40
+              :alphabet (coerce (list #\" #\\ #\/ (code-char 8) (code-char 9)
+                                      (code-char 10) (code-char 12) (code-char 13)
+                                      (code-char 0) (code-char 1) (code-char 31)
+                                      #\a #\z #\Space #\0)
+                                'string))))
+      (:trials 300 :timeout-per-trial 1)
+    (expect (json-escaped-output-safe-p (cl-weave::json-escaped-string text))
+            :to-be-truthy))
+
   (it "serializes Common Lisp values without producing invalid JSON"
     (let* ((circular (list :head))
            (output

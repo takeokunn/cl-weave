@@ -198,7 +198,7 @@
 (defun source-location-option ()
   `(:location ,(source-location-form)))
 
-(defun split-test-body (body)
+(defun split-leading-option-plist (body)
   (if (and body (option-plist-form-p (first body)))
       (values (first body) (rest body))
       (values nil body)))
@@ -231,7 +231,7 @@
 
 (defmacro define-test-registration-macro (name prefix-options)
   `(defmacro ,name (test-name &body body)
-     (multiple-value-bind (options forms) (split-test-body body)
+     (multiple-value-bind (options forms) (split-leading-option-plist body)
        (test-registration-form
         test-name
         forms

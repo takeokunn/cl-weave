@@ -2,6 +2,13 @@
 
 (cl-weave:clear-tests)
 
+(defun add-tripwire-test-case (suite flag-setter)
+  "Register a test case named \"must not run\" under SUITE that calls
+FLAG-SETTER if it ever executes; used to assert a test is skipped entirely."
+  (cl-weave::add-child
+   suite
+   (cl-weave::make-test-case :name "must not run" :function flag-setter)))
+
 (defun ensure-directory-suffix (value)
   (let ((string (namestring (pathname value))))
     (if (and (plusp (length string))
@@ -27,6 +34,51 @@
     (unless root
       (error "No usable temporary root is available."))
     (pathname (ensure-directory-suffix root))))
+
+(defun json-escaped-output-safe-p (escaped)
+  "True when ESCAPED contains no raw double-quote or control character
+outside of a recognized backslash escape sequence."
+  (let ((length (length escaped)))
+    (loop with index = 0
+          while (< index length)
+          for char = (char escaped index)
+          do (cond
+               ((char= char #\\)
+                (let ((next (and (< (1+ index) length) (char escaped (1+ index)))))
+                  (unless (member next '(#\" #\\ #\/ #\b #\t #\n #\f #\r #\u))
+                    (return-from json-escaped-output-safe-p nil))
+                  (incf index (if (eql next #\u) 6 2))))
+               ((or (char= char #\") (< (char-code char) 32))
+                (return-from json-escaped-output-safe-p nil))
+               (t (incf index)))
+          finally (return t))))
+
+(defun xml-escaped-output-safe-p (escaped)
+  "True when ESCAPED contains no raw <, >, &, \", or ' character outside of
+a recognized XML entity reference."
+  (let ((length (length escaped)))
+    (loop with index = 0
+          while (< index length)
+          for char = (char escaped index)
+          do (cond
+               ((char= char #\&)
+                (let ((entity (find-if (lambda (candidate)
+                                         (let ((end (+ index (length candidate))))
+                                           (and (<= end length)
+                                                (string= escaped candidate
+                                                        :start1 index :end1 end))))
+                                       '("&lt;" "&gt;" "&amp;" "&quot;" "&apos;"))))
+                  (unless entity
+                    (return-from xml-escaped-output-safe-p nil))
+                  (incf index (length entity))))
+               ((member char '(#\< #\> #\" #\'))
+                (return-from xml-escaped-output-safe-p nil))
+               (t (incf index)))
+          finally (return t))))
+
+(defun find-metadata-entry (plist-key value entries)
+  "Return the plist in ENTRIES whose PLIST-KEY value is string= to VALUE."
+  (find value entries :key (lambda (entry) (getf entry plist-key)) :test #'string=))
 
 (defun test-snapshot-directory (name)
   (merge-pathnames

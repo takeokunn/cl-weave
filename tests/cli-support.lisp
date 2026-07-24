@@ -10,36 +10,11 @@
                       length)
         collect (subseq workflow start end)))
 
-(defun workflow-step-for-command (workflow command)
-  (let ((command-text (normalize-shell-text (workflow-command-string command))))
-    (find-if (lambda (step)
-               (search command-text (normalize-shell-text step)))
-             (workflow-step-blocks workflow))))
-
-(defun workflow-timeout-minutes-for-command (workflow command)
-  (let ((step (workflow-step-for-command workflow command)))
-    (when step
-      (let* ((marker "timeout-minutes:")
-             (marker-position (search marker step)))
-        (when marker-position
-          (let* ((line-start (+ marker-position (length marker)))
-                 (line-end (or (position #\Newline step :start line-start)
-                               (length step)))
-                 (line (string-trim '(#\Space #\Tab)
-                                    (subseq step line-start line-end))))
-            (parse-integer line)))))))
-
-(defun minimum-workflow-timeout-minutes (timeout-seconds)
-  (ceiling timeout-seconds 60))
-
 (defun workflow-artifact-section (workflow)
   (let ((section-position (search "path: |" workflow)))
     (if section-position
         (subseq workflow section-position)
         "")))
-
-(defun workflow-covers-quality-gate-p (workflow gate)
-  (not (null (workflow-step-for-command workflow (getf gate :command)))))
 
 (defun flake-check-names (flake)
   (loop with marker = " = mkCheck {"

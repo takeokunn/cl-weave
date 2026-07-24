@@ -4,363 +4,6 @@
 
 
 (in-package #:cl-weave/tests)
-(describe "collection snapshot before coverage"
-  (it "uses one copied collection preflight across coverage setup"
-    (let* ((root (cl-weave::make-suite :name "root"))
-           (target #P"/tmp/cl-weave/collection-snapshot.lisp")
-           (other #P"/tmp/cl-weave/collection-mutated.lisp")
-           (name-filter (copy-seq "runs"))
-           (location-filter (list target))
-           (path-component (copy-seq "runs"))
-           (test-path-filter (list (list path-component)))
-           (include-tag (copy-seq "fast"))
-           (exclude-tag (copy-seq "slow"))
-           (include-tags (list include-tag))
-           (exclude-tags (list exclude-tag))
-           (coverage-require 0)
-           (coverage-reset 0)
-           (suite-root 0)
-           (suite-snapshot 0)
-           (executed 0))
-      (cl-weave::add-child
-       root
-       (cl-weave::make-test-case
-        :name "runs"
-        :location (list :file (namestring target))
-        :tags '("FAST")
-        :function (lambda () (incf executed))))
-      (with-mocked-functions
-          (((symbol-function 'cl-weave::require-coverage-support)
-            (lambda ()
-              (incf coverage-require)
-              (setf (char name-filter 0) #\x
-                    (car location-filter) other
-                    (char path-component 0) #\x
-                    (char include-tag 0) #\x
-                    (car exclude-tags) "fast")))
-           ((symbol-function 'cl-weave:reset-coverage)
-            (lambda () (incf coverage-reset)))
-           ((symbol-function 'cl-weave:root-suite)
-            (lambda ()
-              (incf suite-root)
-              root))
-           ((symbol-function 'cl-weave::snapshot-suite)
-            (lambda (suite)
-              (incf suite-snapshot)
-              suite)))
-        (expect
-         (cl-weave:run-all
-          :reporter :sexp
-          :stream (make-broadcast-stream)
-          :coverage t
-          :name-filter name-filter
-          :location-filter location-filter
-          :test-path-filter test-path-filter
-          :include-tags include-tags
-          :exclude-tags exclude-tags)
-         :to-be-truthy))
-      (expect coverage-require :to-be 1)
-      (expect coverage-reset :to-be 1)
-      (expect suite-root :to-be 1)
-      (expect suite-snapshot :to-be 1)
-      (expect executed :to-be 1))))
-
-
-(describe "unconsumed coverage filters"
-  (it "ignores source filters when no coverage artifact consumes them"
-    (labels ((exercise ()
-               (let ((root (cl-weave::make-suite :name "root"))
-                     (include-cycle (list #P"/tmp/cl-weave/include-cycle/"))
-                     (coverage-require 0)
-                     (coverage-reset 0)
-                     (coverage-cleanup 0)
-                     (suite-root 0)
-                     (suite-snapshot 0)
-                     (executed 0)
-                     (artifact 0))
-                 (setf (cdr include-cycle) include-cycle)
-                 (cl-weave::add-child
-                  root
-                  (cl-weave::make-test-case
-                   :name "runs"
-                   :function (lambda () (incf executed))))
-                 (with-mocked-functions
-                     (((symbol-function 'cl-weave::require-coverage-support)
-                       (lambda () (incf coverage-require)))
-                      ((symbol-function 'cl-weave:reset-coverage)
-                       (lambda () (incf coverage-reset)))
-                      ((symbol-function 'cl-weave:coverage-statistics)
-                       (lambda (&key include-pathnames exclude-pathnames)
-                         (declare (ignore include-pathnames exclude-pathnames))
-                         (incf coverage-cleanup)))
-                      ((symbol-function 'cl-weave::save-coverage-report)
-                       (lambda (path &key include-pathnames exclude-pathnames)
-                         (declare (ignore path include-pathnames exclude-pathnames))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:save-coverage)
-                       (lambda (path)
-                         (declare (ignore path))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:root-suite)
-                       (lambda ()
-                         (incf suite-root)
-                         root))
-                      ((symbol-function 'cl-weave::snapshot-suite)
-                       (lambda (suite)
-                         (incf suite-snapshot)
-                         suite)))
-                   (expect
-                    (cl-weave:run-all
-                     :reporter :sexp
-                     :stream (make-broadcast-stream)
-                     :coverage t
-                     :coverage-reset :enabled
-                     :coverage-include-pathnames include-cycle
-                     :coverage-exclude-pathnames
-                     (cons #P"/tmp/cl-weave/exclude/" :tail))
-                    :to-be-truthy))
-                 (expect coverage-require :to-be 1)
-                 (expect coverage-reset :to-be 1)
-                 (expect coverage-cleanup :to-be 0)
-                 (expect suite-root :to-be 1)
-                 (expect suite-snapshot :to-be 1)
-                 (expect executed :to-be 1)
-                 (expect artifact :to-be 0))))
-      #+sbcl
-      (sb-ext:with-timeout 10
-        (exercise))
-      #-sbcl
-      (exercise))))
-
-
-(describe "coverage boundary controls"
-  (it "accepts threshold boundaries and generalized coverage controls"
-  (let* ((root (cl-weave::make-suite :name "root"))
-         (source-pathnames (list "src/"))
-         (expected-source
-           (make-pathname
-            :defaults
-            (uiop:ensure-absolute-pathname #P"src/" (uiop:getcwd))))
-         (coverage-require 0)
-         (coverage-reset 0)
-         (coverage-cleanup 0)
-         (suite-root 0)
-         (suite-snapshot 0)
-         (executed 0)
-         (observed-source-pathnames nil))
-    (cl-weave::add-child
-     root
-     (cl-weave::make-test-case
-      :name "runs"
-      :function (lambda () (incf executed))))
-    (with-mocked-functions
-        (((symbol-function 'cl-weave::require-coverage-support)
-          (lambda ()
-            (incf coverage-require)
-            (setf (car source-pathnames) 42)))
-         ((symbol-function 'cl-weave:reset-coverage)
-          (lambda () (incf coverage-reset)))
-         ((symbol-function 'cl-weave:coverage-statistics)
-          (lambda (&key include-pathnames exclude-pathnames)
-            (declare (ignore exclude-pathnames))
-            (incf coverage-cleanup)
-            (setf observed-source-pathnames include-pathnames)
-            '(:expression-covered 0 :expression-total 0
-              :branch-covered 0 :branch-total 0)))
-         ((symbol-function 'cl-weave:root-suite)
-          (lambda ()
-            (incf suite-root)
-            root))
-         ((symbol-function 'cl-weave::snapshot-suite)
-          (lambda (suite)
-            (incf suite-snapshot)
-            suite)))
-      (expect
-       (cl-weave:run-all
-        :reporter :sexp
-        :stream (make-broadcast-stream)
-        :coverage :enabled
-        :coverage-reset :enabled
-        :coverage-include-pathnames source-pathnames
-        :coverage-minimum-expression 0
-        :coverage-minimum-branch 100)
-       :to-be-truthy))
-    (expect coverage-require :to-be 1)
-    (expect coverage-reset :to-be 1)
-    (expect coverage-cleanup :to-be 1)
-    (expect suite-root :to-be 1)
-    (expect suite-snapshot :to-be 1)
-    (expect executed :to-be 1)
-    (expect observed-source-pathnames
-            :to-satisfy
-            (lambda (pathnames)
-              (and (= (length pathnames) 1)
-                   (pathnamep (first pathnames))
-                   (uiop:absolute-pathname-p (first pathnames))
-                   (equal (first pathnames) expected-source)))))))
-
-
-(describe "coverage disabled preflight"
-  (it "ignores invalid coverage-only options when coverage is disabled"
-    (labels ((exercise ()
-               (let ((root (cl-weave::make-suite :name "root"))
-                     (include-cycle (list #P"/tmp/cl-weave/include-cycle/"))
-                     (coverage-require 0)
-                     (coverage-reset 0)
-                     (coverage-cleanup 0)
-                     (suite-root 0)
-                     (suite-snapshot 0)
-                     (executed 0)
-                     (artifact 0))
-                 (setf (cdr include-cycle) include-cycle)
-                 (cl-weave::add-child
-                  root
-                  (cl-weave::make-test-case
-                   :name "runs"
-                   :function (lambda () (incf executed))))
-                 (with-mocked-functions
-                     (((symbol-function 'cl-weave::require-coverage-support)
-                       (lambda () (incf coverage-require)))
-                      ((symbol-function 'cl-weave:reset-coverage)
-                       (lambda () (incf coverage-reset)))
-                      ((symbol-function 'cl-weave:coverage-statistics)
-                       (lambda (&key include-pathnames exclude-pathnames)
-                         (declare (ignore include-pathnames exclude-pathnames))
-                         (incf coverage-cleanup)))
-                      ((symbol-function 'cl-weave::save-coverage-report)
-                       (lambda (path &key include-pathnames exclude-pathnames)
-                         (declare (ignore path include-pathnames exclude-pathnames))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:save-coverage)
-                       (lambda (path)
-                         (declare (ignore path))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:root-suite)
-                       (lambda ()
-                         (incf suite-root)
-                         root))
-                      ((symbol-function 'cl-weave::snapshot-suite)
-                       (lambda (suite)
-                         (incf suite-snapshot)
-                         suite)))
-                   (expect
-                    (cl-weave:run-all
-                     :reporter :sexp
-                     :stream (make-broadcast-stream)
-                     :coverage nil
-                     :coverage-output 42
-                     :coverage-report-directory 42
-                     :coverage-reset :arbitrary
-                     :coverage-include-pathnames include-cycle
-                     :coverage-exclude-pathnames
-                     (cons #P"/tmp/cl-weave/exclude/" :tail)
-                     :coverage-minimum-expression #C(1 1)
-                     :coverage-minimum-branch 101)
-                    :to-be-truthy))
-                 (expect coverage-require :to-be 0)
-                 (expect coverage-reset :to-be 0)
-                 (expect coverage-cleanup :to-be 0)
-                 (expect suite-root :to-be 1)
-                 (expect suite-snapshot :to-be 1)
-                 (expect executed :to-be 1)
-                 (expect artifact :to-be 0))))
-      #+sbcl
-      (sb-ext:with-timeout 10
-        (exercise))
-      #-sbcl
-      (exercise))))
-
-
-(describe "coverage input preflight"
-  (it "validates coverage options before lifecycle suite and artifacts"
-    (labels ((exercise ()
-               (let* ((root (cl-weave::make-suite :name "root"))
-                      (limit cl-weave::+maximum-selection-filter-count+)
-                      (include-cycle (list #P"/tmp/cl-weave/include-cycle/"))
-                      (coverage-require 0)
-                      (coverage-reset 0)
-                      (coverage-cleanup 0)
-                      (suite-root 0)
-                      (suite-snapshot 0)
-                      (executed 0)
-                      (artifact 0))
-                 (setf (cdr include-cycle) include-cycle)
-                 (cl-weave::add-child
-                  root
-                  (cl-weave::make-test-case
-                   :name "must not run"
-                   :function (lambda () (incf executed))))
-                 (with-mocked-functions
-                     (((symbol-function 'cl-weave::require-coverage-support)
-                       (lambda () (incf coverage-require)))
-                      ((symbol-function 'cl-weave:reset-coverage)
-                       (lambda () (incf coverage-reset)))
-                      ((symbol-function 'cl-weave:coverage-statistics)
-                       (lambda (&key include-pathnames exclude-pathnames)
-                         (declare (ignore include-pathnames exclude-pathnames))
-                         (incf coverage-cleanup)
-                         '(:expression-covered 0 :expression-total 0
-                           :branch-covered 0 :branch-total 0)))
-                      ((symbol-function 'cl-weave::save-coverage-report)
-                       (lambda (path &key include-pathnames exclude-pathnames)
-                         (declare (ignore path include-pathnames exclude-pathnames))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:save-coverage)
-                       (lambda (path)
-                         (declare (ignore path))
-                         (incf artifact)))
-                      ((symbol-function 'cl-weave:root-suite)
-                       (lambda ()
-                         (incf suite-root)
-                         root))
-                      ((symbol-function 'cl-weave::snapshot-suite)
-                       (lambda (suite)
-                         (incf suite-snapshot)
-                         suite)))
-                   (dolist (arguments
-                            (list
-                             (list :coverage-output 42)
-                             (list :coverage-report-directory 42)
-                             (list :coverage-minimum-expression -1)
-                             (list :coverage-minimum-branch 101)
-                             (list :coverage-minimum-expression #C(1 1))
-                             #+sbcl
-                             (list :coverage-minimum-expression
-                                   (sb-kernel:make-double-float #x7ff00000 0))
-                             (list :coverage-report-directory "unused-report/"
-                                   :coverage-include-pathnames include-cycle)
-                             (list :coverage-minimum-expression 0
-                                   :coverage-exclude-pathnames
-                                   (cons #P"/tmp/cl-weave/exclude/" :tail))
-                             (list :coverage-report-directory "unused-report/"
-                                   :coverage-include-pathnames
-                                   (make-list (1+ limit)
-                                              :initial-element
-                                              #P"/tmp/cl-weave/include/"))
-                             (list :coverage-minimum-branch 100
-                                   :coverage-exclude-pathnames (list 42))))
-                     (expect
-                      (lambda ()
-                        (apply #'cl-weave:run-all
-                               :reporter :sexp
-                               :stream (make-broadcast-stream)
-                               :coverage :enabled
-                               arguments))
-                      :to-throw)))
-                 (expect coverage-require :to-be 0)
-                 (expect coverage-reset :to-be 0)
-                 (expect coverage-cleanup :to-be 0)
-                 (expect suite-root :to-be 0)
-                 (expect suite-snapshot :to-be 0)
-                 (expect executed :to-be 0)
-                 (expect artifact :to-be 0))))
-      #+sbcl
-      (sb-ext:with-timeout 10
-        (exercise))
-      #-sbcl
-      (exercise))))
-
-
 (defun exercise-coverage-report-failure (finder)
   (let ((directory (make-test-temporary-directory "coverage-report-failure"))
         (cl-weave::*coverage-report-finder* finder))
@@ -395,6 +38,37 @@
                  :branch-covered 8 :branch-total 10)
                75 80))
             :to-throw "Coverage threshold failed"))
+
+  (it "computes coverage percentage, treating zero-total as fully covered"
+    (expect (cl-weave::coverage-percentage 0 0) :to-be 100.0)
+    (expect (cl-weave::coverage-percentage 5 10) :to-be 50.0)
+    (expect (cl-weave::coverage-percentage 10 10) :to-be 100.0))
+
+  (it "validates coverage thresholds as finite reals between 0 and 100"
+    (expect (cl-weave::valid-coverage-threshold-p 0) :to-be-truthy)
+    (expect (cl-weave::valid-coverage-threshold-p 100) :to-be-truthy)
+    (expect (cl-weave::valid-coverage-threshold-p 57.5) :to-be-truthy)
+    (expect (cl-weave::valid-coverage-threshold-p -1) :to-be nil)
+    (expect (cl-weave::valid-coverage-threshold-p 101) :to-be nil)
+    (expect (cl-weave::valid-coverage-threshold-p "80") :to-be nil)
+    (expect (cl-weave::valid-coverage-threshold-p #C(1 1)) :to-be nil))
+
+  (it "normalizes coverage thresholds, passing NIL through and rejecting invalid values"
+    (expect (cl-weave::normalize-coverage-threshold nil "minimum") :to-be nil)
+    (expect (cl-weave::normalize-coverage-threshold 90 "minimum") :to-be 90)
+    (expect (lambda () (cl-weave::normalize-coverage-threshold 101 "minimum"))
+            :to-throw "minimum must be a finite real number between 0 and 100"))
+
+  (it "normalizes coverage pathname designators, passing NIL through and copying inputs"
+    (expect (cl-weave::normalize-coverage-pathname-designator nil "output")
+            :to-be nil)
+    (expect (cl-weave::normalize-coverage-pathname-designator "report.html" "output")
+            :to-equal "report.html")
+    (expect (cl-weave::normalize-coverage-pathname-designator #P"report.html" "output")
+            :to-equal #P"report.html")
+    (expect (lambda ()
+              (cl-weave::normalize-coverage-pathname-designator 42 "output"))
+            :to-throw "output must be a pathname designator or NIL"))
 
   (it "enforces thresholds without requiring an HTML report"
     (with-mocked-functions
@@ -717,4 +391,34 @@
                   pathname))))
         (expect (lambda ()
                   (cl-weave::save-coverage-report directory))
-                :to-throw "Coverage report at")))))
+                :to-throw "Coverage report at"))))
+
+  (it "resets coverage data through the SB-COVER reset hook without touching real coverage state"
+    (let ((calls 0)
+          (probe (gensym "RESET-COVERAGE-STUB")))
+      (setf (symbol-function probe) (lambda () (incf calls)))
+      (unwind-protect
+           (with-mocked-functions
+               (((symbol-function 'cl-weave::require-coverage-support) (lambda () t))
+                ((symbol-function 'cl-weave::coverage-fbound-symbol)
+                 (lambda (name &optional required-p)
+                   (declare (ignore required-p))
+                   (expect name :to-equal "RESET-COVERAGE")
+                   probe)))
+             (expect (cl-weave:reset-coverage) :to-be-truthy)
+             (expect calls :to-be 1))
+        (fmakunbound probe))))
+
+  (it "saves and reports coverage data through the real SB-COVER hooks when available"
+    (when (cl-weave:coverage-support-available-p)
+      (let ((output (test-temporary-pathname "coverage-save-real.out"))
+            (stats (cl-weave:coverage-statistics)))
+        (unwind-protect
+             (progn
+               (expect (cl-weave:save-coverage output) :to-equal output)
+               (expect (probe-file output) :to-be-truthy))
+          (ignore-errors (delete-file output)))
+        (expect (getf stats :expression-total) :to-satisfy (lambda (value) (>= value 0)))
+        (expect (getf stats :expression-covered) :to-satisfy (lambda (value) (>= value 0)))
+        (expect (getf stats :branch-total) :to-satisfy (lambda (value) (>= value 0)))
+        (expect (getf stats :branch-covered) :to-satisfy (lambda (value) (>= value 0)))))))

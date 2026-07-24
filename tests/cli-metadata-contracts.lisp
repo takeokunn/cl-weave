@@ -26,10 +26,8 @@
           (expect ci-document :to-contain artifact)))))
 
   (it "keeps mutation artifact schema aligned with mutation reporters"
-    (let* ((schema (find "mutations"
-                         (cl-weave:reporter-artifact-schemas)
-                         :key (lambda (entry) (getf entry :kind))
-                         :test #'string=))
+    (let* ((schema (find-metadata-entry
+                    :kind "mutations" (cl-weave:reporter-artifact-schemas)))
            (field-names (mapcar (lambda (entry) (getf entry :name))
                                 (getf schema :fields)))
            (results (run-mutations '(+ 1 1)
@@ -106,10 +104,8 @@
                  (push (symbol-name symbol) exports))
                (sort exports #'string<)))
            (metadata-exports (package-name metadata)
-             (getf (find package-name
-                         (getf metadata :package-exports)
-                         :key (lambda (entry) (getf entry :name))
-                         :test #'string=)
+             (getf (find-metadata-entry
+                    :name package-name (getf metadata :package-exports))
                    :exports)))
       (let ((metadata (cl-weave/metadata:framework-metadata)))
         (let ((declared-core (metadata-exports "cl-weave" metadata))
@@ -161,9 +157,8 @@
           (expect (getf entry :quality-gates) :to-satisfy #'consp)
           (expect-unique-strings (getf entry :quality-gates))
           (dolist (gate-name (getf entry :quality-gates))
-            (expect (find gate-name (getf metadata :quality-gates)
-                          :key (lambda (gate) (getf gate :name))
-                          :test #'string=)
+            (expect (find-metadata-entry
+                     :name gate-name (getf metadata :quality-gates))
                     :not :to-be nil))
           (expect (getf entry :documentation) :to-satisfy #'consp)
           (expect-unique-strings (getf entry :documentation))
@@ -171,10 +166,8 @@
             (expect (probe-file (merge-pathnames document (uiop:getcwd)))
                     :not :to-be nil)))
         (dolist (capability (getf metadata :capabilities))
-          (expect (find capability
-                        (getf metadata :capability-matrix)
-                        :key (lambda (entry) (getf entry :name))
-                        :test #'string=)
+          (expect (find-metadata-entry
+                   :name capability (getf metadata :capability-matrix))
                   :not :to-be nil))
         (expect-unique-strings (getf metadata :policy-documents))
         (dolist (document (getf metadata :policy-documents))
@@ -361,10 +354,7 @@
                                  "artifact-schemas"
                                  "ai-discovery-metadata"
                                  "public-package-exports"))
-        (let* ((entry (find capability-name
-                            capability-matrix
-                            :key (lambda (item) (getf item :name))
-                            :test #'string=))
+        (let* ((entry (find-metadata-entry :name capability-name capability-matrix))
                (public-apis (getf entry :public-apis)))
           (expect entry :not :to-be nil)
           (expect public-apis :to-contain "framework-metadata")))))
