@@ -26,7 +26,7 @@ The JSON root is stable. The example below is abridged: agents should treat the
 runtime `artifactSchemas` value as authoritative because it includes every
 structured artifact kind currently advertised by the loaded version. Beyond
 runtime commands and reporters, the same root metadata also exposes
-`citation`, `distributionChannels`, `supportChannels`, `communityHealth`,
+`distributionChannels`, `supportChannels`, `communityHealth`,
 `securityContacts`, `lifecycle`, `governance`, `runtimeSupport`,
 `releaseProcess`, `continuousIntegration`, and `policyDocuments` so agents
 can route issues, pull requests, compatibility-sensitive changes, and
@@ -1317,6 +1317,20 @@ unwinds. Around hooks compose from outer suites to inner suites. Use
 `unwind-protect` inside an around hook for deterministic cleanup. Reporter
 schemas are unchanged.
 
+`after-each` and `after-all` hooks are guaranteed to run even when the test body
+or an inner hook performs a non-local transfer of control. This includes SBCL
+timeout conditions and any debugger-invoked restart that unwinds through the
+runner: the runner drives its after-each and after-all phases from an
+`unwind-protect` cleanup clause, so a fixture teardown is not skipped because an
+earlier condition escaped classification as `error`. Error collection for the
+`before-each`, `after-each`, `before-all`, and `after-all` phases captures
+`serious-condition`, not only `error`, so a timeout raised inside one of those
+hooks is recorded as a hook failure rather than aborting the run. A condition
+that escapes the test body or an `around-each` hook propagates as the primary
+condition; when a primary condition and a teardown condition both occur, the
+primary condition propagates and the teardown conditions are attached as
+`:secondary-conditions`.
+
 ## CPS Continuation Helper Contract
 
 `with-continuation-result` and `with-continuation-values` bind the continuation
@@ -1678,6 +1692,11 @@ declared ASDF systems before evaluating the body.
  :stderr-path "/tmp/cl-weave-isolated-....stderr"
  :home-path "/tmp/cl-weave-isolated-....home/")
 ```
+
+The `:stdout` and `:stderr` strings are the full child-process captures decoded
+as UTF-8 text. Decoding reads the capture files by character, so non-ASCII
+output (for example `雪😀` on stdout or `警告` on stderr) is returned exactly,
+with no trailing NUL padding from an octet-versus-character length mismatch.
 
 The path accessors are populated only when files are retained. `:keep-files`
 accepts `nil`, `t`, or `:on-failure`; `:on-failure` keeps artifacts for

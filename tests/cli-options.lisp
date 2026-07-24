@@ -318,18 +318,34 @@
         (expect (cl-weave/cli::cli-options-pass-with-no-tests options)
                 :to-be nil))))
 
-  (progn
   (it "rejects inline values for flag-only options"
     (dolist (token '("--help=1"
-                     "--version=1"
-                     "--coverage=false"
-                     "--pass-with-no-tests=false"
-                     "--fail-with-no-tests=true"
-                     "--update-snapshots=false"))
+                 "--version=1"
+                 "--coverage=false"
+                 "--pass-with-no-tests=false"
+                 "--fail-with-no-tests=true"
+                 "--update-snapshots=false"))
       (expect (lambda ()
                 (parse-cli (list "run" token)))
               :to-throw
               "does not accept an inline value")))
+  (it "does not consume a positional system as a bare bail value"
+    (let ((bare (parse-cli (list "run" "--bail" "cl-weave/tests")))
+          (numeric (parse-cli (list "run" "--bail" "2" "cl-weave/tests")))
+          (disabled (parse-cli (list "run" "--bail=false" "cl-weave/tests"))))
+      (expect (cl-weave/cli::cli-options-bail bare) :to-be t)
+      (expect (cl-weave/cli::cli-options-systems bare)
+              :to-equal (list "cl-weave/tests"))
+      (expect (cl-weave/cli::cli-options-bail numeric) :to-be 2)
+      (expect (cl-weave/cli::cli-options-systems numeric)
+              :to-equal (list "cl-weave/tests"))
+      (expect (cl-weave/cli::cli-options-bail disabled) :to-be nil)
+      (expect (cl-weave/cli::cli-options-systems disabled)
+              :to-equal (list "cl-weave/tests")))
+    (expect (lambda ()
+              (parse-cli (list "run" "--bail=invalid" "cl-weave/tests")))
+            :to-throw
+            "--bail must be true, false, or a positive integer"))
 
   (it "enforces semantic runner bounds for CLI options"
     (let ((options
@@ -370,16 +386,16 @@
               (list "--max-workers"
                     (princ-to-string
                      (1+ cl-weave::+maximum-worker-count+)))
-              (list "--bail"
-                    (princ-to-string
-                     (1+ cl-weave::+maximum-bail-limit+)))
+              (list (format nil "--bail=~D"
+                            (1+ cl-weave::+maximum-bail-limit+))
+                    "cl-weave/tests")
               (list "--shard"
                     (format nil "1/~D"
                             (1+ cl-weave::+maximum-shard-count+)))))
       (expect (lambda ()
                 (parse-cli
                  (list "run" (first option-value) (second option-value))))
-              :to-throw))))
+              :to-throw)))
 
   (it "treats Lisp nil environment tokens as false"
     (with-mocked-functions

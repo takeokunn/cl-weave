@@ -39,7 +39,31 @@
       (expect (isolated-result-status result) :to-be :timeout)
       (expect (isolated-result-timed-out-p result) :to-be-truthy)))
 
-  (it "retries temp directory allocation after a collision"
+  (it "cleans allocated temp files when a later allocation fails"
+  (let ((original (symbol-function 'cl-weave::isolated-temp-pathname))
+        (calls 0)
+        allocated)
+    (unwind-protect
+         (with-mocked-functions
+             (((symbol-function 'cl-weave::isolated-temp-pathname)
+               (lambda (prefix type)
+                 (incf calls)
+                 (when (= calls 2)
+                   (error "second allocation failed"))
+                 (setf allocated (funcall original prefix type)))))
+           (expect (lambda ()
+                     (run-isolated '(values)
+                                   :systems '("cl-weave/tests")
+                                   :package "CL-WEAVE/TESTS"
+                                   :timeout 180))
+                   :to-throw
+                   "second allocation failed")
+           (expect allocated :to-satisfy #'pathnamep)
+           (expect (probe-file allocated) :to-be nil))
+      (when allocated
+        (ignore-errors (delete-file allocated))))))
+
+(it "retries temp directory allocation after a collision"
     (let* ((temporary-directory (uiop:temporary-directory))
            (collision-name "cl-weave-isolated-home-collision")
            (fresh-name "cl-weave-isolated-home-fresh")
@@ -71,18 +95,20 @@
                                     :validate t
                                     :if-does-not-exist :ignore))))
 
-  (it "keeps isolated artifacts only when keep-files is enabled"
+  (it "preserves Unicode isolated output without trailing NUL characters"
     (let ((result (run-isolated
-                   '(progn
-                      (format t "ok")
-                      (format *error-output* "warn"))
-                   :systems '("cl-weave/tests")
+                   (quote (progn
+                            (format t "雪😀")
+                            (format *error-output* "警告")))
+                   :systems (quote ("cl-weave/tests"))
                    :package "CL-WEAVE/TESTS"
                    :timeout 180
                    :keep-files t)))
       (unwind-protect
            (progn
              (expect (isolated-result-status result) :to-be :pass)
+             (expect (cl-weave:isolated-result-stdout result) :to-equal "雪😀")
+             (expect (isolated-result-stderr result) :to-equal "警告")
              (expect (probe-file (isolated-result-script-path result)) :to-be-truthy)
              (expect (probe-file (isolated-result-stdout-path result)) :to-be-truthy)
              (expect (probe-file (isolated-result-stderr-path result)) :to-be-truthy)

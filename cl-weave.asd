@@ -136,5 +136,5 @@
      (:file "runner-public-api"))))
   :perform (test-op (op c)
              (declare (ignore op c))
-             (unless (uiop:symbol-call :cl-weave :run-all :reporter :spec)
+             (unless (uiop:symbol-call :cl-weave :run-all :reporter :spec :pass-with-no-tests nil)
                (error "cl-weave self test suite failed."))))

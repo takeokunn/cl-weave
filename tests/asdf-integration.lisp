@@ -101,7 +101,21 @@
       (expect (cl-weave::changed-pathnames new-state new-state)
               :to-equal nil)))
 
-  #+sbcl
+  (progn (it "shares one content buffer across a file-state scan"
+  (let ((buffers (quote ())))
+    (with-mocked-functions
+        (((symbol-function (quote cl-weave::pathname-signature))
+          (lambda (pathname &optional buffer)
+            (declare (ignore pathname))
+            (push buffer buffers)
+            (list :exists t))))
+      (cl-weave::file-state (list #P"first.lisp" #P"second.lisp")))
+    (expect (length buffers) :to-be 2)
+    (expect (eq (first buffers) (second buffers)) :to-be-truthy)
+    (expect (typep (first buffers)
+                   (quote (simple-array (unsigned-byte 8) (*))))
+            :to-be-truthy)
+    (expect (length (first buffers)) :to-be 8192))) #+sbcl
   (it "detects same-size content changes with an unchanged modification time"
     (let* ((directory (make-test-temporary-directory "watch-signature"))
            (pathname (merge-pathnames #P"watched.bin" directory)))
@@ -138,7 +152,7 @@
                         :to-equal (list pathname)))))
         (uiop:delete-directory-tree directory
                                     :validate t
-                                    :if-does-not-exist :ignore))))
+                                    :if-does-not-exist :ignore)))))
 
   (it "rejects invalid watch intervals before enumerating watched files"
     (let ((enumeration-count 0))
@@ -1809,3 +1823,15 @@
           :to-be-greater-than
           11))))
 ))
+
+(describe "asdf test-op"
+  (it "fails when no tests are registered"
+    (let ((cl-weave::*root-suite* nil)
+          (cl-weave::*current-suite* nil)
+          (cl-weave::*named-suites* (make-hash-table :test (function equal))))
+      (expect
+       (lambda ()
+         (asdf:perform (asdf:make-operation (quote asdf:test-op))
+                       (asdf:find-system "cl-weave/tests")))
+       :to-throw
+       "cl-weave self test suite failed."))))

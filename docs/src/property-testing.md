@@ -45,7 +45,10 @@ generator for bounded S-expression and AST shapes; `gen-sexp` and `gen-form`
 provide common Lisp data and macro-expansion inputs without embedding runner
 logic in tests; `gen-tuple` shrinks each slot through its corresponding
 generator; `gen-such-that` keeps generated and shrunk values inside the
-predicate.
+predicate. `gen-such-that` validates its arguments eagerly: `predicate` must be
+a function and `attempts` must be a positive integer, so a misplaced value
+(for example passing a symbol instead of `#'plusp`) signals a `cl-weave` error
+at construction time rather than failing deep inside generation.
 
 ```lisp
 (it-property "command shape is stable"

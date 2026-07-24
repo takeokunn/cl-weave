@@ -836,8 +836,13 @@
                    (remove-duplicate-shrink-candidates
                     (nreverse candidates) #'equal)))))))
 
+
+
 (defun gen-such-that (predicate generator &key (attempts 100))
   (ensure-property-generator generator "gen-such-that")
+  (unless (functionp predicate)
+    (error "cl-weave: gen-such-that requires PREDICATE to be a function, got ~S."
+           predicate))
   (unless (and (integerp attempts) (plusp attempts))
     (error "cl-weave: gen-such-that requires a positive integer ATTEMPTS, got ~S."
            attempts))

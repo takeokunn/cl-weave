@@ -453,7 +453,17 @@
                                      (declare (ignore condition))
                                      (invoke-restart 'continue-test))))
                     (cl-weave::run-test-case/interactively (cl-weave::root-suite) test))))
-      (expect (cl-weave::test-event-status event) :to-be :pass)))
+      (expect (cl-weave::test-event-status event) :to-be :pass))
+    (let* ((cleanup-count 0)
+           (suite (cl-weave::make-suite
+                   :name "direct continue cleanup"
+                   :after-each (list (lambda () (incf cleanup-count)))))
+           (test (cl-weave::make-test-case
+                  :name "direct continue"
+                  :function (lambda () (invoke-restart 'continue-test))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :pass)
+      (expect cleanup-count :to-be 1)))
 
   (it "exposes a restart that records a failed attempt as skipped"
     (let* ((test (cl-weave::make-test-case
@@ -466,7 +476,18 @@
                                      (invoke-restart 'skip-test "patched interactively"))))
                     (cl-weave::run-test-case/interactively (cl-weave::root-suite) test))))
       (expect (cl-weave::test-event-status event) :to-be :skip)
-      (expect (cl-weave::test-event-reason event) :to-equal "patched interactively")))
+      (expect (cl-weave::test-event-reason event) :to-equal "patched interactively"))
+    (let* ((cleanup-count 0)
+           (suite (cl-weave::make-suite
+                   :name "direct skip cleanup"
+                   :after-each (list (lambda () (incf cleanup-count)))))
+           (test (cl-weave::make-test-case
+                  :name "direct skip"
+                  :function (lambda () (invoke-restart 'skip-test "directly skipped"))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :skip)
+      (expect (cl-weave::test-event-reason event) :to-equal "directly skipped")
+      (expect cleanup-count :to-be 1)))
 
   (it "allows warnings and notification conditions to continue"
     (dolist (test-function
@@ -528,4 +549,20 @@
                          test))))
              (event (funcall run)))
         (expect attempts :to-be 2)
-        (expect (cl-weave::test-event-status event) :to-be :pass)))))
+        (expect (cl-weave::test-event-status event) :to-be :pass)))
+    (let* ((attempts 0)
+           (cleanup-count 0)
+           (suite (cl-weave::make-suite
+                   :name "direct retry cleanup"
+                   :after-each (list (lambda () (incf cleanup-count)))))
+           (test (cl-weave::make-test-case
+                  :name "direct retry"
+                  :retry 1
+                  :function (lambda ()
+                              (incf attempts)
+                              (when (= attempts 1)
+                                (invoke-restart 'retry-test)))))
+           (event (cl-weave::run-test-case suite test)))
+      (expect (cl-weave::test-event-status event) :to-be :pass)
+      (expect attempts :to-be 2)
+      (expect cleanup-count :to-be 2))))

@@ -20,67 +20,60 @@
       (setf (cdr head-last) tail)
       (values head tail-last))))
  (defun collect-suite-events/k
-     (suite control continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
-   (if (or (execution-control-stopped control)
-           (not (selected-suite-p suite filter ancestor-focused)))
-       (funcall continue nil nil)
-       (let ((active-execution-mode
-               (effective-suite-execution-mode suite inherited-execution-mode)))
-         (multiple-value-bind (active-status active-reason)
-             (suite-suppression suite suppressed-status suppressed-reason)
-           (if active-status
-               (collect-children/k
-                suite
-                (ordered-children suite (suite-children suite))
-                control
-                continue
-                filter
-                ancestor-focused
-                active-status
-                active-reason
-                active-execution-mode)
-               (let ((before-errors
-                       (call-hooks/collect-errors (suite-hook suite before-all))))
-                 (labels ((finish (events events-last)
-                            (let* ((after-errors
-                                    (call-hooks/collect-errors
-                                     (reverse (suite-hook suite after-all))))
-                                   (before-events
+    (suite control continue filter &optional ancestor-focused suppressed-status suppressed-reason inherited-execution-mode)
+  (if (or (execution-control-stopped control)
+          (not (selected-suite-p suite filter ancestor-focused)))
+      (funcall continue nil nil)
+      (let ((active-execution-mode
+              (effective-suite-execution-mode suite inherited-execution-mode)))
+        (multiple-value-bind (active-status active-reason)
+            (suite-suppression suite suppressed-status suppressed-reason)
+          (if active-status
+              (collect-children/k suite
+                                  (ordered-children suite (suite-children suite))
+                                  control continue filter ancestor-focused
+                                  active-status active-reason active-execution-mode)
+              (let ((before-errors
+                      (call-hooks/collect-errors (suite-hook suite before-all)))
+                    (after-called-p nil)
+                    (after-errors nil))
+                (labels ((run-after-hooks ()
+                           (unless after-called-p
+                             (setf after-called-p t
+                                   after-errors
+                                   (call-hooks/collect-errors
+                                    (reverse (suite-hook suite after-all)))))
+                           after-errors)
+                         (finish (events events-last)
+                           (let* ((after-errors (run-after-hooks))
+                                  (before-events
                                     (when before-errors
                                       (list (record-event/control
                                              control
                                              (make-suite-hook-event
                                               suite :before-all before-errors)))))
-                                   (after-events
+                                  (after-events
                                     (when after-errors
                                       (list (record-event/control
                                              control
                                              (make-suite-hook-event
                                               suite :after-all after-errors))))))
-                              (multiple-value-bind (with-before with-before-last)
-                                  (link-collection-segments
-                                   before-events
-                                   before-events
-                                   events
-                                   events-last)
-                                (multiple-value-call continue
-                                  (link-collection-segments
-                                   with-before
-                                   with-before-last
-                                   after-events
-                                   after-events))))))
-                   (if before-errors
-                       (finish nil nil)
-                       (collect-children/k
-                        suite
-                        (ordered-children suite (suite-children suite))
-                        control
-                        #'finish
-                        filter
-                        ancestor-focused
-                        nil
-                        nil
-                        active-execution-mode)))))))))
+                             (multiple-value-bind (with-before with-before-last)
+                                 (link-collection-segments
+                                  before-events before-events events events-last)
+                               (multiple-value-call continue
+                                 (link-collection-segments
+                                  with-before with-before-last
+                                  after-events after-events))))))
+                  (unwind-protect
+                       (if before-errors
+                           (finish nil nil)
+                           (collect-children/k
+                            suite
+                            (ordered-children suite (suite-children suite))
+                            control (function finish) filter ancestor-focused
+                            nil nil active-execution-mode))
+                    (run-after-hooks)))))))))
 
 
 

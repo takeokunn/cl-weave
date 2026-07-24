@@ -119,7 +119,21 @@
         (expect (mapcar #'cl-weave::test-event-status result) :to-equal '(:error)))
       (expect (reverse events) :to-equal '(:around-cleanup :after)))))
 
-  (it "normalizes an around-each wrapper error as a hook failure"
+  (it "runs after-all exactly once without replacing a non-local exit"
+  (let* ((after-count 0)
+         (suite (cl-weave::make-suite
+                 :name "non-local suite exit"
+                 :after-all (list (lambda () (incf after-count)))))
+         (test (cl-weave::make-test-case
+                :name "escape"
+                :function (lambda () (throw (quote suite-exit) :escaped)))))
+    (cl-weave::add-child suite test)
+    (expect (catch (quote suite-exit)
+              (cl-weave::collect-events suite))
+            :to-equal :escaped)
+    (expect after-count :to-be 1)))
+
+(it "normalizes an around-each wrapper error as a hook failure"
     (let* ((cause (make-condition 'simple-error :format-control "wrapper failed"))
            (suite
              (cl-weave::make-suite
@@ -149,6 +163,49 @@
            (event (cl-weave::run-test-case suite test)))
       (expect (cl-weave::test-event-status event) :to-be :error)
       (expect (cl-weave::test-event-condition event) :to-be cause)))
+
+  (it "runs inherited hooks in parent-child order"
+    (let* ((events nil)
+           (root (cl-weave::make-suite :name "root"))
+           (parent
+             (cl-weave::add-child
+              root
+              (cl-weave::make-suite
+               :name "parent"
+               :parent root
+               :before-each (list (lambda () (push :parent-before events)))
+               :around-each (list (lambda (next)
+                                       (push :parent-around-enter events)
+                                       (funcall next)
+                                       (push :parent-around-exit events)))
+               :after-each (list (lambda () (push :parent-after events))))))
+           (child
+             (cl-weave::add-child
+              parent
+              (cl-weave::make-suite
+               :name "child"
+               :parent parent
+               :before-each (list (lambda () (push :child-before events)))
+               :around-each (list (lambda (next)
+                                       (push :child-around-enter events)
+                                       (funcall next)
+                                       (push :child-around-exit events)))
+               :after-each (list (lambda () (push :child-after events))))))
+           (test (cl-weave::make-test-case
+                  :name "case"
+                  :function (lambda () (push :body events)))))
+      (cl-weave::add-child child test)
+      (cl-weave::collect-events root)
+      (expect (reverse events)
+              :to-equal '(:parent-before
+                          :child-before
+                          :parent-around-enter
+                          :child-around-enter
+                          :body
+                          :child-around-exit
+                          :parent-around-exit
+                          :child-after
+                          :parent-after))))
 
 (describe "fixture failures"
   (it "aggregates before-each failures without running the body"
@@ -203,45 +260,64 @@
       (expect (length (cl-weave::test-event-secondary-conditions event))
               :to-be 2)))
 
-  (it "represents an otherwise unhandled after-each failure"
-    (let* ((suite
-             (cl-weave::make-suite
-              :name "cleanup"
-              :after-each (list (lambda () (error "cleanup")))))
-           (test (cl-weave::make-test-case :name "case" :function (lambda () t)))
-           (event (cl-weave::run-test-case suite test))
-           (condition (cl-weave::test-event-condition event)))
-      (expect (cl-weave::test-event-status event) :to-be :error)
-      (expect condition
-              :to-satisfy (lambda (value)
-                            (typep value 'cl-weave:hook-failure)))
-      (expect (cl-weave:hook-failure-phase condition) :to-be :after-each)
-      (expect (length (cl-weave:hook-failure-causes condition)) :to-be 1)))
+  (it "collects bare serious conditions from after-each and continues cleanup"
+  (let* ((log nil)
+         (bare-condition (make-condition (quote serious-condition)))
+         (suite
+           (cl-weave::make-suite
+            :name "cleanup"
+            :after-each
+            (list (lambda () (push :after-serious log))
+                  (lambda ()
+                    (push :serious log)
+                    (error bare-condition))
+                  (lambda ()
+                    (push :before-serious log)
+                    (error "ordinary cleanup")))))
+         (test (cl-weave::make-test-case :name "case" :function (lambda () t)))
+         (event (cl-weave::run-test-case suite test))
+         (condition (cl-weave::test-event-condition event))
+         (causes (cl-weave:hook-failure-causes condition)))
+    (expect (cl-weave::test-event-status event) :to-be :error)
+    (expect condition
+            :to-satisfy (lambda (value)
+                          (typep value (quote cl-weave:hook-failure))))
+    (expect (cl-weave:hook-failure-phase condition) :to-be :after-each)
+    (expect (length causes) :to-be 2)
+    (expect (second causes) :to-be bare-condition)
+    (expect log :to-equal (quote (:after-serious :serious :before-serious)))))
 
-  (it "turns suite hook failures into events and still runs all cleanup hooks"
-    (let ((root (cl-weave::make-suite :name "root"))
-          (log nil))
-      (let ((cl-weave::*current-suite* root)
-            (cl-weave::*root-suite* root))
-        (cl-weave::register-suite
-         "broken suite"
-         (lambda ()
-           (before-all
-             (push :before log)
-             (error "setup"))
-           (after-all
-             (push :after-first log)
-             (error "first teardown"))
-           (after-all
-             (push :after-second log)
-             (error "second teardown"))
-           (it "must not run" (push :body log)))))
-      (let* ((events (cl-weave::collect-events root))
-             (conditions (mapcar #'cl-weave::test-event-condition events)))
-        (expect (mapcar #'cl-weave::test-event-status events)
-                :to-equal '(:error :error))
-        (expect (mapcar #'cl-weave:hook-failure-phase conditions)
-                :to-equal '(:before-all :after-all))
-        (expect (length (cl-weave:hook-failure-causes (second conditions)))
-                :to-be 2)
-        (expect log :to-equal '(:after-first :after-second :before))))))
+  (it "turns suite hook failures into events and continues after bare serious conditions"
+  (let ((root (cl-weave::make-suite :name "root"))
+        (log nil)
+        (bare-condition (make-condition (quote serious-condition))))
+    (let ((cl-weave::*current-suite* root)
+          (cl-weave::*root-suite* root))
+      (cl-weave::register-suite
+       "broken suite"
+       (lambda ()
+         (before-all
+           (push :before log)
+           (error "setup"))
+         (after-all
+           (push :after-serious log))
+         (after-all
+           (push :serious log)
+           (error bare-condition))
+         (after-all
+           (push :before-serious log)
+           (error "ordinary teardown"))
+         (it "must not run" (push :body log)))))
+    (let* ((events (cl-weave::collect-events root))
+           (conditions (mapcar (function cl-weave::test-event-condition) events))
+           (after-all-causes
+             (cl-weave:hook-failure-causes (second conditions))))
+      (expect (mapcar (function cl-weave::test-event-status) events)
+              :to-equal (quote (:error :error)))
+      (expect (mapcar (function cl-weave:hook-failure-phase) conditions)
+              :to-equal (quote (:before-all :after-all)))
+      (expect (length after-all-causes) :to-be 2)
+      (expect (second after-all-causes) :to-be bare-condition)
+      (expect log
+              :to-equal
+              (quote (:after-serious :serious :before-serious :before)))))))

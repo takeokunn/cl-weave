@@ -25,6 +25,8 @@
       (list (lambda () (gen-one-of)) "at least one property generator")
       (list (lambda () (gen-tuple (gen-boolean) :not-a-generator))
             "property generator")
+      (list (lambda () (gen-such-that :not-a-function (gen-boolean)))
+            "PREDICATE")
       (list (lambda () (gen-such-that #'identity (gen-boolean) :attempts 0))
             "positive integer ATTEMPTS")
       (list (lambda () (gen-such-that #'identity :not-a-generator))

@@ -279,13 +279,16 @@
 
 (defun ordered-children (suite children)
   (if (eq *test-sequence-order* :random)
-      (stable-sort
-       (copy-list children)
-       #'<
-       :key (lambda (child)
-              (stable-string-hash
-               (sequence-child-label suite child)
-               *test-sequence-seed*)))
+      (mapcar #'cdr
+              (stable-sort
+               (mapcar (lambda (child)
+                         (cons (stable-string-hash
+                                (sequence-child-label suite child)
+                                *test-sequence-seed*)
+                               child))
+                       children)
+               #'<
+               :key #'car))
       children))
 
 (defun selected-test-case-p (suite test filter ancestor-focused)

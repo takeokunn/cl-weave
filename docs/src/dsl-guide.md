@@ -46,8 +46,7 @@ Because Common Lisp already exports `CL:DESCRIBE`, test packages should import
 (it-skip-each ((:slow :case))
     "skips generated case ~A"
     (kind label)
-  "blocked by upstream"
-  (expect (list kind label) :to-equal '(:slow :case)))
+  "blocked by upstream")
 
 (it-todo-each ((:parser :stream) (:ffi :crash-boundary))
     "documents generated todo ~A"
@@ -63,9 +62,9 @@ compose with canonical modifiers such as `it-only-each`,
 and `it-todo-each`. Fixture hooks use the canonical Lisp names.
 [ai-contract.md](ai-contract.md) is the machine-readable normalization
 contract for agents. Runtime metadata also exposes `referenceDocuments`,
-`citation`, `supportChannels`, `securityContacts`, `lifecycle`,
+`supportChannels`, `securityContacts`, `lifecycle`,
 `runtimeSupport`, and `releaseProcess` so external tools can discover
-canonical docs, citation metadata, support routing, disclosure paths,
+canonical docs, support routing, disclosure paths,
 platform support, release policy, and project status without scraping prose.
 
 ## Conditional Runs
@@ -129,6 +128,9 @@ bodies are not executed.
 `around-each` receives a continuation for the remaining around hooks and test
 body, so special variables can be dynamically rebound around only the case.
 Use `unwind-protect` inside `around-each` when the fixture owns cleanup.
+`after-each` and `after-all` teardown runs even when a test body or hook exits
+non-locally — including SBCL timeouts and debugger restarts — so fixtures that
+release resources in a teardown hook are not skipped when a case times out.
 Fixture hooks intentionally use canonical Lisp names rather than camelCase
 aliases, because Common Lisp uppercases unescaped symbols while reading source.
 

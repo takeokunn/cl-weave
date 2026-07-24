@@ -346,10 +346,24 @@
         (values (subseq token 0 equals) (subseq token (1+ equals)) t)
         (values token nil nil))))
 
-(defun consume-optional-value (default rest)
-  (if (and (first rest) (not (option-token-p (first rest))))
+(defun bail-value-token-p (value)
+  (handler-case
+      (progn
+        (parse-bail value)
+        t)
+    (cli-error () nil)))
+
+(defun consume-optional-value (default rest accept-value-p)
+  (if (and (first rest)
+           (not (option-token-p (first rest)))
+           (funcall accept-value-p (first rest)))
       (values (first rest) (rest rest))
       (values default rest)))
+
+(defun optional-value-token-p (flag value)
+  (cond
+    ((string= flag "--bail") (bail-value-token-p value))
+    (t nil)))
 
 (defun apply-cli-option (options flag rest inline-p)
   (let ((spec (cli-option-spec flag)))
@@ -376,7 +390,13 @@
          (rest rest)))
       (:optional-value
        (multiple-value-bind (raw remaining)
-           (consume-optional-value (cli-spec-default spec) rest)
+           (if inline-p
+               (values (first rest) (rest rest))
+               (consume-optional-value
+                (cli-spec-default spec)
+                rest
+                (lambda (value)
+                  (optional-value-token-p flag value))))
          (let* ((name (or (cli-spec-argument-name spec) flag))
                 (value (call-cli-option-parser (cli-spec-parser spec) raw name)))
            (set-cli-option-field options (cli-spec-field spec) value)

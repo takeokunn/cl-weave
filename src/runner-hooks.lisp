@@ -6,23 +6,26 @@
         collect current into suites
         finally (return (nreverse suites))))
 
-(defun effective-before-hooks (suite)
-  (loop for current in (suite-lineage suite)
-        append (suite-hook current before-each)))
-
-(defun effective-around-hooks (suite)
-  (loop for current in (suite-lineage suite)
-        append (suite-hook current around-each)))
-
-(defun effective-after-hooks (suite)
-  (loop for current in (reverse (suite-lineage suite))
-        append (reverse (suite-hook current after-each))))
+(defun effective-hook-lists (suite)
+  (let ((before-hooks nil)
+        (around-hooks nil)
+        (after-hooks nil))
+    (dolist (current (suite-lineage suite)
+                     (values (nreverse before-hooks)
+                             (nreverse around-hooks)
+                             after-hooks))
+      (dolist (hook (suite-hook current before-each))
+        (push hook before-hooks))
+      (dolist (hook (suite-hook current around-each))
+        (push hook around-hooks))
+      (dolist (hook (suite-hook current after-each))
+        (push hook after-hooks)))))
 
 (defun call-hooks/collect-errors (hooks)
   (loop for hook in hooks
         when (handler-case
                  (progn (funcall hook) nil)
-               (error (condition) condition))
+               (serious-condition (condition) condition))
           collect it))
 
 (defun call-around-hooks/k (hooks continue)
@@ -51,29 +54,32 @@
         (*expected-assertion-count-form* nil)
         (*has-assertions-required* nil)
         (*has-assertions-form* nil))
-    (let ((primary-condition nil)
-          (result nil))
-      ;; SERIOUS-CONDITION (not ERROR) so platform timeouts, which SBCL
-      ;; signals as a bare serious condition, still reach the cleanup hooks.
-      (handler-case
-          (setf result
-                (let ((before-errors
-                        (call-hooks/collect-errors
-                         (effective-before-hooks suite))))
-                  (when before-errors
-                    (error 'hook-failure
-                           :phase :before-each
-                           :causes before-errors))
-                  (call-around-hooks/k
-                   (effective-around-hooks suite)
-                   (lambda ()
-                     (funcall (test-case-function test))
-                     (verify-assertion-counts)
-                     (funcall continue)))))
-        (serious-condition (condition)
-          (setf primary-condition condition)))
-      (let ((cleanup-errors
-              (call-hooks/collect-errors (effective-after-hooks suite))))
+    (multiple-value-bind (before-hooks around-hooks after-hooks)
+        (effective-hook-lists suite)
+      (let ((primary-condition nil)
+            (result nil)
+            (cleanup-errors nil))
+        ;; SERIOUS-CONDITION includes both ERROR and implementation conditions that
+        ;; cannot be classified portably as ERROR, such as SBCL timeout conditions.
+        (unwind-protect
+             (handler-case
+                 (setf result
+                       (let ((before-errors
+                               (call-hooks/collect-errors before-hooks)))
+                         (when before-errors
+                           (error 'hook-failure
+                                  :phase :before-each
+                                  :causes before-errors))
+                         (call-around-hooks/k
+                          around-hooks
+                          (lambda ()
+                            (funcall (test-case-function test))
+                            (verify-assertion-counts)
+                            (funcall continue)))))
+               (serious-condition (condition)
+                 (setf primary-condition condition)))
+          (setf cleanup-errors
+                (call-hooks/collect-errors after-hooks)))
         (cond
           (primary-condition
            (setf *attempt-secondary-conditions* cleanup-errors)
@@ -81,4 +87,3 @@
           (cleanup-errors
            (error 'hook-failure :phase :after-each :causes cleanup-errors))
           (t result))))))
-

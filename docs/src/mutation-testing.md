@@ -41,8 +41,10 @@ literals, and `if` branch swaps. `report-mutations-sexp` and
 survived, errored, and score fields.
 
 Use `mutation-score-passes-p` or `assert-mutation-score` to turn mutation
-results into CI gates. A gate passes only when the score meets the threshold
-and there are no survived or errored mutants:
+results into CI gates. A gate passes only when there are no errored mutants and
+the mutation score meets the threshold. Because the score is `killed / total`,
+surviving mutants lower the score but do not fail the gate on their own unless
+they push the score below the threshold:
 
 ```lisp
 (let ((results (cl-weave:run-mutations

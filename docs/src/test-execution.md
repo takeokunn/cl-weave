@@ -167,6 +167,22 @@ For command-line and CI usage, `--bail` accepts `true`, `yes`, `on`,
 timeout 120s nix run . -- run cl-weave/tests --bail 1
 ```
 
+`--bail` is an optional-value flag, so it may also appear on its own. A bare
+`--bail` defaults to `true`, and the separated form only consumes the following
+token when that token is a valid bail literal (one of the values above). A
+positional target after a bare `--bail` is therefore left for argument parsing
+rather than swallowed, so both of these select `cl-weave/tests` with
+fast-fail enabled:
+
+```sh
+timeout 120s nix run . -- run --bail cl-weave/tests
+timeout 120s nix run . -- run cl-weave/tests --bail
+```
+
+Use the inline `--bail=VALUE` form to force value parsing; an invalid inline
+value (for example `--bail=maybe`) is reported as an error instead of being
+reinterpreted as a positional argument.
+
 Bail composes with focus and filtering. Reporters emit only the events that were
 selected and executed before the runner stopped.
 

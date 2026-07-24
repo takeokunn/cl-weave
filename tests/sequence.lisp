@@ -22,6 +22,20 @@
         (expect (mapcar #'cl-weave:test-plan-entry-path plan)
                 :to-equal (mapcar #'cl-weave::test-event-path events)))))
 
+  (it "preserves child order when randomized hashes collide"
+    (let* ((suite (cl-weave::make-suite :name "sequence-collision"))
+           (first (cl-weave::make-test-case :name "duplicate"
+                                            :function (lambda () t)))
+           (second (cl-weave::make-test-case :name "duplicate"
+                                             :function (lambda () t)))
+           (children (list first second)))
+      (let ((cl-weave:*test-sequence-order* :random)
+            (cl-weave:*test-sequence-seed* 17))
+        (expect (every #'eq
+                       (cl-weave::ordered-children suite children)
+                       children)
+                :to-be t))))
+
   (it "applies sharding before seeded ordering"
     (let* ((root (cl-weave::make-suite :name "root"))
            (suite (cl-weave::add-child

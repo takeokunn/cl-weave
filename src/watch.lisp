@@ -124,42 +124,46 @@
         (push pathname files)))
     (nreverse files)))
 
-(defun file-content-signature (pathname)
-    (with-open-file (stream pathname
-                            :direction :input
-                            :element-type (quote (unsigned-byte 8)))
-      (let ((buffer (make-array 8192 :element-type (quote (unsigned-byte 8))))
-            (hash #xcbf29ce484222325)
-            (byte-count 0))
-        (loop
-          for count = (read-sequence buffer stream)
-          while (plusp count)
-          do (incf byte-count count)
-             (loop for index below count
-                   do (setf hash
-                            (logand #xffffffffffffffff
-                                    (* #x100000001b3
-                                       (logxor hash (aref buffer index))))))
-          finally (return (values hash byte-count))))))
+(defun file-content-signature (pathname &optional buffer)
+  (with-open-file (stream pathname
+                          :direction :input
+                          :element-type (quote (unsigned-byte 8)))
+    (let ((buffer (or buffer
+                      (make-array 8192
+                                  :element-type (quote (unsigned-byte 8)))))
+          (hash #xcbf29ce484222325)
+          (byte-count 0))
+      (loop
+        for count = (read-sequence buffer stream)
+        while (plusp count)
+        do (incf byte-count count)
+           (loop for index below count
+                 do (setf hash
+                          (logand #xffffffffffffffff
+                                  (* #x100000001b3
+                                     (logxor hash (aref buffer index))))))
+        finally (return (values hash byte-count))))))
 
-  (defun pathname-signature (pathname)
-    (handler-case
-        (if (probe-file pathname)
-            (let ((write-date (file-write-date pathname)))
-              (multiple-value-bind (content-hash byte-count)
-                  (file-content-signature pathname)
-                (list :exists t
-                      :write-date write-date
-                      :length byte-count
-                      :hash content-hash)))
-            (list :exists nil))
-      (error ()
-        (list :exists :unknown))))
+(defun pathname-signature (pathname &optional buffer)
+  (handler-case
+      (if (probe-file pathname)
+          (let ((write-date (file-write-date pathname)))
+            (multiple-value-bind (content-hash byte-count)
+                (file-content-signature pathname buffer)
+              (list :exists t
+                    :write-date write-date
+                    :length byte-count
+                    :hash content-hash)))
+          (list :exists nil))
+    (error ()
+      (list :exists :unknown))))
 
-  (defun file-state (pathnames)
+(defun file-state (pathnames)
+  (let ((buffer (make-array 8192
+                            :element-type (quote (unsigned-byte 8)))))
     (mapcar (lambda (pathname)
-              (cons pathname (pathname-signature pathname)))
-            pathnames))
+              (cons pathname (pathname-signature pathname buffer)))
+            pathnames)))
 
 (defun changed-pathnames (old-state new-state)
   (let ((new-signatures (make-hash-table :test (function equal)))
@@ -179,7 +183,7 @@
         (push (car entry) changed)))
     (nreverse changed)))
 
-(defvar *watch-test-dependency-index* nil)
+  (defvar *watch-test-dependency-index* nil)
 (defvar *watch-registered-test-files* nil)
 (defvar *watch-index-suite* nil)
 (defvar *watch-index-generation* -1)

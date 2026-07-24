@@ -88,10 +88,7 @@ subsystems, which load after this file."
 
 (defun read-file-string-or-empty (pathname)
   (if (probe-file pathname)
-      (with-open-file (stream pathname :direction :input)
-        (let ((content (make-string (file-length stream))))
-          (read-sequence content stream)
-          content))
+      (uiop:read-file-string pathname)
       ""))
 
 (defun maybe-path-namestring (pathname keep-files)
@@ -196,15 +193,19 @@ subsystems, which load after this file."
   (unless (and (numberp timeout) (plusp timeout))
     (error "cl-weave: isolated timeout must be a positive number, got ~S." timeout))
   (let* ((keep-files (normalize-isolated-keep-files keep-files))
-         (script (isolated-temp-pathname "cl-weave-isolated" "lisp"))
-         (stdout (isolated-temp-pathname "cl-weave-isolated" "out"))
-         (stderr (isolated-temp-pathname "cl-weave-isolated" "err"))
-         (home (isolated-temp-directory "cl-weave-isolated-home"))
+         script
+         stdout
+         stderr
+         home
          (started (get-internal-real-time))
          result
          retain-files)
     (unwind-protect
          (progn
+           (setf script (isolated-temp-pathname "cl-weave-isolated" "lisp")
+                 stdout (isolated-temp-pathname "cl-weave-isolated" "out")
+                 stderr (isolated-temp-pathname "cl-weave-isolated" "err")
+                 home (isolated-temp-directory "cl-weave-isolated-home"))
            (write-isolated-script script form systems package)
            (let* ((process
                      (sb-ext:run-program
